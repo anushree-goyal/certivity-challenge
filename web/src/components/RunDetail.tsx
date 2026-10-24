@@ -51,7 +51,9 @@ export function RunDetail({ runId, onFinished }: { runId: string; onFinished: ()
   });
 
   const inSubmission = view?.requirements.filter((r) => r.requirement_id) ?? [];
-  const attention = inSubmission.filter((r) => needsReview(r, view?.engineer_reviews[r.draft_id])).length;
+  // Without a completed automated review, every exported requirement still needs a person to check it.
+  const attention = view && !view.review_complete ? inSubmission.length
+    : inSubmission.filter((r) => needsReview(r, view?.engineer_reviews[r.draft_id])).length;
   const approved = inSubmission.filter((r) => view?.engineer_reviews[r.draft_id]?.status === "approved").length;
   const regulations = new Set(inSubmission.map((r) => r.source.regulation)).size;
   const p = status.progress;
@@ -105,7 +107,7 @@ export function RunDetail({ runId, onFinished }: { runId: string; onFinished: ()
           <div className="stats">
             <Stat label="Requirements" value={inSubmission.length} sub={`across ${regulations} regulation${regulations === 1 ? "" : "s"}`} />
             <Stat label="Source-checked" value={view.review_complete ? inSubmission.length - attention : 0} sub="automated evidence review" />
-            <Stat label="Needs review" value={attention} sub="issues, open references or flagged" attention={attention > 0} />
+            <Stat label="Needs review" value={attention} sub={view.review_complete ? "issues, open references or flagged" : "automated review did not complete"} attention={attention > 0} />
             <Stat label="Engineer approved" value={`${approved} / ${inSubmission.length}`} sub="human review" />
           </div>
 
