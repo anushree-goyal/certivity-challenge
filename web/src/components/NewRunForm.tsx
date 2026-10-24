@@ -51,7 +51,8 @@ export function NewRunForm({ health, onCreated }: { health: Health | null; onCre
   const [error, setError] = useState<string | null>(null);
   const [activeStep, setActiveStep] = useState<Step | null>(null);
 
-  const loadCases = () => api.cases().then(setCases).catch(() => undefined);
+  // Main-goal cases only (sub-goal folders are listed by the API but not runnable here); held-out first.
+  const loadCases = () => api.cases().then((all) => setCases(all.filter((c) => c.type === "main"))).catch(() => undefined);
   useEffect(() => { loadCases(); }, []);
 
   const chooseCase = (id: string) => {
@@ -64,7 +65,10 @@ export function NewRunForm({ health, onCreated }: { health: Health | null; onCre
     localSet("team_id", value.trim());
   };
 
-  const hasInput = !!packageCase || !!specFile || !!specText.trim() || drawings.length > 0;
+  const selectedCase = cases.find((c) => c.case_id === packageCase) ?? null;
+  const caseHasInputs = !!selectedCase && (!!selectedCase.spec_file || selectedCase.drawings.length > 0);
+  const hasInput = (packageCase ? caseHasInputs : false) || !!specFile || !!specText.trim() || drawings.length > 0;
+  const missingPdfs = health?.corpus_freshness?.missing_pdfs ?? [];
   const trimmedTeam = teamId.trim();
   const trimmedCase = caseId.trim();
   // A selected package case fixes the case ID to its folder name; only typed IDs (own input) are checked.
@@ -126,11 +130,24 @@ export function NewRunForm({ health, onCreated }: { health: Health | null; onCre
               <option value="">Upload my own input</option>
               {cases.map((c) => (
                 <option key={c.case_id} value={c.case_id}>
-                  {prettyCase(c.case_id)} ({[c.has_spec && "spec", ...c.drawings].filter(Boolean).join(", ")})
+                  {c.held_out ? "Held-out: " : ""}{prettyCase(c.case_id)} ({[c.spec_file, ...c.drawings].filter(Boolean).join(", ") || "no inputs"})
                 </option>
               ))}
             </select>
           </label>
+          {selectedCase && (
+            <div className="picked-inputs">
+              <span className="muted small">Inputs picked up from the case folder:</span>
+              <ul>
+                {selectedCase.spec_file && <li>Specification · <code>{selectedCase.spec_file}</code></li>}
+                {selectedCase.drawings.map((d) => <li key={d}>Drawing · <code>{d}</code></li>)}
+                {!selectedCase.spec_file && selectedCase.drawings.length === 0 && <li className="error">No .md/.txt or image files found</li>}
+              </ul>
+              {selectedCase.spec_files.length > 1 && (
+                <p className="hint">Several text files found; using <code>{selectedCase.spec_file}</code>.</p>
+              )}
+            </div>
+          )}
           {!packageCase && (
             <>
               <label>Technical specification (.md, .txt)
@@ -189,6 +206,13 @@ export function NewRunForm({ health, onCreated }: { health: Health | null; onCre
             <div className="banner">The full pipeline is not ready (see system status in the sidebar). The run will stop and show why.</div>
           )}
           {DEV_MODE && mode === "fixture" && <div className="banner fixture">Fixture output is synthetic and is labelled as such everywhere.</div>}
+          {missingPdfs.length > 0 && (
+            <div className="banner">
+              {missingPdfs.length} base regulation PDF{missingPdfs.length === 1 ? " is" : "s are"} not downloaded, so
+              {missingPdfs.length === 1 ? " it" : " they"} cannot be cited. Run <code>python tools/fetch_regulations.py --role base</code> in the
+              participant package, then re-import the corpus. See the Regulations page for the list.
+            </div>
+          )}
           {error && <div className="banner error" role="alert">{error}</div>}
           <div className="form-actions">
             <button type="submit" disabled={busy}>{busy ? "Starting…" : "Start analysis"}</button>

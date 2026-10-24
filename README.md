@@ -62,7 +62,9 @@ Per-run folders: `agent/` (Anushree), `quality/` (Teammate 3), `app/` (app). The
 | `POST /api/runs/{id}/cancel` | queued runs stop at once; running runs stop when the current stage finishes |
 | `GET /api/compare?a=&b=` | cited regulations/pages/paragraphs that differ between two runs (not a semantic comparison) |
 | `GET /api/documents[/{id}/pdf \| /{id}/pages/{pdf_page_index}]` | source documents of the loaded snapshot; page index is zero-based; `?snapshot_id=` refuses a mismatched snapshot |
-| `GET /api/cases`, `GET /api/health` | participant-package cases; readiness |
+| `GET /api/cases`, `GET /api/health` | cases (re-read from disk; held-out first; sub-goal folders typed `subgoal`); readiness and corpus freshness |
+| `GET /api/regulations` | every index entry: versions, PDF downloaded and verified, imported in the corpus, pages, document ID (no paths, no download URLs) |
+| `POST/GET /api/corpus/reimport` | build a new corpus snapshot through the corpus module's `bootstrap`; refused while an analysis runs |
 
 ## Integration contract (what the app expects from each module)
 
@@ -89,6 +91,18 @@ Entry points are configurable (`CERTIVITY_EP_*` in `.env.example`). Defaults:
 - Held-out case: `git -C data/participant-package pull`, run `certivity bootstrap` again, then start a run with the new case from the dropdown. Set team ID and case ID (= the case folder name).
 - Download the validated JSON from the run and upload it on the platform. For the held-out case the **last valid upload counts**, so keep the chosen file. Teammate 3 coordinates scoring uploads.
 - Repository/demo: this repository plus `certivity serve`. No hosted services are required.
+
+## Sunday held-out steps
+
+The held-out case arrives as a new folder in the participant package. Nothing in the code needs to change.
+
+1. Run `git pull` in the participant package (`git -C data/participant-package pull`).
+2. Run `python tools/fetch_regulations.py --role base` in the participant package to download any new base PDFs.
+3. Start or refresh the app (`certivity serve`, then http://localhost:8000). If the banner says "Regulation package changed — corpus needs re-import", click **Re-import corpus** and wait for it to finish. The **Regulations** page shows what is downloaded and imported.
+4. Under "Case from the regulation package", select **heldout-front-bumper**: it is listed first, and Case ID fills in automatically. Check the inputs the form says it picked up, enter your Team ID, and start the run.
+5. On the run page, check the validator status beside **Export requirements JSON**, then export and upload at hackathon.certivity.io. The last valid upload counts, not the best; at most 5 valid uploads per hour; uploads close at 13:00.
+
+New case folders, new index entries and newly downloaded PDFs are read from disk on each request, so the app does not need a restart. Re-importing builds a new corpus snapshot. Analyses already finished keep showing their own snapshot, and re-import is disabled while an analysis is running.
 
 ## Third-party licences
 

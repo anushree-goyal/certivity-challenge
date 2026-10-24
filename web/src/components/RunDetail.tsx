@@ -12,7 +12,9 @@ import { ExportPanel } from "./ExportPanel";
 const TABS = ["Requirements", "Product", "Applicability", "Coverage", "Review findings", "Validation", "Compare", "Log"] as const;
 type Tab = (typeof TABS)[number];
 
-export function RunDetail({ runId, onFinished }: { runId: string; onFinished: () => void }) {
+export function RunDetail({ runId, onFinished, onOpenRegulation }: {
+  runId: string; onFinished: () => void; onOpenRegulation: (regulation: string) => void;
+}) {
   const [status, setStatus] = useState<RunStatus | null>(null);
   const [view, setView] = useState<RunView | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -121,7 +123,7 @@ export function RunDetail({ runId, onFinished }: { runId: string; onFinished: ()
           </nav>
           {tab === "Requirements" && <RequirementsView view={view} runId={runId} onReview={setReview} />}
           {tab === "Product" && <ProfileView view={view} runId={runId} />}
-          {tab === "Applicability" && <ApplicabilityView view={view} />}
+          {tab === "Applicability" && <ApplicabilityView view={view} onOpenRegulation={onOpenRegulation} />}
           {tab === "Coverage" && <CoverageView view={view} />}
           {tab === "Review findings" && <FindingsView view={view} />}
           {tab === "Validation" && <ValidationView view={view} />}

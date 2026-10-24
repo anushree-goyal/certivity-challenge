@@ -1,4 +1,4 @@
-import type { CaseInfo, EngineerReview, EngineerReviewStatus, Health, RunComparison, RunStatus, RunSummary, RunView } from "./types";
+import type { CaseInfo, EngineerReview, EngineerReviewStatus, Health, RegulationsReport, ReimportStatus, RunComparison, RunStatus, RunSummary, RunView } from "./types";
 
 async function getJSON<T>(url: string): Promise<T> {
   const res = await fetch(url);
@@ -12,6 +12,14 @@ async function getJSON<T>(url: string): Promise<T> {
 export const api = {
   health: () => getJSON<Health>("/api/health"),
   cases: () => getJSON<CaseInfo[]>("/api/cases"),
+  regulations: () => getJSON<RegulationsReport>("/api/regulations"),
+  reimportStatus: () => getJSON<ReimportStatus>("/api/corpus/reimport"),
+  async startReimport(): Promise<ReimportStatus> {
+    const res = await fetch("/api/corpus/reimport", { method: "POST" });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.detail ?? res.statusText);
+    return body;
+  },
   runs: () => getJSON<RunSummary[]>("/api/runs"),
   status: (id: string) => getJSON<RunStatus>(`/api/runs/${id}`),
   results: (id: string) => getJSON<RunView>(`/api/runs/${id}/results`),

@@ -21,9 +21,11 @@ from fastapi.staticfiles import StaticFiles
 
 from certivity import __version__
 from certivity.api.components import (
-    ComponentError, component_versions, model_configuration, open_corpus_only, package_case, readiness,
+    mask_paths,
+    ComponentError, component_versions, model_configuration, open_corpus_only, package_case, readiness, resolve,
     snapshot_id_of,
 )
+from certivity.api import package
 from certivity.api.pipeline import build_run_view
 from certivity.api.serialization import first, to_jsonable
 from certivity.api.settings import REPO_ROOT, Settings, load_settings
@@ -56,6 +58,9 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
     store = RunStore(settings.runs_dir)
     worker = RunWorker(store, settings)
     local = threading.local()
+    # Corpus re-import (Teammate 2's bootstrap builds a NEW snapshot; runs in progress keep theirs).
+    reimport: dict[str, Any] = {"state": "idle"}
+    corpus_generation = [0]  # bumped after each import so per-thread readers reopen the newest snapshot
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -78,7 +83,7 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
         cache = getattr(local, "corpora", None)
         if cache is None:
             cache = local.corpora = {}
-        key = (mode, snapshot_id)
+        key = (mode, snapshot_id, corpus_generation[0])
         if key not in cache:
             try:
                 cache[key] = open_corpus_only(settings, mode, snapshot_id)
@@ -99,17 +104,56 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
     @app.get("/api/health")
     def health() -> dict[str, Any]:
         return {"app": {"ok": True, "version": __version__, "active_run": worker.active_run,
-                        "queued_runs": worker.queued}, **readiness(settings)}
+                        "queued_runs": worker.queued},
+                "corpus_reimport": {k: v for k, v in reimport.items() if k != "thread"}, **readiness(settings)}
 
     @app.get("/api/cases")
     def cases() -> list[dict[str, Any]]:
-        out = []
-        if settings.cases_dir.is_dir():
-            for case_dir in sorted(p for p in settings.cases_dir.iterdir() if p.is_dir()):
-                case = package_case(settings, case_dir.name)
-                out.append({"case_id": case["case_id"], "has_spec": case["spec_path"] is not None,
-                            "drawings": [p.name for p in case["drawing_paths"]]})
-        return out
+        """Re-read on every request: a pulled or unzipped case folder appears without a restart."""
+        return package.list_cases(settings)
+
+    @app.get("/api/regulations")
+    def regulations() -> dict[str, Any]:
+        """Every index entry with download/verification and corpus-import status. No paths, no PDF download URLs."""
+        documents: list[Any] = []
+        ready = False
+        try:
+            documents = list(open_corpus_only(settings, "real").list_documents(role="base"))
+            ready = True
+        except Exception:
+            pass
+        return package.regulations_report(settings, documents, ready)
+
+    # --- corpus re-import ------------------------------------------------------------------
+
+    def _do_reimport() -> None:
+        try:
+            bootstrap = resolve(settings.entry_points["bootstrap_corpus"])
+            status = to_jsonable(bootstrap(settings.participant_package, settings.corpus_dir))
+            corpus_generation[0] += 1
+            reimport.update(state="done" if status.get("ready") else "failed", finished_at=now_iso(),
+                            snapshot_id=status.get("snapshot_id"),
+                            error=None if status.get("ready") else str(status.get("reason") or "import did not produce a ready snapshot"))
+        except Exception as exc:
+            reimport.update(state="failed", finished_at=now_iso(), error=f"{type(exc).__name__}: {exc}")
+
+    @app.post("/api/corpus/reimport", status_code=202)
+    def start_reimport() -> dict[str, Any]:
+        """Build a new corpus snapshot from the package. Refused while an analysis is running or queued."""
+        if reimport.get("state") == "running":
+            raise HTTPException(409, "A corpus re-import is already running")
+        if worker.active_run or worker.queued:
+            raise HTTPException(409, "An analysis is running or queued; re-import after it finishes")
+        reimport.clear()
+        reimport.update(state="running", started_at=now_iso())
+        thread = threading.Thread(target=_do_reimport, name="certivity-corpus-reimport", daemon=True)
+        reimport["thread"] = thread
+        thread.start()
+        return {k: v for k, v in reimport.items() if k != "thread"}
+
+    @app.get("/api/corpus/reimport")
+    def reimport_status() -> dict[str, Any]:
+        return {k: v for k, v in reimport.items() if k != "thread"}
 
     # --- runs ------------------------------------------------------------------------------
 
@@ -125,6 +169,8 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
         spec_file: UploadFile | None = File(None),
         drawings: list[UploadFile] = File(default=[]),
     ) -> dict[str, Any]:
+        if reimport.get("state") == "running":
+            raise HTTPException(409, "The corpus is being re-imported; start the analysis when it has finished")
         mode = (mode or settings.pipeline_mode).lower()
         if mode not in ("real", "fixture"):
             raise HTTPException(422, "mode must be 'real' or 'fixture'")
@@ -238,7 +284,8 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
             "warnings", "errors", "interrupted", "created_at", "started_at", "finished_at", "revision_rounds",
             "submission_valid", "corpus_snapshot_id", "cancel_requested", "cancelled")} | {
             "finished": RunState(m["state"]).finished,
-            "events": store.read_events(m.get("cached_from") or run_id, limit=100)}
+            "events": mask_paths(store.read_events(m.get("cached_from") or run_id, limit=100))} | {
+            "warnings": mask_paths(m.get("warnings")), "errors": mask_paths(m.get("errors"))}
 
     @app.get("/api/runs/{run_id}/results")
     def run_results(run_id: str) -> dict[str, Any]:
@@ -246,7 +293,7 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
         view = build_run_view(store, run_id)
         if view is None:
             raise HTTPException(409, "No results yet: extraction has not produced a draft for this run")
-        return view
+        return mask_paths(view)  # e.g. a validator report naming the index file it checked
 
     @app.get("/api/runs/{run_id}/submission")
     def run_submission(run_id: str):

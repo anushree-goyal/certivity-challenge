@@ -178,7 +178,8 @@ export function ExplodedAssembly({ title = "ASSY-01 // EXPLODED VIEW", step = nu
       <rect x="236" y="290" width="88" height="12" rx="2" className="fx-tag" />
       <text x="280" y="299" textAnchor="middle" className="fx-label">ASSEMBLY AXIS</text>
 
-      {/* step 2: which regulations apply to which parts */}
+      {/* step 2: which regulations apply to which parts (illustrative, labelled as an example) */}
+      <g className="reg-tag"><text x="516" y="36" textAnchor="end" className="fx-label example-tag">EXAMPLE TAGS · NOT A RESULT</text></g>
       <RegTag x={214} y={222} label="UN R10" to={[[268, 196], [118, 246]]} />
       <RegTag x={322} y={204} label="UN R150" to={[[356, 178]]} />
       <RegTag x={436} y={186} label="UN R148" to={[[452, 164]]} />

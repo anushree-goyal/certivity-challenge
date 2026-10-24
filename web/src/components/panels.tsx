@@ -45,7 +45,7 @@ export function ProfileView({ view, runId }: { view: RunView; runId: string }) {
   );
 }
 
-export function ApplicabilityView({ view }: { view: RunView }) {
+export function ApplicabilityView({ view, onOpenRegulation }: { view: RunView; onOpenRegulation: (regulation: string) => void }) {
   const order = ["applicable", "uncertain", "excluded"];
   const sorted = [...view.applicability_decisions].sort((a, b) => order.indexOf(a.status) - order.indexOf(b.status));
   return (
@@ -55,7 +55,9 @@ export function ApplicabilityView({ view }: { view: RunView }) {
         <tbody>
           {sorted.map((d, i) => (
             <tr key={i}>
-              <td>{d.regulation}</td><td>{d.version_label ?? "—"}</td><td><StatusBadge status={d.status} /></td>
+              <td><button type="button" className="link-button" onClick={() => onOpenRegulation(d.regulation)}
+                          title="Show in the Regulations library">{d.regulation}</button></td>
+              <td>{d.version_label ?? "—"}</td><td><StatusBadge status={d.status} /></td>
               <td>{d.explanation}</td><td><Value value={d.conditions} /></td>
             </tr>
           ))}
