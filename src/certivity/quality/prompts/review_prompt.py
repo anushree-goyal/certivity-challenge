@@ -1,5 +1,5 @@
 """Review prompt text and output schema (owned by Teammate 3). Bump VERSION on any edit."""
-VERSION = "review-v2"
+VERSION = "review-v3"
 
 REVIEW_INSTRUCTIONS = """\
 You are an independent reviewer of draft regulatory obligations. For each draft you are given
@@ -36,20 +36,25 @@ Rules:
 Return one review per draft_id, no extras.
 """
 
+# The provider rejects a request whose schema leaves any object open: every "type": "object"
+# needs "additionalProperties": False (tests/quality/test_review_schemas.py checks this).
 REVIEW_SCHEMA = {
     "type": "object",
+    "additionalProperties": False,
     "required": ["reviews"],
     "properties": {
         "reviews": {
             "type": "array",
             "items": {
                 "type": "object",
+                "additionalProperties": False,
                 "required": ["draft_id", "verdict", "checks", "explanation"],
                 "properties": {
                     "draft_id": {"type": "string"},
                     "verdict": {"enum": ["supported", "unsupported", "needs_revision", "needs_context"]},
                     "checks": {
                         "type": "object",
+                        "additionalProperties": False,
                         "required": ["subject", "scope", "value", "unit", "condition", "exception"],
                         "properties": {k: {"enum": ["ok", "problem", "unclear", "not_applicable"]}
                                        for k in ("subject", "scope", "value", "unit", "condition", "exception")},
@@ -74,9 +79,11 @@ list the draft under "distinct". Only use the evidence shown.
 
 DEDUP_SCHEMA = {
     "type": "object",
+    "additionalProperties": False,
     "required": ["groups"],
     "properties": {"groups": {"type": "array", "items": {
-        "type": "object", "required": ["group_id", "keep", "duplicates", "distinct", "explanation"],
+        "type": "object", "additionalProperties": False,
+        "required": ["group_id", "keep", "duplicates", "distinct", "explanation"],
         "properties": {"group_id": {"type": "string"}, "keep": {"type": "string"},
                        "duplicates": {"type": "array", "items": {"type": "string"}},
                        "distinct": {"type": "array", "items": {"type": "string"}},
