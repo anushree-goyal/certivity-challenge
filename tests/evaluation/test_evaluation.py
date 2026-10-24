@@ -73,7 +73,7 @@ class Candidates(unittest.TestCase):
             self.assertNotEqual(ia, ib)
             self.assertEqual(load_candidate(d, ia), a)
             self.assertEqual({m["run_id"] for m in list_candidates(d)}, {"r1", "r2"})
-            self.assertEqual(compare_candidates(a, b)["pairs_only_in_b"], [("B", 2)])
+            self.assertEqual(compare_candidates(a, b)["pairs_only_in_b"], [("B", "v", 2)])
 
 
 class Boundary(unittest.TestCase):

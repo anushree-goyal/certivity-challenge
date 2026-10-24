@@ -33,14 +33,21 @@ def _load(path):
         return json.load(f)
 
 
-def _pairs(doc) -> list[tuple[str, int]]:
+def _pairs(doc) -> list[tuple[str, str, int | None]]:
+    """(regulation, version, page) per requirement. Version is part of the key, as in the official
+    scorer: a page of the latest version is not a page of the base version."""
     out = []
     for r in (doc.get("requirements") or []) if isinstance(doc, dict) else []:
         s = (r or {}).get("source") or {}
         reg, page = s.get("regulation"), s.get("page")
         if reg is not None:
-            out.append((str(reg), page if isinstance(page, int) and not isinstance(page, bool) else None))
+            out.append((str(reg), str(s.get("version") or ""),
+                        page if isinstance(page, int) and not isinstance(page, bool) else None))
     return out
+
+
+def _sort_key(t):
+    return (t[0], t[1], t[2] or 0)
 
 
 def _prf(pred: set, gold: set) -> dict:
@@ -58,41 +65,49 @@ def classify_misses(sub_pairs: set, exp_pairs: set, run_context: dict | None = N
     unavailable = set(ctx.get("unavailable_regulations", []))
     excluded = set(ctx.get("excluded_regulations", []))
     unread = set(ctx.get("unread_regulations", []))
-    sub_regs = {r for r, _ in sub_pairs}
-    exp_regs = {r for r, _ in exp_pairs}
+    sub_regs = {r for r, _, _ in sub_pairs}
+    exp_regs = {r for r, _, _ in exp_pairs}
+    exp_versions = {(r, v) for r, v, _ in exp_pairs}
     cats: dict[str, list] = {}
 
-    def add(cat, reg, page, note):
-        cats.setdefault(cat, []).append({"regulation": reg, "page": page, "note": note})
+    def add(cat, reg, ver, page, note):
+        cats.setdefault(cat, []).append({"regulation": reg, "version": ver, "page": page, "note": note})
 
-    for reg, page in sorted(exp_pairs - sub_pairs, key=lambda x: (x[0], x[1] or 0)):
+    for reg, ver, page in sorted(exp_pairs - sub_pairs, key=_sort_key):
+        same_version = [(r, v, p) for r, v, p in sub_pairs if r == reg and v == ver]
         if reg in unavailable:
-            add(CAT_SOURCE_UNAVAILABLE, reg, page, "regulation reported unavailable in run context")
+            add(CAT_SOURCE_UNAVAILABLE, reg, ver, page, "regulation reported unavailable in run context")
         elif reg in excluded:
-            add(CAT_EXCLUDED, reg, page, "regulation excluded by applicability in run context")
+            add(CAT_EXCLUDED, reg, ver, page, "regulation excluded by applicability in run context")
         elif reg in unread:
-            add(CAT_UNREAD, reg, page, "regulation/section not read according to run context")
+            add(CAT_UNREAD, reg, ver, page, "regulation/section not read according to run context")
         elif reg not in sub_regs:
-            add(CAT_REG_NOT_COVERED, reg, page,
+            add(CAT_REG_NOT_COVERED, reg, ver, page,
                 "no output cites this regulation; cause unknown without run artifacts")
-        elif page is not None and any(r == reg and p is not None and abs(p - page) <= 1
-                                      for r, p in sub_pairs):
-            add(CAT_WRONG_VERSION_PAGE, reg, page, "output cites an adjacent page; possible wrong page")
+        elif not same_version:
+            add(CAT_WRONG_VERSION_PAGE, reg, ver, page,
+                "regulation cited, but never in this version; possible wrong version")
+        elif page is not None and any(p is not None and abs(p - page) <= 1 for _, _, p in same_version):
+            add(CAT_WRONG_VERSION_PAGE, reg, ver, page, "output cites an adjacent page; possible wrong page")
         else:
-            add("page_not_covered", reg, page, "regulation cited, but not this page")
-    for reg, page in sorted(sub_pairs - exp_pairs, key=lambda x: (x[0], x[1] or 0)):
+            add("page_not_covered", reg, ver, page, "regulation cited, but not this page")
+    for reg, ver, page in sorted(sub_pairs - exp_pairs, key=_sort_key):
         if reg not in exp_regs:
-            add(CAT_UNSUPPORTED, reg, page, "regulation absent from the expected answer (possible false positive)")
+            add(CAT_UNSUPPORTED, reg, ver, page, "regulation absent from the expected answer (possible false positive)")
+        elif (reg, ver) not in exp_versions:
+            add(CAT_WRONG_VERSION_PAGE, reg, ver, page,
+                "cites a version the expected answer does not use; possible wrong version")
     return cats
 
 
 def run_official_scorer(package: Path, submission_path, expected_path) -> dict:
-    """ASSUMED CLI: python tools/score_local.py <submission> <expected>. Raw output is kept."""
+    """`python tools/score_local.py <submission> --expected <expected> --json` (checked against
+    package commit 2104a8e). Raw output is kept; `parsed` holds regulation_level/page_level."""
     script = package / SCORER_REL
     if not script.is_file():
         return {"ran": False, "error": f"scorer not found at {script}"}
     try:
-        proc = subprocess.run([sys.executable, str(script), str(submission_path), str(expected_path)],
+        proc = subprocess.run([sys.executable, str(script), str(submission_path), "--expected", str(expected_path), "--json"],
                               cwd=package, capture_output=True, text=True, timeout=120)
     except subprocess.TimeoutExpired:
         return {"ran": True, "returncode": None, "error": "scorer timed out"}
@@ -109,9 +124,10 @@ def evaluate_submission(submission_path, expected_path, participant_package_path
     sub, exp = _load(submission_path), _load(expected_path)
     sp, ep = _pairs(sub), _pairs(exp)
     s_pairs, e_pairs = set(sp), set(ep)
-    s_regs, e_regs = {r for r, _ in s_pairs}, {r for r, _ in e_pairs}
-    notes = ["Own computation on regulation and (regulation, page) sets; may differ from the "
-             "official local scorer in definition.",
+    s_regs, e_regs = {t[0] for t in s_pairs}, {t[0] for t in e_pairs}
+    notes = ["Own computation on regulation and (regulation, version, page) sets. The official "
+             "local scorer also credits a page when its paragraph matches, so quote its numbers "
+             "(official_local_scorer.parsed) when it ran; the platform's page score differs again.",
              "Category assignments are candidates from file comparison, not confirmed causes. "
              f"Not derivable here: {', '.join(MANUAL_ONLY)}."]
     official = None

@@ -89,10 +89,25 @@ def make_validation_report(valid, errors, official_ran, official_output, schema)
 
 
 def emit(emit_event: Any, stage: str, message: str, completed=None, total=None) -> None:
-    """RunEvent construction is unknown until contracts land; send a plain dict."""
+    """emit_event takes one RunEvent (confirmed by Anushree, contracts 1.0.0). Its constructor
+    is not yet visible here, so only the fields it actually declares are passed; without the
+    contracts a plain dict is sent. A failing callback never fails the review."""
     if emit_event is None:
         return
-    emit_event({"stage": stage, "message": message, "completed": completed, "total": total})
+    values = {"stage": stage, "message": message, "completed": completed, "total": total}
+    event: Any = values
+    try:
+        from dataclasses import fields, is_dataclass
+        from certivity.contracts import RunEvent  # type: ignore
+        if is_dataclass(RunEvent):
+            declared = {f.name for f in fields(RunEvent)}
+            event = RunEvent(**{k: v for k, v in values.items() if k in declared})
+    except Exception:  # noqa: BLE001
+        event = values
+    try:
+        emit_event(event)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def set_export_mapping(report, mapping: dict) -> bool:

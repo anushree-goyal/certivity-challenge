@@ -152,6 +152,7 @@ def review_semantically(pipeline_draft, ids, corpus, llm, config: SemanticConfig
     passages = {A.passage_id(p): p for p in corpus.get_passages(sorted(wanted))}
     items = [_payload_item(drafts[i], _evidence_for(drafts[i], passages)) for i in ids]
 
+    fatal = None
     for batch in _batches(items, cfg):
         batch_ids = [b["draft_id"] for b in batch]
         if out.calls >= cfg.max_calls:
@@ -172,6 +173,10 @@ def review_semantically(pipeline_draft, ids, corpus, llm, config: SemanticConfig
         except Exception as e:  # noqa: BLE001
             for i in batch_ids:
                 out.unreviewed[i] = f"review call failed: {type(e).__name__}: {e}"
+            if type(e).__name__ == "LLMConfigurationError":  # no credential: later calls fail too
+                out.warnings.append(f"model adapter not configured; semantic review skipped: {e}")
+                fatal = f"not reviewed: model adapter not configured ({e})"
+                break
             continue
 
         by_id: dict[str, list] = {}
@@ -209,6 +214,11 @@ def review_semantically(pipeline_draft, ids, corpus, llm, config: SemanticConfig
                 out.rejected[i] = f"{cat}: {expl}"
             else:
                 out.needs_revision[i] = cat
+    if fatal:
+        for i in ids:
+            if i not in out.unreviewed and i not in out.supported and i not in out.rejected \
+                    and i not in out.needs_revision:
+                out.unreviewed[i] = fatal
     for i, why in out.unreviewed.items():
         out.findings.append(make_finding(i, SEM_UNREVIEWED, why))
     return out

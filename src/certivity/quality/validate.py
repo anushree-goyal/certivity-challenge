@@ -70,6 +70,8 @@ def structural_errors(submission) -> list:
         page = src.get("page")
         if isinstance(page, bool) or not isinstance(page, int) or verified_page(page) is None:
             errors.append(err(f"{base}.source.page", "must be a positive integer printed page"))
+        if "paragraph" in src and not isinstance(src["paragraph"], str):
+            errors.append(err(f"{base}.source.paragraph", "must be a string when present (omit it, never null)"))
     try:
         size = len(json.dumps(submission, ensure_ascii=False).encode("utf-8"))
         if size > MAX_OUTPUT_BYTES:
@@ -80,8 +82,9 @@ def structural_errors(submission) -> list:
 
 
 def run_official_validator(submission: dict, package: Path):
-    """Return (ran, passed, output). ASSUMES the CLI `python tools/validate.py <file>` and a
-    non-zero exit code on failure; confirm against the supplied tools/validate.py."""
+    """Return (ran, passed, output). CLI `python tools/validate.py <file>`: exit 0 valid, 1 problems,
+    2 unreadable (checked against package commit 2104a8e). Needs Python 3.12+ and jsonschema.
+    Run from the package root so it finds regulations/index.json and checks names/versions."""
     script = package / OFFICIAL_VALIDATOR_REL
     if not script.is_file():
         return False, False, f"official validator not found at {script}"

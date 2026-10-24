@@ -6,7 +6,7 @@ import json
 import time
 from pathlib import Path
 
-from .scoring import _pairs
+from .scoring import _pairs, _sort_key
 
 
 def candidate_id(submission: dict) -> str:
@@ -45,9 +45,9 @@ def compare_candidates(a: dict, b: dict) -> dict:
     pa, pb = set(_pairs(a)), set(_pairs(b))
     return {"a": candidate_id(a), "b": candidate_id(b),
             "requirements": [len(a.get("requirements", [])), len(b.get("requirements", []))],
-            "pairs_only_in_a": sorted(pa - pb, key=lambda x: (x[0], x[1] or 0)),
-            "pairs_only_in_b": sorted(pb - pa, key=lambda x: (x[0], x[1] or 0)),
-            "scope": "regulation/page sets only; says nothing about requirement meaning"}
+            "pairs_only_in_a": sorted(pa - pb, key=_sort_key),
+            "pairs_only_in_b": sorted(pb - pa, key=_sort_key),
+            "scope": "regulation/version/page sets only; says nothing about requirement meaning"}
 
 
 def write_report(report, directory, name: str) -> Path:

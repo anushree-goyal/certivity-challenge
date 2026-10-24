@@ -130,6 +130,23 @@ class SemanticReview(unittest.TestCase):
         self.assertEqual(llm.calls[0]["images"], [{"doc": F.BASE.document_id, "idx": 31}])
 
 
+class LLMConfigurationError(Exception):
+    """Same class name as the shared adapter's error for a missing credential."""
+
+
+class MissingCredential(unittest.TestCase):
+    def test_stops_after_first_call_and_reports_every_draft_unreviewed(self):
+        drafts = [F.Draft(f"d{i}", f"Luminous intensity shall be at least 4 cd, case {i}.", "p-ok", ["p-ok"])
+                  for i in range(7)]  # two batches at the default batch size of 5
+        llm = FakeLLM({"quality_review": lambda p: LLMConfigurationError("no credential"),
+                       "quality_dedup": lambda p: {"groups": []}})
+        rep, _ = run(drafts, llm)
+        self.assertEqual(len([c for c in llm.calls if c["task"] == "quality_review"]), 1)
+        for d in drafts:
+            self.assertIn("semantic_unreviewed", cats(rep, d.draft_id))
+        self.assertTrue(incomplete(rep))
+
+
 class Dedup(unittest.TestCase):
     def test_same_wording_different_primary_passage_kept(self):
         p2 = F.Passage("p-ok2", F.BASE.document_id, "The luminous intensity shall be at least 4 cd.", "6.9", 15)
