@@ -115,6 +115,7 @@ def code_fingerprint() -> str:
     digest = hashlib.sha256()
     for name in ("parse.py", "structure.py", "assemble.py", "store.py", "registry.py"):
         digest.update((Path(__file__).parent / name).read_bytes())
+    digest.update((Path(__file__).parent.parent / "contracts.py").read_bytes())  # ID and namespace helpers live there
     return digest.hexdigest()[:12]
 
 

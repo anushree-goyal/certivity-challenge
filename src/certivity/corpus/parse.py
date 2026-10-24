@@ -18,7 +18,7 @@ import pymupdf
 
 from . import structure as st
 
-PARSER_VERSION = "corpus-parse-8"
+PARSER_VERSION = "corpus-parse-9"
 
 FOOTER = re.compile(r"^(?P<reg>.+?),\s*version\s+(?P<ver>\S+)\s*\|\s*page\s+(?P<page>\d+)\s+of\s+(?P<total>\d+)$")
 BANNER = re.compile(r"^(Consolidated text of this version, rendered by Certivity|Role in the hackathon:|the bottom of every page)", re.IGNORECASE)
@@ -187,6 +187,7 @@ class _Builder:
         self.previous_line = ""
         self.enclosing_label: str | None = None
         self.last_caption: tuple[str, int, float] | None = None  # (caption text, page, y)
+        self.last_caption_passage: ParsedPassage | None = None
         self.flow_after_table = False
 
     # passage lifecycle
@@ -252,7 +253,21 @@ class _Builder:
         if rest and len(rest) <= 80 and not rest.rstrip().endswith((".", ",", ";", ":", "-")):
             self.current.title = rest.strip()  # confirmed as a title only if more lines follow (see flush)
 
+    def caption(self, text: str, page: int, y: float) -> None:
+        """A figure/table caption is its own passage; like a footnote it does not close the open paragraph,
+        so the paragraph's text continues unbroken after the figure (R148 3.3.1.2)."""
+        label = self.enclosing_label
+        named = st.CAPTION.match(text)
+        name = named.group("name") if named else "untitled"
+        passage = ParsedPassage(self._key(f"{self.namespace}|{(label or '').rstrip('.')}|caption:{name}"), self.namespace, label, "caption", text, [page], ["caption"])
+        self.passages.append(passage)
+        self.last_caption = (text, page, y)
+        self.last_caption_passage = passage
+
     def table(self, rows: list[list[str]], page: int, caption: str | None) -> None:
+        if caption and self.last_caption_passage is not None and self.last_caption_passage.text == caption:
+            self.passages.remove(self.last_caption_passage)  # the table passage carries its own caption
+            self.last_caption_passage = None
         label = self.enclosing_label
         self.start("table", label, page, ["table"] + ([] if caption else ["table_without_caption"]))
         named = st.CAPTION.match(caption) if caption else None
@@ -456,10 +471,8 @@ def _heading(builder: _Builder, text: str, page: int, *, major: bool, y: float =
     if st.LABEL_LINE.match(text):
         fake = Line(text, 0, 0, 0, 0, 0, True, page)
         return _body_line(builder, fake, page, heading=True)
-    caption = st.CAPTION.match(text)
-    if caption:
-        builder.last_caption = (text, page, y)
-        builder.add_text(text, page, ("caption",))
+    if st.CAPTION.match(text):
+        builder.caption(text, page, y)
         return True
     if major:
         # an unnumbered major heading such as "Scope": its own heading passage in the current namespace
@@ -488,9 +501,10 @@ def _body_line(builder: _Builder, line: Line, page: int, heading: bool = False) 
                 and st.judge_label(st.parse_label(nodot["label"]), previous, builder.previous_line, nodot["rest"]).accept:
             builder.label(nodot["label"] + ".", nodot["rest"], page, ("label_without_dot",) + (("heading",) if heading else ()))
             return True
-    caption = st.CAPTION.match(line.text)
-    if caption:
-        builder.last_caption = (line.text, page, line.y0)
+    # an unemphasised line is a caption only when short and not a sentence ("Table 3 lists the ..." stays text)
+    if st.CAPTION.match(line.text) and len(line.text) <= 100 and not line.text.rstrip().endswith((".", ":", ";")):
+        builder.caption(line.text, page, line.y0)
+        return True
     builder.add_text(line.text, page)
     return True
 

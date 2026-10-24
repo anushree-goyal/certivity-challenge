@@ -39,7 +39,7 @@ def tiny_package(tmp_path, paths):
 def test_build_reports_missing_files_and_reuses_snapshot(tiny_package):
     first = build_snapshot(tiny_package, workers=1)
     assert not first.reused and len(first.documents_imported) == 1
-    assert len(first.not_downloaded) == 1 and first.not_downloaded[0].startswith("UN_R42@")
+    assert len(first.not_downloaded) == 1 and first.not_downloaded[0].startswith("un-r42:")
     assert current_snapshot_id(tiny_package) == first.snapshot_id
 
     second = build_snapshot(tiny_package, workers=1)

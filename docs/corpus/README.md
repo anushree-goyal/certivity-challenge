@@ -5,7 +5,7 @@ Other components never touch the SQL; they call the reader.
 
 ## Setup and commands
 
-Python 3.11+ with `pymupdf` (PDF text, tables and page rendering). `certifi` is optional and is only used for the
+Python 3.11+ with `pymupdf`. `certivity.contracts` (Anushree) must be importable (PDF text, tables and page rendering). `certifi` is optional and is only used for the
 download step on macOS python.org builds. `pytest` is needed for the tests. Run with `src` on `PYTHONPATH` until
 Teammate 4's package scaffolding is merged.
 
@@ -23,11 +23,11 @@ PYTHONPATH=src python -m certivity.corpus build
 # inspection
 PYTHONPATH=src python -m certivity.corpus status
 PYTHONPATH=src python -m certivity.corpus documents
-PYTHONPATH=src python -m certivity.corpus sections 'UN_R48@9.3.0~UN_R48_base~d4b1dde8'
-PYTHONPATH=src python -m certivity.corpus section 'UN_R48@9.3.0~UN_R48_base~d4b1dde8/sec/main/6.10'
-PYTHONPATH=src python -m certivity.corpus resolve 'UN_R48@9.3.0~UN_R48_base~d4b1dde8/p/main/6.10.5.1' 'paragraph 5.8.1. above'
-PYTHONPATH=src python -m certivity.corpus page 'UN_R48@9.3.0~UN_R48_base~d4b1dde8' 49
-PYTHONPATH=src python -m certivity.corpus search 'rear position lamp height' --document 'UN_R48@9.3.0~UN_R48_base~d4b1dde8'
+PYTHONPATH=src python -m certivity.corpus sections 'un-r48:9-3-0:sha256-d4b1dde87bf8'
+PYTHONPATH=src python -m certivity.corpus section 'un-r48:9-3-0:sha256-d4b1dde87bf8#main/6.10'
+PYTHONPATH=src python -m certivity.corpus resolve 'un-r48:9-3-0:sha256-d4b1dde87bf8#main/6.10.5.1@001' 'paragraph 5.8.1. above'
+PYTHONPATH=src python -m certivity.corpus page 'un-r48:9-3-0:sha256-d4b1dde87bf8' 49
+PYTHONPATH=src python -m certivity.corpus search 'rear position lamp height' --document 'un-r48:9-3-0:sha256-d4b1dde87bf8'
 PYTHONPATH=src python -m certivity.corpus diagnostics --summary
 PYTHONPATH=src python -m certivity.corpus prune --keep 2      # manual; never deletes CURRENT
 
@@ -40,13 +40,17 @@ Environment overrides: `CERTIVITY_PARTICIPANT_PACKAGE` (default `data/participan
 
 ## Public interface
 
+Records are Anushree's `certivity.contracts` (1.3.0, merged into this branch from `feature/agent`): `Document`,
+`SourcePassage`, `Section`, `SectionBundle`, `PageAsset`, `ReferenceRequest`, `ReferenceResolution`, `DocumentRole`,
+`ReferenceStatus`. The reader satisfies both published protocols, `CorpusReader` and the optional `CorpusSearch`.
+
 ```python
 from certivity.corpus import open_corpus, corpus_status, ensure_corpus
 
 corpus = open_corpus("data/cache/corpus")   # CURRENT snapshot, read-only; snapshot_id="snap-..." pins one
 corpus.snapshot_id                       # record with each run
-corpus.list_documents(role="base")       # -> list[Document]; role=None lists every imported role
-corpus.read_scope(document_id)           # -> list[SourcePassage]: title + Scope clause and its sub-paragraphs
+corpus.list_documents(role="base")       # -> list[Document] in index.json order; role=None lists every imported role
+corpus.read_scope(document_id)           # -> list[SourcePassage]: title, Scope clause, then the Definitions clause
 corpus.list_sections(document_id)        # -> list[Section] in reading order (systematic coverage starts here)
 corpus.read_section(section_id, include_context=True)   # -> SectionBundle
 corpus.get_passages(passage_ids)         # -> list[SourcePassage] in request order; unknown ids are omitted (contract)
@@ -54,11 +58,11 @@ corpus.resolve_reference(ReferenceRequest)               # -> ReferenceResolutio
 corpus.get_page_asset(document_id, pdf_page_index)       # -> PageAsset (PNG rendered on demand, cached)
 ```
 
-Additions beyond the planned seven methods (listed in `contract-proposal.md`):
+`get_document` and `list_reference_candidates` are part of `CorpusReader` (1.3.0); `search` is `CorpusSearch`. Corpus-only extras:
 
 | Method | For |
 | --- | --- |
-| `list_reference_candidates(passage_ids) -> list[ReferenceRequest]` | References detected at import, ready to pass to `resolve_reference` |
+| `list_reference_candidates(passage_ids) -> list[ReferenceRequest]` | (`CorpusReader`) references detected at import, ready to pass to `resolve_reference` |
 | `search(query, document_id=None, limit=20)` | SQLite FTS5 navigation aid. Not a coverage mechanism |
 | `get_document(document_id)`, `diagnostics(document_id=None)`, `status()` | Metadata, parse diagnostics, readiness |
 | `get_document_path(document_id) -> Path` | **Server-only** original PDF path for the backend's `/pdf` route (`UnknownId` / `FileNotFoundError`) |
@@ -72,23 +76,35 @@ shared by a worker's threads. Writes fail.
 
 ## IDs and citation fields
 
-| Thing | Format | Example |
+| Thing | Format (contract helper) | Example |
 | --- | --- | --- |
-| document | `<regulation>@<version>~<file stem>~<sha256[:8]>` | `UN_R48@9.3.0~UN_R48_base~d4b1dde8` |
-| section | `<document>/sec/<namespace>/<label or root>` | `.../sec/Annex6Part6/root`, `.../sec/main/6.10` |
-| passage | `<document>/p/<namespace>/<label or _kind>[_dupN]` | `.../p/main/6.10.4.2`, `.../p/Annex6Part6/3.2/table:A6-1` |
+| document | `document_id_for(regulation, version, checksum)` | `un-r48:9-3-0:sha256-d4b1dde87bf8` |
+| section | `section_id_for(document, namespace, number)`; a namespace root uses `root` | `...#main/6.10`, `...#annex:6/part:6/root` |
+| passage | `passage_id_for(document, namespace, label, ordinal)` | `...#main/6.10.4.2@001`, `...#annex:6/part:6/3.2@002` (its table) |
 
-- **Namespaces** keep repeated labels apart: `main`, `Annex 4`, `Annex 6 Part 6`, `Annex 4 Appendix 1`, `Appendix 2`
-  (an appendix to the main body), `Introduction` (R148, R171), and `Part I` (the non-normative GTR 9 rationale).
-- **`paragraph_label`** is the citation string, in the same form as `expected.json`: `6.10.4.2` or
-  `Annex 6 Part 6 3`. Unlabelled annex text carries the namespace (`Annex 4`) and the flag `label_from_namespace`.
-  Unlabelled main-body text (title, front matter) has `null`.
-- **Pages:** every page of every supplied PDF has a footer `UN R48, version 9.3.0 | page 50 of 122`. The parser
-  checks that footer against the physical position; it matches on all 3,029 pages. So
-  `printed_start_page = pdf_page_index + 1`, and the printed page is what `source.page` cites. `pdf_page_indices`
-  are zero-based physical indices for rendering. `page_span` is printed pages.
+- **Namespaces** on records are the contract's machine form (`namespace_for`): `main`, `annex:4`, `annex:6/part:6`,
+  `annex:4/appendix:1`, `annex:5/appendix` (an unnumbered appendix, R3), `appendix:2` (an appendix to the main body,
+  R10), `introduction` (R148, R171) and `part:i` (the non-normative GTR 9 rationale). They keep repeated labels apart.
+  `resolve_reference` accepts this form or the human one (`Annex 6, Part 6`) in `target_namespace`.
+- **Passage IDs are keyed on the label, not the section**, so they survive re-sectioning. A passage takes its own
+  label, else the nearest preceding label in its namespace, else `_` (text before the first label: headings, front
+  matter). Within one label the paragraph is `@001`; its tables, captions, footnotes and continuations follow from
+  `@002` in reading order.
+- **`paragraph_label`** (on passages and sections) is the citation form, ready to copy to `source.paragraph`, in the
+  same form as `expected.json`: `6.10.4.2` or `Annex 6 Part 6 3`. Unlabelled annex text carries the division
+  (`Annex 4`) and the flag `label_from_namespace`. Unlabelled main-body text (title, front matter) has `None`.
+- **Pages:** every page of every supplied PDF has a footer `UN R48, version 9.3.0 | page 50 of 122`. The printed page
+  is read **from that footer**, page by page, and checked against the physical position (it matches on all 3,029
+  pages; a page where it did not would be reported, not assumed). `printed_start_page` is a string (`"50"`) and is
+  what `source.page` cites; `page_span` lists every printed page as strings; `pdf_page_indices` are zero-based.
+- **`Section`**: `paragraph_label`, `primary_passage_ids` in reading order, `depth` (0 = namespace root),
+  `ordinal` (position in document reading order).
+- **Tables**: `is_table=True`. `table_context` holds the caption, the column-heading row, and footnote-like text from
+  the table's page(s): footnote passages on that page, plus short lines right after the table that start with a
+  marker (`(a)`, `a)`, `*`, `1/`, `Note`). This is an interim rule until footnotes are tied to their table at parse
+  time; it over-includes on purpose, because a dropped footnote turns a conditional cell into an unconditional limit.
 - **`parsing_flags`** on a `SourcePassage`:
-  - `kind:paragraph|heading|intro|table|footnote|front_matter` marks the passage type.
+  - `kind:paragraph|heading|intro|table|caption|footnote|front_matter` marks the passage type.
   - `context:parent|context:definition` appears only on bundle context passages.
   - `spans_pages`, `page_has_visual_content`, `caption:<text>`, `table_without_caption`, `continuation_after_table`,
     `label_out_of_sequence`, `label_gap`, `duplicate_label`, `label_without_dot` and `layout_text_outside_margin`
@@ -107,11 +123,14 @@ shared by a worker's threads. Writes fail.
   - `context_passages`, kept separate: the heading passages of every ancestor section (e.g. `6. Individual
     specifications`, `Annex 6`, `Part 6 - ...`), plus up to 20 definitions whose quoted term occurs in the primary
     text (`"Rear position lamp" means ...`).
-  - `visual_pdf_page_indices`: pages of the primary passages that have images, tables or substantial vector
-    drawings, for a vision call when needed.
+  - `visual_pdf_page_indices`: zero-based pages of the primary passages that have images, tables or substantial
+    vector drawings, for a vision call when needed.
+  - `notes`: warnings such as a section over 12k characters, or a section number inferred from its sub-paragraphs.
 - **Tables** become their own passages with the caption (`Table A6-1 ...`) and one row per line, cells joined by
   ` | `. Cell text is read with a clip, because PyMuPDF's `Table.extract()` drops decimal points (`0.51 ± 0.02`
   became `051±002`).
+- **Captions** (`Figure I`, `Table A6-1 ...`) become separate `kind:caption` passages and do not interrupt the
+  paragraph around them (R148 3.3.1.2 continues after its figure). A table's caption is part of the table passage.
 - **Footnotes** become separate passages in the section where they appear. They are de-duplicated when the
   renderer repeats one per marker. A paragraph interrupted by a footnote or a page break continues in the same
   passage.
@@ -153,28 +172,31 @@ renders/<pdf sha256>/<page>@<dpi>.png          page images
 - New files or code produce a new id. The old snapshot stays readable until it is pruned manually.
 - Bump `PARSER_VERSION` in `parse.py` when parse output changes; the parse cache is keyed by it.
 
-## Verified on the real base corpus (snapshot `snap-e3d43fb50521`)
+## Verified on the real base corpus (snapshot `snap-80cf23669d98`)
 
 - **Acquisition:** 56 of 56 base PDFs downloaded and checksum-verified, with no failures. The `latest` versions and
   the sub-goal old/new PDFs have **not** been downloaded yet, and the links expire after the event.
-- **Import:** 56 documents, 3,029 pages, 31,305 passages, 6,280 sections, 1,519 definitions and 13,071 reference
-  candidates. There were no parse failures.
+- **Import:** 56 documents, 3,029 pages, 31,881 passages (including 576 figure/table captions), 6,265 sections,
+  1,519 definitions and 13,065 reference candidates. There were no parse failures.
 - **Pages:** printed-page footers match physical positions on 3,029 of 3,029 pages, and the regulation/version
   in each footer matches the index.
 - **Paragraphs:** all 190 cited paragraphs in `cases/dev-rear-lamp/expected.json` (R148, R48, R150, R10) exist in the
   corpus with the cited page inside their page span. This includes `Annex 6 Part 6 3. Table A6-1`. The check was
   a one-off developer script that is not part of the component; runtime code never reads `expected.json`.
-- **Tests:** `tests/corpus` has 28 tests covering structure rules, snapshot behaviour (missing file, checksum
-  mismatch, reuse, refresh keeps the old snapshot) and the real corpus:
-  - metadata and footer verification;
-  - R48 6.10.4.2 on page 50;
-  - a cross-page paragraph;
-  - `1.1` repeated across R150 annex Parts;
-  - table decimals;
-  - bundle context;
-  - every resolution status;
-  - rendering;
-  - read-only access and threads.
+  Teammate 3 independently ran the official scorer on the rear-lamp output: page recall 1.000.
+- **Contracts 1.3.0 migration:** every one of the 11,556 distinct detected references resolves exactly as before the
+  migration (same status, same target passages, compared by citation rather than ID). Anushree's model-free agent
+  paths run on the real corpus: the inspection plan covers 668 sections of R48/R148/R150/R10, and following
+  corpus-detected references from 400 of them resolves 94% (572 of 607).
+- **Tests:** `tests/corpus` has 36 tests; with Anushree's tests the repository runs 117 passed, 3 skipped (billed
+  real-model tests). Corpus tests cover structure rules, snapshot behaviour (missing file, checksum mismatch, reuse,
+  refresh keeps the old snapshot) and the real corpus:
+  - metadata, footer verification and contract-shaped records (IDs, namespaces, enums, index order);
+  - R48 6.10.4.2 on page 50, a cross-page paragraph, `1.1` repeated across R150 annex Parts;
+  - table decimals and `table_context` footnotes;
+  - bundle context and visual pages, scope with Definitions, captions kept out of paragraphs;
+  - every resolution status, including `annex:6/part:6`-style targets;
+  - rendering, read-only access, threads, and both published protocols.
 
 ## Known parsing gaps (from `diagnostics --summary`)
 

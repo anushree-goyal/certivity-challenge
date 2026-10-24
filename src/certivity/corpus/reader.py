@@ -9,18 +9,32 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+import struct
 import threading
 from pathlib import Path
+from typing import Sequence
 
 from . import structure as st
-from ._contracts import Document, PageAsset, ReferenceRequest, ReferenceResolution, Section, SectionBundle, SourcePassage
-from .assemble import normalise_term
+from ._contracts import (
+    Document,
+    DocumentRole,
+    PageAsset,
+    ReferenceRequest,
+    ReferenceResolution,
+    ReferenceStatus,
+    Section,
+    SectionBundle,
+    SourcePassage,
+)
 from .config import CorpusPaths, default_paths
 from .render import DEFAULT_DPI, render_page
 from .store import current_snapshot_id
 
 MAX_DEFINITION_CONTEXT = 20
+LARGE_SECTION_CHARS = 12000
 _SCOPE_HEADING = re.compile(r"^(scope|field of application|application)\b(?!\s+for\b)", re.IGNORECASE)
+_DEFINITIONS_HEADING = re.compile(r"^definitions?\b", re.IGNORECASE)
+_FOOTNOTE_START = re.compile(r"^(\(?[a-z]\)|\*+|\d{1,2}/|\(\d{1,2}\)|Notes?\b)", re.IGNORECASE)
 
 
 class CorpusNotReady(RuntimeError):
@@ -44,6 +58,7 @@ class SqliteCorpusReader:
         self._paths = paths
         self._package_root = Path(self.manifest.get("package_root") or paths.package_root)
         self._local = threading.local()
+        self._index_entries, self._index_order = _load_index(self._package_root)
 
     # --- plumbing -----------------------------------------------------------------------------
 
@@ -64,30 +79,37 @@ class SqliteCorpusReader:
 
     def _passage(self, row: sqlite3.Row, extra_flags: list[str] | None = None) -> SourcePassage:
         flags = json.loads(row["flags"]) + [f"kind:{row['kind']}"] + (extra_flags or [])
+        is_table = row["kind"] == "table"
+        start = row["printed_start_page"]
         return SourcePassage(
             passage_id=row["passage_id"],
             document_id=row["document_id"],
             section_id=row["section_id"],
             text=row["text"],
             paragraph_label=row["paragraph_label"],
-            heading_ancestry=json.loads(row["heading_ancestry"]),
-            printed_start_page=row["printed_start_page"],
-            page_span=json.loads(row["page_span"]),
-            pdf_page_indices=json.loads(row["pdf_page_indices"]),
-            parsing_flags=flags,
+            heading_ancestry=tuple(json.loads(row["heading_ancestry"])),
+            printed_start_page=str(start) if start is not None else None,
+            page_span=tuple(str(n) for n in json.loads(row["page_span"])),
+            pdf_page_indices=tuple(json.loads(row["pdf_page_indices"])),
+            namespace=st.machine_namespace(row["namespace"]),
+            parsing_flags=tuple(flags),
+            is_table=is_table,
+            table_context=self._table_context(row) if is_table else None,
         )
 
     def _section(self, row: sqlite3.Row) -> Section:
-        ids = [r[0] for r in self._db.execute("SELECT passage_id FROM passages WHERE section_id = ? ORDER BY ord", (row["section_id"],))]
+        ids = tuple(r[0] for r in self._db.execute("SELECT passage_id FROM passages WHERE section_id = ? ORDER BY ord", (row["section_id"],)))
         return Section(
             section_id=row["section_id"],
             document_id=row["document_id"],
             parent_section_id=row["parent_section_id"],
             heading=row["heading"],
-            namespace=row["namespace"],
+            namespace=st.machine_namespace(row["namespace"]),
             paragraph_label=row["paragraph_label"],
             primary_passage_ids=ids,
-            parsing_flags=json.loads(row["flags"]),
+            depth=row["depth"],
+            ordinal=row["ord"],
+            parsing_flags=tuple(json.loads(row["flags"])),
         )
 
     def _document(self, row: sqlite3.Row) -> Document:
@@ -95,12 +117,13 @@ class SqliteCorpusReader:
             document_id=row["document_id"],
             regulation=row["regulation"],
             title=row["title"],
-            role=row["role"],
+            role=DocumentRole(row["role"]),
             version_label=row["version_label"],
             filename=row["filename"],
             checksum=row["checksum"],
             snapshot_id=self.snapshot_id,
             page_count=row["page_count"],
+            index_entry=dict(self._index_entries.get(row["regulation"], {})),
         )
 
     def _doc_row(self, document_id: str) -> sqlite3.Row:
@@ -111,19 +134,39 @@ class SqliteCorpusReader:
 
     # --- CorpusReader -------------------------------------------------------------------------
 
-    def list_documents(self, role: str | None = "base") -> list[Document]:
+    def list_documents(self, role: DocumentRole | str | None = DocumentRole.BASE) -> list[Document]:
+        """Documents of that role (None = every imported role), in index.json order."""
         if role is None:
-            rows = self._db.execute("SELECT * FROM documents ORDER BY regulation, role, filename")
+            rows = self._db.execute("SELECT * FROM documents")
         else:
-            rows = self._db.execute("SELECT * FROM documents WHERE role = ? ORDER BY regulation, filename", (role,))
+            rows = self._db.execute("SELECT * FROM documents WHERE role = ?", (getattr(role, "value", role),))
         docs = [self._document(r) for r in rows]
-        return sorted(docs, key=lambda d: _regulation_sort_key(d.regulation))
+        last = len(self._index_order)
+        return sorted(docs, key=lambda d: (self._index_order.get((d.regulation, d.role.value, d.filename), last), _regulation_sort_key(d.regulation), d.filename))
 
     def get_document(self, document_id: str) -> Document:
         return self._document(self._doc_row(document_id))
 
     def read_scope(self, document_id: str) -> list[SourcePassage]:
-        """Title/front matter plus the main-body Scope clause (with its sub-paragraphs)."""
+        """Scope, application and definition passages used for applicability: title/front matter, the main-body
+        Scope clause with its sub-paragraphs, then the main-body Definitions clause."""
+        scope = self._scope_passages(document_id)
+        seen = {p.passage_id for p in scope}
+        definitions = [p for p in self._definition_clause(document_id) if p.passage_id not in seen]
+        return scope + definitions
+
+    def _definition_clause(self, document_id: str) -> list[SourcePassage]:
+        sections = self._db.execute(
+            "SELECT * FROM sections WHERE document_id = ? AND namespace = 'main' AND depth = 1 ORDER BY ord", (document_id,)
+        ).fetchall()
+        out: list[SourcePassage] = []
+        for section in sections:
+            if _DEFINITIONS_HEADING.match(section["heading"]):
+                for sid in self._descendant_section_ids(section["section_id"]):
+                    out += [self._passage(r) for r in self._db.execute("SELECT * FROM passages WHERE section_id = ? ORDER BY ord", (sid,))]
+        return out
+
+    def _scope_passages(self, document_id: str) -> list[SourcePassage]:
         self._doc_row(document_id)
         sections = self._db.execute(
             "SELECT * FROM sections WHERE document_id = ? AND namespace = 'main' AND depth = 1 ORDER BY ord", (document_id,)
@@ -160,16 +203,23 @@ class SqliteCorpusReader:
         if include_context:
             context = self._context_for(row, primary)
         pages = sorted({i for p in primary for i in p.pdf_page_indices})
-        visual = []
+        visual: list[int] = []
         if pages:
             marks = ",".join("?" * len(pages))
             visual = [r[0] for r in self._db.execute(
                 f"SELECT pdf_page_index FROM pages WHERE document_id = ? AND pdf_page_index IN ({marks}) AND (has_images OR has_tables OR drawing_count > 40) ORDER BY pdf_page_index",
                 (row["document_id"], *pages),
             )]
-        return SectionBundle(section=section, primary_passages=primary, context_passages=context, visual_pdf_page_indices=visual)
+        notes: list[str] = []
+        size = sum(len(p.text) for p in primary)
+        if size > LARGE_SECTION_CHARS:
+            notes.append(f"large section ({size} characters): a long table or form without paragraph numbers to split on")
+        if "implicit_section" in section.parsing_flags:
+            notes.append("section number inferred from its sub-paragraphs; the numbered heading paragraph itself was not found")
+        return SectionBundle(section=section, primary_passages=tuple(primary), context_passages=tuple(context), visual_pdf_page_indices=tuple(visual), notes=tuple(notes))
 
-    def get_passages(self, passage_ids: list[str]) -> list[SourcePassage]:
+    def get_passages(self, passage_ids: Sequence[str]) -> list[SourcePassage]:
+        passage_ids = list(passage_ids)
         if not passage_ids:
             return []
         found: dict[str, sqlite3.Row] = {}
@@ -182,9 +232,31 @@ class SqliteCorpusReader:
         return [self._passage(found[p]) for p in dict.fromkeys(passage_ids) if p in found]
 
     def resolve_reference(self, request: ReferenceRequest) -> ReferenceResolution:
+        status, ids, explanation = self._resolve(request)
+        return self._resolution(request, status, ids, explanation)
+
+    def _resolution(self, request: ReferenceRequest, status: str, ids: list[str], explanation: str) -> ReferenceResolution:
+        doc_id = section_id = None
+        if ids:
+            marks = ",".join("?" * len(ids))
+            rows = self._db.execute(f"SELECT DISTINCT document_id, section_id FROM passages WHERE passage_id IN ({marks})", ids).fetchall()
+            if len({r["document_id"] for r in rows}) == 1:
+                doc_id = rows[0]["document_id"]
+            if len({r["section_id"] for r in rows}) == 1:
+                section_id = rows[0]["section_id"]
+        return ReferenceResolution(
+            request=request,
+            status=ReferenceStatus(status),
+            explanation=explanation,
+            candidate_passage_ids=tuple(ids),
+            resolved_document_id=doc_id,
+            resolved_section_id=section_id,
+        )
+
+    def _resolve(self, request: ReferenceRequest) -> tuple[str, list[str], str]:
         origin = self._db.execute("SELECT * FROM passages WHERE passage_id = ?", (request.originating_passage_id,)).fetchone()
         if origin is None:
-            return ReferenceResolution("missing", [], f"originating passage {request.originating_passage_id!r} is not in snapshot {self.snapshot_id}")
+            return ("missing", [], f"originating passage {request.originating_passage_id!r} is not in snapshot {self.snapshot_id}")
         regulation, namespace, paragraph, this_reg = self._reference_hints(request)
         origin_doc = self._doc_row(origin["document_id"])
 
@@ -195,10 +267,10 @@ class SqliteCorpusReader:
             if target_reg != origin_doc["regulation"]:
                 docs = self._db.execute("SELECT * FROM documents WHERE regulation = ? AND role = 'base' ORDER BY filename", (target_reg,)).fetchall()
                 if not docs:
-                    return ReferenceResolution("outside_corpus", [], f"{target_reg} is not an allowed regulation in this snapshot; reference {request.raw_reference!r} cannot be followed")
+                    return ("outside_corpus", [], f"{target_reg} is not an allowed regulation in this snapshot; reference {request.raw_reference!r} cannot be followed")
                 if len(docs) > 1 and paragraph is None and namespace is None:
                     ids = [self._first_passage(d["document_id"]) for d in docs]
-                    return ReferenceResolution("ambiguous", [i for i in ids if i], f"{target_reg} base version has {len(docs)} files; choose one")
+                    return ("ambiguous", [i for i in ids if i], f"{target_reg} base version has {len(docs)} files; choose one")
                 target_docs = docs
                 cross = True
             else:
@@ -211,7 +283,7 @@ class SqliteCorpusReader:
             doc = target_docs[0]
             scope = [p.passage_id for p in self.read_scope(doc["document_id"]) if "scope_section_not_detected" not in p.parsing_flags]
             note = "series of amendments named in the reference may differ from the base version in this corpus; " if cross else ""
-            return ReferenceResolution(
+            return (
                 "resolved" if scope else "ambiguous", scope,
                 f"whole-regulation reference to {doc['regulation']} {doc['version_label']} (base); {note}candidates are its scope passages. "
                 "A reference alone does not establish that the whole regulation applies.",
@@ -222,7 +294,7 @@ class SqliteCorpusReader:
         if namespace == "this annex":
             parts = st.namespace_parts(origin_ns)
             if not parts.get("annex"):
-                return ReferenceResolution("ambiguous", [], f"{request.raw_reference!r} says 'this annex' but the originating passage is in {origin_ns}")
+                return ("ambiguous", [], f"{request.raw_reference!r} says 'this annex' but the originating passage is in {origin_ns}")
             annex_root = st.namespace_label(parts["annex"])
             namespaces = [origin_ns] + ([annex_root] if annex_root != origin_ns else [])
             prefer_first = True
@@ -258,24 +330,24 @@ class SqliteCorpusReader:
         if not candidates:
             near = self._nearest_existing(target_docs[0]["document_id"], namespaces[0], paragraph) if paragraph else None
             hint = f"; nearest existing ancestor is {near}" if near else ""
-            return ReferenceResolution("missing", [], f"{request.raw_reference!r}: no paragraph {paragraph or ''} in {where} of {target_name}{hint}")
+            return ("missing", [], f"{request.raw_reference!r}: no paragraph {paragraph or ''} in {where} of {target_name}{hint}")
         found_ns = {ns for ns, _ in candidates}
         ids = list(dict.fromkeys(r["passage_id"] for _, r in candidates))
         duplicates = any("duplicate_label" in json.loads(r["flags"]) for _, r in candidates)
         if len(found_ns) > 1 and not prefer_first:
-            return ReferenceResolution("ambiguous", ids, f"{request.raw_reference!r} matches paragraph {paragraph} in {', '.join(sorted(found_ns))} of {target_name}; the reference does not say which")
+            return ("ambiguous", ids, f"{request.raw_reference!r} matches paragraph {paragraph} in {', '.join(sorted(found_ns))} of {target_name}; the reference does not say which")
         if prefer_first and len(found_ns) > 1:
             first_ns = next(ns for ns in namespaces if ns in found_ns)
             ids = [r["passage_id"] for ns, r in candidates if ns == first_ns]
             found_ns = {first_ns}
         is_range = "-" in (paragraph or "")
         if (len(ids) > 1 and not is_range) or duplicates:
-            return ReferenceResolution("ambiguous", ids, f"paragraph {paragraph} occurs more than once in {next(iter(found_ns))} of {target_name} (parsing flagged a duplicate label)")
+            return ("ambiguous", ids, f"paragraph {paragraph} occurs more than once in {next(iter(found_ns))} of {target_name} (parsing flagged a duplicate label)")
         note = " (range endpoints only; intermediate paragraphs are in the same section)" if is_range else ""
         where_found = next(iter(found_ns))
         what = f"{where_found} {paragraph}" if paragraph else where_found
         searched = f" (searched {where})" if not prefer_first else ""
-        return ReferenceResolution("resolved", ids, f"{request.raw_reference!r} -> {what} of {target_name}{note}{searched}")
+        return ("resolved", ids, f"{request.raw_reference!r} -> {what} of {target_name}{note}{searched}")
 
     def get_page_asset(self, document_id: str, pdf_page_index: int, dpi: int = DEFAULT_DPI) -> PageAsset:
         doc = self._doc_row(document_id)
@@ -284,7 +356,9 @@ class SqliteCorpusReader:
             raise UnknownId(f"{document_id} has no pdf_page_index {pdf_page_index} (0..{doc['page_count'] - 1})")
         path = render_page(self.document_path(document_id), doc["checksum"], pdf_page_index, self._paths.renders, dpi)
         label = str(page["printed_page"]) if page["printed_verified"] else None
-        return PageAsset(document_id=document_id, pdf_page_index=pdf_page_index, printed_page=label, media_type="image/png", asset_ref=str(path))
+        width, height = _png_size(path)
+        return PageAsset(document_id=document_id, pdf_page_index=pdf_page_index, printed_page=label, media_type="image/png",
+                         asset_ref=str(path), width=width, height=height)
 
     # --- additions beyond the planned interface (server-side helpers) -------------------------
 
@@ -301,8 +375,9 @@ class SqliteCorpusReader:
             raise FileNotFoundError(f"source file for {document_id} is missing or changed: {path}")
         return path
 
-    def list_reference_candidates(self, passage_ids: list[str]) -> list[ReferenceRequest]:
+    def list_reference_candidates(self, passage_ids: Sequence[str]) -> list[ReferenceRequest]:
         """References detected in these passages at import time, as ready-to-resolve requests."""
+        passage_ids = list(passage_ids)
         out: list[ReferenceRequest] = []
         seen: set[tuple] = set()
         for chunk in range(0, len(passage_ids), 500):
@@ -313,7 +388,12 @@ class SqliteCorpusReader:
                 key = (r["passage_id"], r["raw"], reg, r["target_namespace"], r["target_paragraph"])
                 if key not in seen:
                     seen.add(key)
-                    out.append(ReferenceRequest(*key))
+                    ns = r["target_namespace"]
+                    out.append(ReferenceRequest(
+                        originating_passage_id=r["passage_id"], raw_reference=r["raw"], target_regulation=reg,
+                        target_namespace=st.machine_namespace(ns) if ns and ns != "this annex" else ns,
+                        target_paragraph=r["target_paragraph"], origin_document_id=r["document_id"],
+                    ))
         return out
 
     def search(self, query: str, document_id: str | None = None, limit: int = 20) -> list[SourcePassage]:
@@ -355,7 +435,7 @@ class SqliteCorpusReader:
     # --- internals ----------------------------------------------------------------------------
 
     def _reference_hints(self, request: ReferenceRequest) -> tuple[str | None, str | None, str | None, bool]:
-        regulation, namespace, paragraph = request.target_regulation, request.target_annex, request.target_paragraph
+        regulation, namespace, paragraph = request.target_regulation, request.target_namespace, request.target_paragraph
         this_reg = bool(re.search(r"this\s+Regulation", request.raw_reference, re.IGNORECASE))
         if regulation is None and namespace is None and paragraph is None:
             parsed = st.find_references(request.raw_reference)
@@ -365,12 +445,12 @@ class SqliteCorpusReader:
                 namespace, paragraph = first.target_annex, first.target_paragraph
                 this_reg = this_reg or first.explicit_this_regulation
         if namespace and namespace != "this annex":
-            namespace = _normalise_namespace(namespace)
+            namespace = st.human_namespace(namespace)  # accepts "annex:6/part:6" and "Annex 6, Part 6"
         if paragraph:
             paragraph = paragraph.strip().rstrip(".")
             match = re.match(r"^(?:Annex\s+\S+(?:\s+(?:Part|Appendix)\s+\S+)*\s*,?\s*)", paragraph, re.IGNORECASE)
             if match and match.group(0).strip():
-                namespace = namespace or _normalise_namespace(match.group(0).strip(" ,"))
+                namespace = namespace or st.human_namespace(match.group(0).strip(" ,"))
                 paragraph = paragraph[match.end():].strip() or None
         return regulation, namespace, paragraph, this_reg
 
@@ -404,6 +484,36 @@ class SqliteCorpusReader:
                 out.append(self._passage(rows[cid], [role]))
         return out
 
+    def _table_context(self, row: sqlite3.Row) -> str | None:
+        """Caption, the column-heading row, and footnote-like text from the table's page(s).
+
+        Interim footnote rule (until footnotes are tied to their table at parse time): footnote passages on the same
+        page, and short lines right after the table that start with a marker ("(a)", "a)", "*", "1/", "Note").
+        Footnotes change what a cell means ("values applying at 25 °C (a)"), so over-inclusion is the safe side.
+        """
+        rows = json.loads(row["table_rows"]) if row["table_rows"] else []
+        caption = row["text"].split("\n", 1)[0]
+        header = next((r for r in rows if any(c.strip() for c in r)), None)
+        parts = [caption] if caption and caption != "Table" else []
+        if header:
+            parts.append("Columns: " + " | ".join(header))
+        pages = set(json.loads(row["pdf_page_indices"]))
+        notes: list[str] = []
+        for fn in self._db.execute("SELECT text, pdf_page_indices FROM passages WHERE document_id = ? AND kind = 'footnote' ORDER BY ord", (row["document_id"],)):
+            if pages & set(json.loads(fn["pdf_page_indices"])):
+                notes.append(fn["text"])
+        after = self._db.execute(
+            "SELECT text, pdf_page_indices FROM passages WHERE section_id = ? AND ord > ? AND kind IN ('paragraph', 'intro') ORDER BY ord LIMIT 3",
+            (row["section_id"], row["ord"]),
+        ).fetchall()
+        for nxt in after:
+            if not pages & set(json.loads(nxt["pdf_page_indices"])) or not _FOOTNOTE_START.match(nxt["text"]):
+                break
+            notes.append(nxt["text"][:400])
+        if notes:
+            parts.append("Footnotes: " + " / ".join(notes))
+        return "\n".join(parts) or None
+
     def _descendant_section_ids(self, section_id: str) -> list[str]:
         out, frontier = [section_id], [section_id]
         while frontier:
@@ -429,9 +539,29 @@ def _paragraph_targets(paragraph: str) -> list[str]:
     return [p.strip().rstrip(".") for p in paragraph.split("-") if p.strip()]
 
 
-def _normalise_namespace(text: str) -> str:
-    parts = dict((k.lower(), v.rstrip(".,").upper()) for k, v in re.findall(r"(Annex|Part|Appendix)\s+(\w+)", text, re.IGNORECASE))
-    return st.namespace_label(parts.get("annex"), parts.get("part"), parts.get("appendix"))
+def _load_index(package_root: Path) -> tuple[dict[str, dict], dict[tuple[str, str, str], int]]:
+    """Verbatim index entries by regulation, and each (regulation, role, filename)'s position in index.json."""
+    try:
+        entries = json.loads((package_root / "regulations" / "index.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}, {}
+    order: dict[tuple[str, str, str], int] = {}
+    for entry in entries:
+        for version in entry.get("versions", []):
+            for file in version.get("files", []):
+                order.setdefault((entry["regulation"], version.get("role"), file.get("name")), len(order))
+    return {e["regulation"]: e for e in entries}, order
+
+
+def _png_size(path: Path) -> tuple[int | None, int | None]:
+    try:
+        with open(path, "rb") as handle:
+            head = handle.read(24)
+        if head[:8] == b"\x89PNG\r\n\x1a\n":
+            return struct.unpack(">II", head[16:24])
+    except OSError:
+        pass
+    return None, None
 
 
 def _regulation_sort_key(regulation: str) -> tuple:

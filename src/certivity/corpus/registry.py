@@ -33,9 +33,11 @@ def regulation_slug(regulation: str) -> str:
 
 
 def make_document_id(regulation: str, version_label: str, filename: str, sha256: str) -> str:
-    """Readable and unique: regulation, version, file stem and checksum prefix, e.g. ``UN_R48@9.3.0~UN_R48_base~1f1ddd74``."""
-    stem = re.sub(r"[^A-Za-z0-9_.-]", "_", Path(filename).stem)
-    return f"{regulation_slug(regulation)}@{version_label}~{stem}~{sha256[:8]}"
+    """The contract's ``document_id_for``: ``un-r48:9-3-0:sha256-d4b1dde87bf8``. The checksum segment keeps two files
+    of one version apart; ``filename`` is accepted for call compatibility and is not part of the ID."""
+    from certivity.contracts import document_id_for
+
+    return document_id_for(regulation, version_label, sha256)
 
 
 def load_index(package_root: Path) -> list[DocumentSpec]:

@@ -11,6 +11,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
+from certivity import contracts
+
 from . import structure as st
 from .parse import ParsedDocument, ParsedPassage
 from .registry import DocumentSpec
@@ -81,19 +83,42 @@ class AssembledDocument:
     references: list[ReferenceRow]
 
 
-def _slug(namespace: str) -> str:
-    return namespace.replace(" ", "")
+NAMESPACE_LEVEL = "_"  # ID label for text before the first paragraph label of a namespace (headings, front matter)
 
 
 def section_id_for(document_id: str, namespace: str, label_key: tuple | None) -> str:
+    """The contract's ``section_id_for`` with the machine namespace: ``<doc>#annex:6/part:6/3``; a root is ``.../root``."""
     tail = ".".join(map(str, label_key)) if label_key else "root"
-    return f"{document_id}/sec/{_slug(namespace)}/{tail}"
+    return contracts.section_id_for(document_id, st.machine_namespace(namespace), tail)
 
 
-def passage_id_for(document_id: str, passage: ParsedPassage) -> str:
-    ns, _, rest = passage.key.partition("|")
-    rest = rest.replace("#", "_dup").replace(" ", "_")
-    return f"{document_id}/p/{_slug(ns)}/{rest}"
+def assign_passage_ids(document_id: str, passages: list[ParsedPassage]) -> dict[str, str]:
+    """Label-keyed passage IDs (contract ``passage_id_for``): ``<doc>#main/6.10.4.2@001``.
+
+    A passage is keyed on its own label, else on the nearest preceding label in its namespace, else on
+    NAMESPACE_LEVEL. Within one label the paragraph itself is @001; tables, captions, footnotes and continuations
+    attributed to it follow from @002 in reading order. So an ID survives re-sectioning as long as the label does.
+    """
+    current: dict[str, str] = {}
+    groups: dict[tuple[str, str], list[ParsedPassage]] = {}
+    for passage in passages:
+        if passage.label:
+            label = passage.label.rstrip(".")
+        else:
+            label = current.get(passage.namespace, NAMESPACE_LEVEL) if passage.kind != "heading" else NAMESPACE_LEVEL
+        if passage.kind == "paragraph" and passage.label:
+            current[passage.namespace] = label
+        groups.setdefault((passage.namespace, label), []).append(passage)
+    ids: dict[str, str] = {}
+    for (namespace, label), members in groups.items():
+        primary = next((m for m in members if m.kind == "paragraph" and m.label and "continuation_after_table" not in m.flags), None)
+        ordered = ([primary] if primary else []) + [m for m in members if m is not primary]
+        machine = st.machine_namespace(namespace)
+        for ordinal, member in enumerate(ordered, start=1):
+            ids[member.key] = contracts.passage_id_for(document_id, machine, label, ordinal)
+    if len(set(ids.values())) != len(ids):
+        raise ValueError(f"{document_id}: passage IDs are not unique")
+    return ids
 
 
 def short_heading(text: str, label: str | None) -> str:
@@ -111,6 +136,7 @@ def assemble(spec: DocumentSpec, parsed: ParsedDocument) -> AssembledDocument:
     doc_id = spec.document_id
     printed = {p.pdf_page_index: p.printed_page for p in parsed.pages}
 
+    passage_ids = assign_passage_ids(doc_id, parsed.passages)
     # pass 1: passage rows, each attached to a paragraph-tree node (namespace, label key or None for the root)
     titles: dict[str, str] = {}
     by_label: dict[tuple[str, tuple], PassageRow] = {}
@@ -127,7 +153,7 @@ def assemble(spec: DocumentSpec, parsed: ParsedDocument) -> AssembledDocument:
         else:
             node = current.get(ns)
         current[ns] = node
-        pid = passage_id_for(doc_id, passage)
+        pid = passage_ids[passage.key]
         pages_printed = [printed.get(i) for i in passage.pdf_pages]
         flags = list(passage.flags)
         if not passage.label and ns != st.MAIN and passage.kind in ("intro", "heading", "paragraph"):
