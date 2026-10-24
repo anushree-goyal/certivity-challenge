@@ -29,7 +29,7 @@ def test_every_page_has_a_verified_printed_label(corpus):
 
 def test_known_paragraph_text_and_page(corpus, docs, by_label):
     p = by_label(docs["UN R48"].document_id, "6.10.4.2")
-    assert p.printed_start_page == 50 and p.pdf_page_indices == [49]
+    assert p.printed_start_page == "50" and p.pdf_page_indices == (49,) and p.printed_page_span == ("50",)
     assert "not less than 350 mm nor more than 1,500 mm" in p.text
     assert p.heading_ancestry[-2:] == ["6. Individual specifications", "6.10. Rear position lamp"] or "6.10.4. Position" in p.heading_ancestry[-1]
 
@@ -39,8 +39,9 @@ def test_paragraph_spanning_pages_keeps_both_pages(corpus, docs):
     spanning = [p for s in corpus.list_sections(doc) for p in corpus.read_section(s.section_id, False).primary_passages if "spans_pages" in p.parsing_flags and "kind:paragraph" in p.parsing_flags]
     assert spanning, "expected at least one cross-page paragraph in R48"
     p = spanning[0]
-    assert len(p.page_span) == 2 and p.page_span[1] == p.page_span[0] + 1
-    assert p.pdf_page_indices == [n - 1 for n in p.page_span]
+    span = [int(n) for n in p.printed_page_span]
+    assert len(span) == 2 and span[1] == span[0] + 1 and p.printed_start_page == p.printed_page_span[0]
+    assert list(p.pdf_page_indices) == [n - 1 for n in span]
 
 
 def test_repeated_label_across_annex_parts_stays_distinct(corpus, docs):
@@ -61,16 +62,16 @@ def test_table_keeps_numeric_values(corpus, docs):
 
 def test_section_bundle_separates_primary_and_context(corpus, docs):
     doc = docs["UN R48"].document_id
-    section = next(s for s in corpus.list_sections(doc) if s.paragraph_label == "6.10")
+    section = next(s for s in corpus.list_sections(doc) if s.number == "6.10" and s.namespace == "main")
     bundle = corpus.read_section(section.section_id)
     primary_ids = {p.passage_id for p in bundle.primary_passages}
-    assert [p.passage_id for p in bundle.primary_passages] == section.primary_passage_ids
+    assert [p.passage_id for p in bundle.primary_passages] == list(section.passage_ids)
     assert primary_ids.isdisjoint(p.passage_id for p in bundle.context_passages)
     roles = {f for p in bundle.context_passages for f in p.parsing_flags if f.startswith("context:")}
     assert roles == {"context:parent", "context:definition"}
     defined = [p.text for p in bundle.context_passages if "context:definition" in p.parsing_flags]
     assert any('"Rear position lamp" means' in t for t in defined)
-    assert corpus.read_section(section.section_id, include_context=False).context_passages == []
+    assert corpus.read_section(section.section_id, include_context=False).context_passages == ()
 
 
 def test_every_document_has_scope_passages(corpus, docs):
@@ -87,7 +88,7 @@ def test_reference_resolution_statuses(corpus, docs, by_label):
         return corpus.resolve_reference(ReferenceRequest(origin.passage_id, raw))
 
     res = resolve(r48, "paragraph 5.8.1. above")
-    assert res.status == "resolved" and res.candidate_passage_ids == [r48.passage_id.replace("/6.10.5.1", "/5.8.1")]
+    assert res.status == "resolved" and res.candidate_passage_ids == (r48.passage_id.replace("/6.10.5.1", "/5.8.1"),)
     res = resolve(r48, "paragraph 6.2 of UN Regulation No. 10")
     assert res.status == "resolved" and res.candidate_passage_ids[0].startswith(docs["UN R10"].document_id)
     assert resolve(r48, "UN Regulation No. 999").status == "outside_corpus"
@@ -123,7 +124,7 @@ def test_page_asset_renders_exact_physical_page(corpus, docs):
 
 def test_unknown_ids_raise(corpus, docs):
     # get_passages omits unknown IDs (contract); the other lookups raise
-    known = corpus.list_sections(docs["UN R48"].document_id)[3].primary_passage_ids[0]
+    known = corpus.list_sections(docs["UN R48"].document_id)[3].passage_ids[0]
     assert corpus.get_passages(["nope"]) == []
     assert [p.passage_id for p in corpus.get_passages(["nope", known, known])] == [known]
     with pytest.raises(UnknownId):
@@ -135,7 +136,7 @@ def test_unknown_ids_raise(corpus, docs):
 
 def test_get_passages_preserves_order(corpus, docs):
     doc = docs["UN R48"].document_id
-    ids = corpus.list_sections(doc)[5].primary_passage_ids[:3]
+    ids = corpus.list_sections(doc)[5].passage_ids[:3]
     assert [p.passage_id for p in corpus.get_passages(list(reversed(ids)))] == list(reversed(ids))
 
 
@@ -153,3 +154,51 @@ def test_snapshot_is_read_only_and_thread_safe(corpus, docs):
     for t in threads:
         t.join()
     assert len(set(results)) == 1 and results[0] > 0
+
+
+def test_contract_shapes(corpus, docs, by_label, paths):
+    from certivity.corpus._contracts import DocumentRole, PageRef, ReferenceStatus
+
+    # documents: role enum, verbatim index entry, index.json order
+    listed = corpus.list_documents(DocumentRole.BASE)
+    assert [d.regulation for d in listed[:3]] == ["UN R3", "UN R6", "UN R7"] and listed[-1].regulation == "UN GTR 9"
+    assert listed == corpus.list_documents("base")
+    r48 = docs["UN R48"]
+    assert r48.role is DocumentRole.BASE and r48.index_entry["regulation"] == "UN R48" and r48.index_entry["versions"]
+    # tables: is_table + table_context
+    doc = docs["UN R150"].document_id
+    table = next(p for s in corpus.list_sections(doc) if s.namespace == "Annex 6 Part 6" for p in corpus.read_section(s.section_id, False).primary_passages if p.is_table)
+    assert table.table_context.startswith("Table A6-1") and "Columns:" in table.table_context
+    # bundle page refs with reasons
+    section = next(s for s in corpus.list_sections(doc) if s.namespace == "Annex 6 Part 6")
+    refs = corpus.read_section(section.section_id).page_refs
+    assert refs and all(isinstance(r, PageRef) and r.reason and r.printed_page == str(r.pdf_page_index + 1) for r in refs)
+    # resolution carries its request, enum status and resolved ids
+    origin = by_label(r48.document_id, "6.10.5.1")
+    req = corpus.list_reference_candidates([origin.passage_id])[0]
+    res = corpus.resolve_reference(req)
+    assert res.request is req and res.status is ReferenceStatus.RESOLVED and res.is_usable
+    assert res.resolved_document_id == r48.document_id and res.resolved_section_id
+    assert req.origin_document_id == r48.document_id
+
+
+def test_namespace_for_style_targets_are_accepted(corpus, docs, by_label):
+    from certivity.corpus._contracts import ReferenceRequest
+
+    origin = by_label(docs["UN R150"].document_id, "Annex 6 Part 6 3")
+    for ns in ("annex:6/part:6", "Annex 6, Part 6", "Annex 6 Part 6"):
+        res = corpus.resolve_reference(ReferenceRequest(origin.passage_id, "paragraph 1.1", target_namespace=ns, target_paragraph="1.1"))
+        assert res.status == "resolved" and corpus.get_passages(res.candidate_passage_ids)[0].paragraph_label == "Annex 6 Part 6 1.1", ns
+
+
+def test_read_scope_includes_definitions(corpus, docs):
+    scope = corpus.read_scope(docs["UN R48"].document_id)
+    labels = [p.paragraph_label for p in scope]
+    assert "1" in labels and "2.5.7" in labels and labels.index("1") < labels.index("2.5.7")
+
+
+def test_figure_caption_is_not_merged_into_paragraph(corpus, docs, by_label):
+    p = by_label(docs["UN R148"].document_id, "3.3.1.2")
+    assert "Figure I" not in p.text and p.text.endswith("shown in Annex 7.")
+    section = corpus.read_section(p.section_id, False)
+    assert any("kind:caption" in q.parsing_flags and q.text == "Figure I" for q in section.primary_passages)

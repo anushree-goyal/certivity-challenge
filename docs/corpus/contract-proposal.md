@@ -1,5 +1,9 @@
 # Contract proposal from the corpus component (for Anushree)
 
+> **Superseded for record shapes:** the corpus now produces the records exactly as defined in `certivity.contracts`
+> 1.1.0 (`feature/agent`). The decisions below that are still open are the namespace format, the ID format and the
+> `paragraph_label` form (bare label or citation form); the corpus keeps its current formats until those are settled.
+
 `src/certivity/contracts.py` did not exist when the corpus was built. To avoid blocking, the corpus imports
 `certivity.contracts` when present and otherwise uses
 `src/certivity/corpus/_provisional_contracts.py`, whose field names follow the master-plan table. When you publish

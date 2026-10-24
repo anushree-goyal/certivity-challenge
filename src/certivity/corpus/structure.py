@@ -106,7 +106,9 @@ SCOPE_HEADING = re.compile(r"^Scope\b", re.IGNORECASE)
 MAJOR_LABEL_NODOT = re.compile(r"^(?P<label>\d{1,2})\s+(?P<rest>[A-Z].*)$")
 APPENDIX_HEADING = re.compile(r"^Appendix\s+(?P<appendix>\d+[A-Z]?|[IVX]+)\b(?P<rest>.*)$", re.IGNORECASE)
 PART_HEADING = re.compile(rf"^Part\s+(?P<part>\d+[A-Z]?|[IVX]+|[A-Z])\b(?:{_DASH}|\s+)?(?P<rest>.*)$", re.IGNORECASE)
-CAPTION = re.compile(r"^(?P<kind>Table|Figure)\s+(?P<name>[A-Z]{0,3}\d+[A-Za-z]?(?:[-.]\d+[A-Za-z]?)*)\b", re.IGNORECASE)
+CAPTION = re.compile(
+    r"^(?P<kind>Table|Figure)\s+(?P<name>[A-Z]{0,3}\d+[A-Za-z]?(?:[-.]\d+[A-Za-z]?)*|[IVX]{1,5})(?![\w-])", re.IGNORECASE
+)  # "Table A6-1", "Figure 3a", "Figure I" (R148)
 
 MAIN = "main"
 

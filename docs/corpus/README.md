@@ -40,13 +40,18 @@ Environment overrides: `CERTIVITY_PARTICIPANT_PACKAGE` (default `data/participan
 
 ## Public interface
 
+Records are Anushree's `certivity.contracts` (1.1.0): `Document`, `SourcePassage`, `Section`, `SectionBundle`,
+`PageRef`, `PageAsset`, `ReferenceRequest`, `ReferenceResolution`, `DocumentRole`, `ReferenceStatus`. Until that module
+is on this branch the corpus uses `_provisional_contracts.py`, which mirrors the same names, types and defaults; the
+tests pass against both.
+
 ```python
 from certivity.corpus import open_corpus, corpus_status, ensure_corpus
 
 corpus = open_corpus("data/cache/corpus")   # CURRENT snapshot, read-only; snapshot_id="snap-..." pins one
 corpus.snapshot_id                       # record with each run
-corpus.list_documents(role="base")       # -> list[Document]; role=None lists every imported role
-corpus.read_scope(document_id)           # -> list[SourcePassage]: title + Scope clause and its sub-paragraphs
+corpus.list_documents(role="base")       # -> list[Document] in index.json order; role=None lists every imported role
+corpus.read_scope(document_id)           # -> list[SourcePassage]: title, Scope clause, then the Definitions clause
 corpus.list_sections(document_id)        # -> list[Section] in reading order (systematic coverage starts here)
 corpus.read_section(section_id, include_context=True)   # -> SectionBundle
 corpus.get_passages(passage_ids)         # -> list[SourcePassage] in request order; unknown ids are omitted (contract)
@@ -76,7 +81,7 @@ shared by a worker's threads. Writes fail.
 | --- | --- | --- |
 | document | `<regulation>@<version>~<file stem>~<sha256[:8]>` | `UN_R48@9.3.0~UN_R48_base~d4b1dde8` |
 | section | `<document>/sec/<namespace>/<label or root>` | `.../sec/Annex6Part6/root`, `.../sec/main/6.10` |
-| passage | `<document>/p/<namespace>/<label or _kind>[_dupN]` | `.../p/main/6.10.4.2`, `.../p/Annex6Part6/3.2/table:A6-1` |
+| passage | `<document>/p/<namespace>/<label or _kind>[_dupN]`; tables and captions add `\|table:<name>` / `\|caption:<name>` | `.../p/main/6.10.4.2`, `.../p/Annex6Part6/3.2\|table:A6-1` |
 
 - **Namespaces** keep repeated labels apart: `main`, `Annex 4`, `Annex 6 Part 6`, `Annex 4 Appendix 1`, `Appendix 2`
   (an appendix to the main body), `Introduction` (R148, R171), and `Part I` (the non-normative GTR 9 rationale).
@@ -85,10 +90,13 @@ shared by a worker's threads. Writes fail.
   Unlabelled main-body text (title, front matter) has `null`.
 - **Pages:** every page of every supplied PDF has a footer `UN R48, version 9.3.0 | page 50 of 122`. The parser
   checks that footer against the physical position; it matches on all 3,029 pages. So
-  `printed_start_page = pdf_page_index + 1`, and the printed page is what `source.page` cites. `pdf_page_indices`
-  are zero-based physical indices for rendering. `page_span` is printed pages.
+  `printed_start_page` (a string, e.g. `"50"`) is `pdf_page_index + 1`, and it is what `source.page` cites.
+  `printed_page_span` lists every printed page as strings; `pdf_page_indices` are zero-based physical indices.
+- **`Section`**: `number` is the bare label (`6.10`, `None` for a namespace root), `passage_ids` the primary passages
+  in reading order, `depth` (0 = namespace root), `ordinal` the position in document reading order.
+- **Tables**: `is_table=True`, and `table_context` holds the caption plus the column-heading row.
 - **`parsing_flags`** on a `SourcePassage`:
-  - `kind:paragraph|heading|intro|table|footnote|front_matter` marks the passage type.
+  - `kind:paragraph|heading|intro|table|caption|footnote|front_matter` marks the passage type.
   - `context:parent|context:definition` appears only on bundle context passages.
   - `spans_pages`, `page_has_visual_content`, `caption:<text>`, `table_without_caption`, `continuation_after_table`,
     `label_out_of_sequence`, `label_gap`, `duplicate_label`, `label_without_dot` and `layout_text_outside_margin`
@@ -107,11 +115,14 @@ shared by a worker's threads. Writes fail.
   - `context_passages`, kept separate: the heading passages of every ancestor section (e.g. `6. Individual
     specifications`, `Annex 6`, `Part 6 - ...`), plus up to 20 definitions whose quoted term occurs in the primary
     text (`"Rear position lamp" means ...`).
-  - `visual_pdf_page_indices`: pages of the primary passages that have images, tables or substantial vector
-    drawings, for a vision call when needed.
+  - `page_refs`: a `PageRef` for each page of the primary passages that has images, tables or substantial vector
+    drawings (`reason` = `table`, `image`, `drawing`, comma-joined), for a vision call when needed.
+  - `notes`: warnings such as a section over 12k characters, or a section number inferred from its sub-paragraphs.
 - **Tables** become their own passages with the caption (`Table A6-1 ...`) and one row per line, cells joined by
   ` | `. Cell text is read with a clip, because PyMuPDF's `Table.extract()` drops decimal points (`0.51 ± 0.02`
   became `051±002`).
+- **Captions** (`Figure I`, `Table A6-1 ...`) become separate `kind:caption` passages and do not interrupt the
+  paragraph around them (R148 3.3.1.2 continues after its figure). A table's caption is part of the table passage.
 - **Footnotes** become separate passages in the section where they appear. They are de-duplicated when the
   renderer repeats one per marker. A paragraph interrupted by a footnote or a page break continues in the same
   passage.

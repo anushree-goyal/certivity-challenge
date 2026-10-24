@@ -92,7 +92,7 @@ def main(argv: list[str] | None = None) -> int:
         _dump(corpus.list_documents(None))
     elif args.cmd == "sections":
         for sec in corpus.list_sections(args.document_id):
-            print(f"{sec.section_id}\t{len(sec.primary_passage_ids)}\t{sec.paragraph_label or ''}\t{sec.heading[:80]}")
+            print(f"{sec.section_id}\t{len(sec.passage_ids)}\t{sec.number or ''}\t{sec.heading[:80]}")
     elif args.cmd == "section":
         _dump(corpus.read_section(args.section_id, include_context=not args.no_context))
     elif args.cmd == "passages":
