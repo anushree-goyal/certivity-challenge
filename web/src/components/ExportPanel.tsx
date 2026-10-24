@@ -8,6 +8,9 @@ type Availability =
   | { kind: "unavailable"; reason: string };
 
 function availability(status: RunStatus, view: RunView | null): Availability {
+  if (status.finished && !(status.team_id ?? "").trim()) {
+    return { kind: "unavailable", reason: "the team ID is not configured (set CERTIVITY_TEAM_ID and run again)" };
+  }
   if (view?.submission.available) return { kind: "valid" };
   if (view?.validation && !view.validation.valid) return { kind: "invalid", errors: view.validation.errors ?? [] };
   if (!status.finished) return { kind: "unavailable", reason: `the run is still ${status.state}` };
@@ -47,6 +50,9 @@ export function ExportPanel({ runId, status, view }: { runId: string; status: Ru
 
   return (
     <div className="export-box">
+      <div className="export-case" title="Written into the exported file; check it before uploading">
+        Case ID <code>{status.case_id}</code>
+      </div>
       <div className="export-row">
         {state.kind === "valid" && <span className="chip green" title="Passed the official participant validator">Valid · official validator</span>}
         {state.kind === "invalid" && <span className="chip error">Invalid · {state.errors.length} validator error{state.errors.length === 1 ? "" : "s"}</span>}

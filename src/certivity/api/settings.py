@@ -74,6 +74,19 @@ DEFAULT_ENTRY_POINTS = {
 }
 
 
+PLACEHOLDER_TEAM_IDS = {"team-07", "team-demo", "team-test", "your-team-id"}
+
+
+def team_id_problem(team_id: str) -> str | None:
+    """Why the configured team ID cannot be trusted for exports, or None when it looks real."""
+    value = (team_id or "").strip()
+    if not value:
+        return "CERTIVITY_TEAM_ID is not set; exports are blocked until it is (team id from hackathon.certivity.io)."
+    if value.lower() in PLACEHOLDER_TEAM_IDS:
+        return f"CERTIVITY_TEAM_ID is a placeholder ({value!r}); set your real team id from hackathon.certivity.io."
+    return None
+
+
 def load_settings() -> Settings:
     _load_dotenv(REPO_ROOT / ".env")
     entry_points = {

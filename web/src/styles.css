@@ -425,3 +425,7 @@ tr.reg-focus td:first-child { box-shadow: inset 3px 0 0 var(--teal); }
 .app-footer { margin-top: 2rem; padding-top: .8rem; border-top: 1px solid var(--border); font-size: .75rem; color: var(--muted); }
 .app-footer a { color: var(--muted); }
 .app-footer a:hover { color: var(--teal); }
+
+.form-grid.single { grid-template-columns: minmax(0, 1fr); max-width: 760px; }
+.export-case { font-size: .75rem; color: var(--muted); }
+.export-case code { color: var(--teal); font-size: .8rem; margin-left: .3rem; }

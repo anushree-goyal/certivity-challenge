@@ -23,6 +23,10 @@ def _serve(args) -> int:
         args.fetch = False
         if _bootstrap(args) != 0:
             print("Corpus is not ready; the server starts anyway and /api/health shows why.", file=sys.stderr)
+    from certivity.api.settings import load_settings, team_id_problem
+
+    if problem := team_id_problem(load_settings().default_team_id):
+        print(f"Warning: {problem}", file=sys.stderr)
     if not (REPO_ROOT / "web" / "dist").is_dir():
         print("Note: the UI is not built, so only /api is served. Build it with: cd web && npm install && npm run build",
               file=sys.stderr)

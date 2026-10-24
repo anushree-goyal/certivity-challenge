@@ -69,7 +69,6 @@ export function RunDetail({ runId, onFinished, onOpenRegulation }: {
         <h1>{prettyCase(status.case_id)}</h1>
         <StateBadge state={status.state} />
         <OriginBadge origin={status.origin} />
-        <span className="muted small">team {status.team_id}</span>
         <span className="spacer" />
         {!status.finished && (status.cancel_requested
           ? <span className="muted small">Cancelling after the current stage…</span>
