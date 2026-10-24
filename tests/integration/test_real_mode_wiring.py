@@ -55,7 +55,7 @@ def test_cached_reuse_only_for_identical_fresh_runs(settings):
         wait_finished(client, first["run_id"])
 
         reused = client.post("/api/runs", data={"package_case": "dev-rear-lamp", "team_id": "team-07",
-                                                "reuse_cached": "true"}).json()
+                                                "reuse_cached": "true", "dev": "true"}).json()
         assert reused["origin"] == "cached" and reused["cached_from"] == first["run_id"]
         view = client.get(f"/api/runs/{reused['run_id']}/results").json()
         assert view["run"]["origin"] == "cached" and len(view["requirements"]) == 6
@@ -63,7 +63,7 @@ def test_cached_reuse_only_for_identical_fresh_runs(settings):
             client.get(f"/api/runs/{first['run_id']}/submission").json()
 
         other_team = client.post("/api/runs", data={"package_case": "dev-rear-lamp", "team_id": "team-08",
-                                                    "reuse_cached": "true"}).json()
+                                                    "reuse_cached": "true", "dev": "true"}).json()
         assert other_team["origin"] == "fresh"
         wait_finished(client, other_team["run_id"])
 
@@ -143,3 +143,13 @@ def test_model_call_budget_reaches_the_adapter(settings):
         assert [a["max_calls"] for a in fake_modules.SEEN["adapters"] if a["cache_dir"]] == [7, 3]
         manifest = client.app.state.store.read(run["run_id"])
         assert manifest["model_call_budget"] == 7 and manifest["review_call_budget"] == 3
+
+
+def test_cache_reuse_ignored_without_dev_flag(settings):
+    with TestClient(create_app(_real_settings(settings))) as client:
+        first = client.post("/api/runs", data={"package_case": "dev-rear-lamp", "team_id": "team-07"}).json()
+        wait_finished(client, first["run_id"])
+        normal = client.post("/api/runs", data={"package_case": "dev-rear-lamp", "team_id": "team-07",
+                                                "reuse_cached": "true"}).json()
+        assert normal["origin"] == "fresh"  # normal runs are always fresh
+        wait_finished(client, normal["run_id"])

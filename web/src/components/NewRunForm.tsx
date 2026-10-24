@@ -25,11 +25,12 @@ export function NewRunForm({ health, onCreated }: { health: Health | null; onCre
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => { api.cases().then(setCases).catch(() => undefined); }, []);
+  const loadCases = () => api.cases().then(setCases).catch(() => undefined);
+  useEffect(() => { loadCases(); }, []);
 
   const chooseCase = (id: string) => {
     setPackageCase(id);
-    setCaseId(id);  // the case folder name is the case_id the platform expects
+    setCaseId(id);  // exactly the folder name: the case_id the platform expects (empty again for own input)
     setError(null);
   };
   const changeTeam = (value: string) => {
@@ -40,9 +41,9 @@ export function NewRunForm({ health, onCreated }: { health: Health | null; onCre
   const hasInput = !!packageCase || !!specFile || !!specText.trim() || drawings.length > 0;
   const trimmedTeam = teamId.trim();
   const trimmedCase = caseId.trim();
-  const isPackageFolder = cases.some((c) => c.case_id === trimmedCase);  // folder names are accepted as they are
-  const caseIdError = !trimmedCase ? "Case ID is required."
-    : !isPackageFolder && !CASE_ID_PATTERN.test(trimmedCase) ? "Case ID may contain only lowercase letters, digits and hyphens." : null;
+  // A selected package case fixes the case ID to its folder name; only typed IDs (own input) are checked.
+  const caseIdError = packageCase ? null : !trimmedCase ? "Case ID is required."
+    : !CASE_ID_PATTERN.test(trimmedCase) ? "Case ID may contain only lowercase letters, digits and hyphens." : null;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,7 +62,8 @@ export function NewRunForm({ health, onCreated }: { health: Health | null; onCre
     form.set("team_id", trimmedTeam);
     form.set("case_id", trimmedCase);
     form.set("mode", DEV_MODE ? mode : "real");
-    form.set("reuse_cached", String(reuseCached));
+    form.set("reuse_cached", String(DEV_MODE && reuseCached));  // normal runs are always fresh
+    form.set("dev", String(DEV_MODE));
     if (packageCase) form.set("package_case", packageCase);
     if (specFile) form.set("spec_file", specFile);
     else if (specText.trim()) form.set("spec_text", specText);
@@ -98,7 +100,7 @@ export function NewRunForm({ health, onCreated }: { health: Health | null; onCre
           <h2>Product input</h2>
           <p className="hint">A technical specification and/or an exploded-view drawing of the component.</p>
           <label>Case from the regulation package
-            <select value={packageCase} onChange={(e) => chooseCase(e.target.value)}>
+            <select value={packageCase} onChange={(e) => chooseCase(e.target.value)} onFocus={loadCases}>
               <option value="">Upload my own input</option>
               {cases.map((c) => (
                 <option key={c.case_id} value={c.case_id}>
@@ -134,33 +136,33 @@ export function NewRunForm({ health, onCreated }: { health: Health | null; onCre
             </label>
             <label>Case ID <span className="req" aria-hidden>*</span>
               {packageCase ? (
-                <select value={caseId} onChange={(e) => setCaseId(e.target.value)}>
-                  {cases.map((c) => <option key={c.case_id} value={c.case_id}>{c.case_id}</option>)}
-                </select>
+                <input value={packageCase} readOnly aria-readonly className="readonly"
+                       title="Set by the selected case folder" />
               ) : (
                 <input value={caseId} onChange={(e) => setCaseId(e.target.value.toLowerCase())} required aria-required
-                       aria-invalid={!!caseId && !!caseIdError} placeholder="e.g. front-bumper" list="case-folders" autoComplete="off" />
+                       aria-invalid={!!caseId && !!caseIdError} placeholder="heldout-front-bumper" autoComplete="off" />
               )}
-              <datalist id="case-folders">{cases.map((c) => <option key={c.case_id} value={c.case_id} />)}</datalist>
             </label>
           </div>
           {!packageCase && caseId && caseIdError && <p className="field-error">{caseIdError}</p>}
-          <p className="hint">The case ID is the case's folder name in the regulation package; it is written into the exported file.</p>
+          <p className="hint">{packageCase
+            ? "Case ID is the selected case's folder name and is written into the exported file."
+            : "For the held-out case the case ID must be exactly heldout-front-bumper."}</p>
 
-          <label>Processing
-            {DEV_MODE ? (
-              <select value={mode} onChange={(e) => setMode(e.target.value as "real" | "fixture")}>
-                <option value="real">Full analysis (corpus and model)</option>
-                <option value="fixture">Fixture: synthetic data (dev only)</option>
-              </select>
-            ) : (
-              <div className="static-field">Full analysis (corpus and model)</div>
-            )}
-          </label>
-          <label className="check">
-            <input type="checkbox" checked={reuseCached} onChange={(e) => setReuseCached(e.target.checked)} />
-            Reuse a cached result for identical input and configuration
-          </label>
+          {DEV_MODE && (
+            <>
+              <label>Processing (dev)
+                <select value={mode} onChange={(e) => setMode(e.target.value as "real" | "fixture")}>
+                  <option value="real">Full analysis (corpus and model)</option>
+                  <option value="fixture">Fixture: synthetic data</option>
+                </select>
+              </label>
+              <label className="check">
+                <input type="checkbox" checked={reuseCached} onChange={(e) => setReuseCached(e.target.checked)} />
+                Reuse a cached result for identical input and configuration (dev)
+              </label>
+            </>
+          )}
           {health && !health.real_pipeline_ready && (!DEV_MODE || mode === "real") && (
             <div className="banner">The full pipeline is not ready (see system status in the sidebar). The run will stop and show why.</div>
           )}

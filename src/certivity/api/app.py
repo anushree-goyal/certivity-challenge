@@ -121,12 +121,18 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
         spec_text: str = Form(""),
         mode: str = Form(""),
         reuse_cached: bool = Form(False),
+        dev: bool = Form(False),
         spec_file: UploadFile | None = File(None),
         drawings: list[UploadFile] = File(default=[]),
     ) -> dict[str, Any]:
         mode = (mode or settings.pipeline_mode).lower()
         if mode not in ("real", "fixture"):
             raise HTTPException(422, "mode must be 'real' or 'fixture'")
+        # Fixture processing and cache reuse are development options (the UI's ?dev=1 sends dev=true).
+        # A server deliberately configured for fixture mode keeps fixture as its default.
+        if mode == "fixture" and not dev and settings.pipeline_mode != "fixture":
+            raise HTTPException(422, "Fixture processing is a development option; open the app with ?dev=1 to use it")
+        reuse_cached = reuse_cached and dev  # normal runs are always fresh
         files: dict[str, bytes] = {}
         spec_bytes: bytes | None = None
         drawing_files: list[str] = []
@@ -142,7 +148,10 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
                 name = f"drawing-{len(drawing_files) + 1}{p.suffix.lower()}"
                 files[name] = p.read_bytes()
                 drawing_files.append(name)
-            case_id = case_id or package_case_id
+            # The platform's case_id is the case folder name; it is filled from the selected case, never edited.
+            if case_id.strip() and case_id.strip() != package_case_id:
+                raise HTTPException(422, f"case_id must be the selected case folder name {package_case_id!r}")
+            case_id = package_case_id
 
         if spec_file is not None and spec_file.filename:
             if Path(spec_file.filename).suffix.lower() not in SPEC_TYPES:

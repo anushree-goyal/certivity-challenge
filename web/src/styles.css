@@ -346,7 +346,7 @@ body { background:
 /* ---- run settings form ---- */
 .req { color: var(--error); font-weight: 700; }
 .field-error { color: var(--error); font-size: .78rem; margin: -.2rem 0 .3rem; }
-.static-field { margin-top: .25rem; padding: .45rem .55rem; border: 1px dashed var(--border-strong); border-radius: 6px; color: var(--text); font-size: .85rem; }
+input.readonly { background: transparent; border-style: dashed; color: var(--teal); cursor: default; font-family: var(--mono); }
 input[aria-invalid="true"] { border-color: var(--error); }
 .side-tag.cached { background: rgba(143, 227, 209, .16); color: var(--teal); font-weight: 700; }
 
