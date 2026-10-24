@@ -60,10 +60,10 @@ def draft_notes(d: Any) -> str:
 
 # --- CorpusReader ---
 def get_passages(corpus: Any, ids) -> list:
-    """Passages for ``ids``, omitting unknown ones (the contract's rule).
+    """Passages for ``ids``, omitting unknown ones (the contract's rule; feature/corpus d76052b).
 
-    feature/corpus currently raises UnknownId for any unknown ID instead; one bad citation must
-    not abort the whole review, so on an error fall back to one lookup per ID.
+    Defensive: if a reader raises anyway, fall back to one lookup per ID so one bad citation
+    cannot abort the whole review.
     """
     ids = list(dict.fromkeys(i for i in ids if i))
     if not ids:

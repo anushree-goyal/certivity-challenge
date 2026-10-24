@@ -139,6 +139,26 @@ class SemanticReview(unittest.TestCase):
                          "Intensity in cd")
 
 
+class PageImageRule(unittest.TestCase):
+    """Signals from Teammate 2's parser for when the text layer alone cannot be trusted."""
+    def _p(self, flags=(), is_table=False):
+        return F.Passage("p", F.BASE.document_id, "x", parsing_flags=tuple(flags), is_table=is_table)
+
+    def test_table_and_layout_signals_send_image(self):
+        from certivity.quality.semantic import needs_page_image
+        for flags, tab in [((), True), (("kind:table",), False), (("table",), False),
+                           (("layout_text_outside_margin",), False), (("table_without_caption",), False),
+                           (("caption:Figure 3 - Marking",), False)]:
+            self.assertTrue(needs_page_image(self._p(flags, tab), "Lamps shall be red."), flags)
+
+    def test_visual_content_only_when_draft_refers_to_a_figure(self):
+        from certivity.quality.semantic import needs_page_image
+        p = self._p(("page_has_visual_content",))
+        self.assertFalse(needs_page_image(p, "Lamps shall be red."))
+        self.assertTrue(needs_page_image(p, "The marking shall follow the format in Figure 2."))
+        self.assertFalse(needs_page_image(self._p(("caption:Table 1",)), "Lamps shall be red."))
+
+
 class MissingCredential(unittest.TestCase):
     def test_stops_after_first_call_and_reports_every_draft_unreviewed(self):
         drafts = [F.Draft(f"d{i}", f"Luminous intensity shall be at least 4 cd, case {i}.", "p-ok", ["p-ok"])

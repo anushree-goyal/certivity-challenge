@@ -18,9 +18,25 @@ from .prompts.review_prompt import REVIEW_INSTRUCTIONS, REVIEW_SCHEMA, VERSION
 
 CHECKS = ("subject", "scope", "value", "unit", "condition", "exception")
 OK_STATES = {"ok", "not_applicable"}
-# Parser flags that mean the text layer alone may misread the passage (besides is_table).
-# "table_cell" is from the contract docstring; the rest are a guess until the corpus lists its flags.
-TABLE_FLAGS = {"table_cell", "table", "table_layout", "layout_uncertain", "image_only"}
+# When to send the page image, per Teammate 2 (feature/corpus parser flags):
+#   is_table / "table" / "kind:table"   text came from a detected table; cell order may be off
+#   "layout_text_outside_margin"        text outside the column (figure labels, unruled table)
+#   "table_without_caption"             table found without a "Table X" caption
+#   "caption:Figure ..."                a figure on the page
+#   "page_has_visual_content"           only when the draft itself refers to a figure/diagram
+IMAGE_FLAGS = {"table", "kind:table", "layout_text_outside_margin", "table_without_caption"}
+VISUAL_FLAG = "page_has_visual_content"
+_REFERS_TO_VISUAL = re.compile(r"\b(figure|fig\.|diagram|drawing|sketch|illustrat\w*|shown (below|above))",
+                               re.I)
+
+
+def needs_page_image(passage, draft_text: str) -> bool:
+    flags = set(map(str, A.passage_flags(passage)))
+    if A.passage_is_table(passage) or flags & IMAGE_FLAGS:
+        return True
+    if any(f.casefold().startswith("caption:figure") for f in flags):
+        return True
+    return VISUAL_FLAG in flags and bool(_REFERS_TO_VISUAL.search(draft_text or ""))
 
 SEM_SUPPORTED = "semantic_supported"
 SEM_UNSUPPORTED = "semantic_unsupported"
@@ -92,11 +108,11 @@ def _batches(items: list[dict], cfg: SemanticConfig) -> list[list[dict]]:
 
 
 def _page_images(batch_drafts, passages, corpus, warnings) -> list:
-    """Page images for table/layout-flagged primary evidence (vision adapter input)."""
+    """Page images for primary evidence whose text layer may be misleading (see needs_page_image)."""
     images, seen = [], set()
     for d in batch_drafts:
         p = passages.get(A.draft_primary_id(d))
-        if p is None or not (A.passage_is_table(p) or set(map(str, A.passage_flags(p))) & TABLE_FLAGS):
+        if p is None or not needs_page_image(p, A.draft_text(d)):
             continue
         for idx in A.passage_pdf_page_indices(p):
             key = (A.passage_document_id(p), idx)

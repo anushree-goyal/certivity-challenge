@@ -44,7 +44,7 @@ when the package is present. Nothing here has run against the real corpus, real 
 - **Run-level findings** (`review_incomplete`) use `ReviewFinding.for_run`; `QualityReport.partial` is set whenever review did not finish; `run_id` and measured `usage` are filled.
 - **Export** uses `report.with_export_mapping`; `BuildResult.report` is the copy to persist. `build_submission` (dict only) no longer touches the report.
 - **Printed pages are string labels.** Only digit-only labels ("12") can become the integer `source.page`; others need revision.
-- **Vision** gets `ImagePayload` built from `PageAsset`; table passages are detected by `is_table` (or parser flags) and `table_context` is sent with the evidence.
+- **Vision** gets `ImagePayload` built from `PageAsset` (rule: `semantic.needs_page_image`); `table_context` is sent with the evidence.
 - **Evaluation** returns the contract `EvaluationReport` (flat metrics, category counts; quotes the official scorer when it ran). `evaluate_submission_detailed` adds per-item misses and raw scorer output.
 - Unresolved references on a draft are flagged (`unresolved_reference`, informational) and sent to semantic review.
 - Checked end to end on Anushree's `PIPELINE_DRAFT` + `InMemoryCorpusReader`: reviewed (partial, no model), exported, and correctly rejected by the official validator because its regulation names are synthetic.
@@ -52,10 +52,7 @@ when the package is present. Nothing here has run against the real corpus, real 
 ## Open with other owners
 
 1. Anushree: add `ReviewFinding.code: Optional[str]` so the `[code]` prefix can go. Optional dedicated categories instead of `other` for `review_incomplete` / `semantic_unreviewed`.
-2. Teammate 2 (`feature/corpus`, read not merged):
-   - `get_passages` raises `UnknownId` for unknown IDs; the contract says omit them. Quality tolerates both (`_access.get_passages`).
-   - `get_page_asset` builds `PageAsset(printed_page_label=...)`; the contract field is `printed_page`, so it raises `TypeError` with the canonical contracts.
-   - Parser flag names that mean "read the page image" (only `table_cell` is documented).
+2. ~~Teammate 2: `get_passages` raising, `PageAsset.printed_page_label`, image flags.~~ RESOLVED in `feature/corpus` d76052b (unknown IDs omitted, request order, duplicates removed; `printed_page`). Page-image rule now follows their parser signals (`semantic.needs_page_image`): table (`is_table`/`table`/`kind:table`), `layout_text_outside_margin`, `table_without_caption`, `caption:Figure ...`; `page_has_visual_content` only when the draft refers to a figure/diagram. `_access.get_passages` stays defensive.
 3. No run against a real corpus snapshot or a real model yet.
 
 ## Commands
