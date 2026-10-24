@@ -19,7 +19,12 @@ export function Sidebar({ runs, selected, health, healthError, onNew, onSelect, 
       </div>
 
       <div className="side-section">
-        <button className="side-new" onClick={onNew} aria-current={newActive ? "page" : undefined}>+ New analysis</button>
+        <div className="glass-wrap">
+          <button className="glass-btn" onClick={onNew} aria-current={newActive ? "page" : undefined}>
+            <span className="glass-label">+ New analysis</span>
+            <span className="glass-arrow" aria-hidden>→</span>
+          </button>
+        </div>
       </div>
 
       <div className="side-label" style={{ paddingLeft: "1.1rem" }}>Analyses</div>

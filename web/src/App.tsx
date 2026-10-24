@@ -4,6 +4,7 @@ import type { Health, RunSummary } from "./types";
 import { Sidebar } from "./components/Sidebar";
 import { NewRunForm } from "./components/NewRunForm";
 import { RunDetail } from "./components/RunDetail";
+import { BackgroundPaths } from "./components/BackgroundPaths";
 
 export default function App() {
   const [health, setHealth] = useState<Health | null>(null);
@@ -29,14 +30,17 @@ export default function App() {
   };
 
   return (
-    <div className="shell">
-      <Sidebar runs={runs} selected={selected} health={health} healthError={healthError}
-               onNew={() => select(null)} onSelect={select} newActive={!selected} />
-      <main className="main">
-        {selected
-          ? <RunDetail key={selected} runId={selected} onFinished={refreshRuns} />
-          : <NewRunForm health={health} onCreated={(id) => { refreshRuns(); select(id); }} />}
-      </main>
-    </div>
+    <>
+      <BackgroundPaths />
+      <div className="shell">
+        <Sidebar runs={runs} selected={selected} health={health} healthError={healthError}
+                 onNew={() => select(null)} onSelect={select} newActive={!selected} />
+        <main className="main">
+          {selected
+            ? <RunDetail key={selected} runId={selected} onFinished={refreshRuns} />
+            : <NewRunForm health={health} onCreated={(id) => { refreshRuns(); select(id); }} />}
+        </main>
+      </div>
+    </>
   );
 }
