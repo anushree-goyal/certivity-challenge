@@ -8,7 +8,7 @@ import inspect
 import pytest
 
 from certivity.api.components import ComponentError, resolve
-from certivity.api.settings import DEFAULT_ENTRY_POINTS
+from certivity.api.settings import DEFAULT_ENTRY_POINTS, load_settings
 
 PLANNED = {
     "run_extraction": ["run_input", "corpus", "llm", "emit_event"],
@@ -59,10 +59,10 @@ def test_create_llm_accepts_cache_dir_and_describes_itself():
     assert not any("key" in k.lower() and isinstance(v, str) and len(v) > 20 for k, v in description.items())
 
 
-def test_corpus_reader_has_planned_methods(settings):
+def test_corpus_reader_has_planned_methods():
     open_corpus = _load("open_corpus")
     try:
-        corpus = open_corpus(settings.corpus_dir)
+        corpus = open_corpus(load_settings().corpus_dir)  # the real snapshot, once built
     except Exception as exc:
         pytest.skip(f"corpus module merged but no snapshot available: {exc}")
     missing = [m for m in CORPUS_METHODS if not callable(getattr(corpus, m, None))]

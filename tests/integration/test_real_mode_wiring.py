@@ -114,3 +114,13 @@ def test_sources_stay_viewable_after_reimport_and_corpus_errors_map_to_http(sett
             assert missing.status_code == 500 and "missing or changed" in missing.json()["detail"]
         finally:
             fake_modules.CURRENT_SNAPSHOT[0] = "fake-snapshot-1"
+
+
+def test_source_pages_need_only_the_corpus_module(settings):
+    # Only the corpus entry point is real; agent/quality/llm are missing, as before those branches merge.
+    eps = {**settings.entry_points, "open_corpus": "tests.integration.fake_modules:open_corpus"}
+    with TestClient(create_app(dataclasses.replace(settings, pipeline_mode="real", entry_points=eps))) as client:
+        assert client.get("/api/health").json()["real_pipeline_ready"] is False
+        docs = client.get("/api/documents").json()
+        assert isinstance(docs, list) and docs
+        assert client.get(f"/api/documents/{docs[0]['document_id']}/pages/0").status_code == 200

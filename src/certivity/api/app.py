@@ -20,7 +20,7 @@ from fastapi.staticfiles import StaticFiles
 
 from certivity import __version__
 from certivity.api.components import (
-    ComponentError, component_versions, load_components, model_configuration, package_case, readiness,
+    ComponentError, component_versions, model_configuration, open_corpus_only, package_case, readiness,
     snapshot_id_of,
 )
 from certivity.api.pipeline import build_run_view
@@ -79,7 +79,7 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
         key = (mode, snapshot_id)
         if key not in cache:
             try:
-                cache[key] = load_components(settings, mode).open_corpus(snapshot_id=snapshot_id)
+                cache[key] = open_corpus_only(settings, mode, snapshot_id)
             except ComponentError as exc:
                 raise HTTPException(503, f"Corpus unavailable in {mode} mode: {exc}") from exc
             except Exception as exc:
@@ -388,7 +388,7 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
             raise HTTPException(404, f"No page {pdf_page_index} for {document_id!r}: {exc}") from None
         media_type = _field(asset, "media_type") or "image/png"
         headers = {"X-Pdf-Page-Index": str(pdf_page_index), "Cache-Control": "max-age=3600"}
-        printed = _field(asset, "printed_page_label")
+        printed = _field(asset, "printed_page", "printed_page_label")
         if printed is not None:
             headers["X-Printed-Page-Label"] = str(printed)
         content = _field(asset, "content", "data")

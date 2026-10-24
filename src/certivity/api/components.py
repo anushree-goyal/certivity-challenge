@@ -96,6 +96,20 @@ def llm_configured(description: dict[str, Any]) -> bool:
     return description.get("credentials_configured", True) is not False
 
 
+def open_corpus_only(settings: Settings, mode: str | None = None, snapshot_id: str | None = None) -> Any:
+    """Open the corpus without loading the rest of the pipeline: source viewing needs only the corpus module."""
+    mode = mode or settings.pipeline_mode
+    if mode == "fixture":
+        from certivity.api import fixture_mode
+        return fixture_mode.FixtureCorpus()
+    if mode != "real":
+        raise ComponentError(f"unknown pipeline mode {mode!r}")
+    open_corpus = resolve(settings.entry_points["open_corpus"])
+    if snapshot_id:
+        return call_accepting(open_corpus, settings.corpus_dir, snapshot_id=snapshot_id)
+    return open_corpus(settings.corpus_dir)
+
+
 def load_components(settings: Settings, mode: str | None = None) -> Components:
     mode = mode or settings.pipeline_mode
     if mode == "fixture":
