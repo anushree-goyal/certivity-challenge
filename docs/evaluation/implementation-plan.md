@@ -35,6 +35,11 @@ Nothing here has run against the real corpus, real extraction, a real model, the
 - Review prompts have never been run on a real model; expect to tune them on real drafts.
 - Honest limits: heuristics (numbers, exception words) are regex-based; table-flag names and PageAsset hand-off to the vision adapter are assumed.
 
+## Contract changes requested from Anushree (she owns contracts.py)
+
+- `QualityReport.export_mapping: dict[str, str]` (draft ID -> requirement ID), default `{}`. Filled by `build_submission` with what was actually exported (empty before export, and for drafts excluded at export). Until the field exists, `BuildResult.export_mapping` carries it and a warning is recorded.
+- `ReviewFinding.requested_context: str | None` and `ReviewFinding.requested_correction: str | None`. Every finding that needs revision/context sets at least one (enforced by tests): context = more source needed, correction = what must change in the draft.
+
 ## Questions to resolve with other owners
 
 1. Anushree: exact field names/types in `contracts.py` (edit `_access.py`/`_records.py` only); how `emit_event` takes a RunEvent; whether QualityReport has a field for "review incomplete".

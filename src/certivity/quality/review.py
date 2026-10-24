@@ -45,6 +45,7 @@ def review_requirements(run_input, draft, corpus, llm, emit_event, config: Seman
 
     remaining = [f for f in findings if f.draft_id in needs_rev
                  and f.category in (NEEDS_REVISION | {SEM_REVISION, SEM_CONTEXT})]
+    _ensure_requested(remaining)
     gaps = []
     if sem.unreviewed:
         gaps.append(f"{len(sem.unreviewed)} draft(s) not semantically reviewed: {sorted(sem.unreviewed)}")
@@ -65,3 +66,18 @@ def review_requirements(run_input, draft, corpus, llm, emit_event, config: Seman
          + ("; semantic review NOT performed" if llm is None else ""),
          completed=len(candidates), total=len(candidates))
     return make_report(accepted, findings, dup_map, rejected, remaining)
+
+
+def _ensure_requested(findings) -> None:
+    """Invariant: every finding that asks for revision/context carries a requested_* field.
+
+    Producers set specific requests; this only fills a generic one if a path forgot, so the app
+    never shows a revision-needed finding with nothing to act on. Tests assert it never fires.
+    """
+    for f in findings:
+        if A.pick(f, "requested_context") or A.pick(f, "requested_correction"):
+            continue
+        try:
+            f.requested_correction = "resolve: " + (A.pick(f, "explanation", default="") or f.category)
+        except Exception:  # noqa: BLE001
+            pass

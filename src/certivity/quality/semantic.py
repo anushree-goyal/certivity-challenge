@@ -193,7 +193,16 @@ def review_semantically(pipeline_draft, ids, corpus, llm, config: SemanticConfig
             ev_ids = [A.passage_id(p) for p in ev]
             cat = {"supported": SEM_SUPPORTED, "rejected": SEM_UNSUPPORTED,
                    "revision": SEM_REVISION, "context": SEM_CONTEXT}[bucket]
-            out.findings.append(make_finding(i, cat, expl, ev_ids, req))
+            if bucket == "context":
+                out.findings.append(make_finding(
+                    i, cat, expl, ev_ids,
+                    requested_context=req or f"additional context needed to decide: {expl}"))
+            elif bucket == "revision":
+                out.findings.append(make_finding(
+                    i, cat, expl, ev_ids, requested_context=req,
+                    requested_correction=expl or "revise the draft to match the evidence"))
+            else:
+                out.findings.append(make_finding(i, cat, expl, ev_ids))
             if bucket == "supported":
                 out.supported.append(i)
             elif bucket == "rejected":

@@ -18,6 +18,7 @@ from .limits import MAX_TEXT_CHARS
 
 # Finding categories
 SOURCE_MISSING = "source_missing"
+SUPPORTING_INVALID = "supporting_passage_invalid"
 WRONG_VERSION = "wrong_version_or_document"
 SNAPSHOT_MISMATCH = "snapshot_mismatch"
 PAGE_UNVERIFIED = "page_unverified"
@@ -31,7 +32,7 @@ POSSIBLE_LOST_CONDITION = "possible_lost_condition"
 PRIMARY_SPANS_PAGES = "primary_spans_pages"
 
 REJECT = {SOURCE_MISSING, WRONG_VERSION, SNAPSHOT_MISMATCH}
-NEEDS_REVISION = {PAGE_UNVERIFIED, NO_PRIMARY, PRIMARY_NOT_SUPPORTING, EMPTY_TEXT,
+NEEDS_REVISION = {SUPPORTING_INVALID, PAGE_UNVERIFIED, NO_PRIMARY, PRIMARY_NOT_SUPPORTING, EMPTY_TEXT,
                   TEXT_TOO_LONG, DUPLICATE_DRAFT_ID}
 # everything else is a non-blocking flag for semantic review
 
@@ -84,12 +85,13 @@ def check_drafts(run_input, pipeline_draft, corpus) -> DeterministicResult:
         did = A.draft_id(d)
         local: list = []
 
-        def add(category, explanation, supporting=None, requested=None):
-            local.append(make_finding(did, category, explanation, supporting, requested))
+        def add(category, explanation, supporting=None, context=None, correction=None):
+            local.append(make_finding(did, category, explanation, supporting, context, correction))
 
         if not did or id_counts[did] > 1:
             add(DUPLICATE_DRAFT_ID, f"draft_id {did!r} is missing or used more than once; "
-                "the drafts cannot be told apart.")
+                "the drafts cannot be told apart.",
+                correction="give every draft a unique, non-empty draft_id")
             result.findings += local
             if did:
                 result.needs_revision.setdefault(did, DUPLICATE_DRAFT_ID)
@@ -97,13 +99,14 @@ def check_drafts(run_input, pipeline_draft, corpus) -> DeterministicResult:
 
         text = A.draft_text(d)
         if not text.strip():
-            add(EMPTY_TEXT, "Draft has no obligation text.")
+            add(EMPTY_TEXT, "Draft has no obligation text.",
+                correction="provide the obligation text or drop the draft")
         elif len(text) > MAX_TEXT_CHARS:
             add(TEXT_TOO_LONG,
                 f"Text is {len(text)} characters (limit {MAX_TEXT_CHARS}). It must not be "
                 "truncated; request a faithful reformulation or a split only if it contains "
                 "separate obligations.",
-                requested="faithful reformulation/split")
+                correction="faithful reformulation within the limit, or a split only if the text contains separate obligations")
 
         primary_id = A.draft_primary_id(d)
         support_ids = A.draft_supporting_ids(d)
@@ -111,37 +114,46 @@ def check_drafts(run_input, pipeline_draft, corpus) -> DeterministicResult:
 
         if not primary_id:
             add(NO_PRIMARY, "Draft names no primary supporting passage.",
-                requested="primary passage that supports the stated obligation")
+                correction="name the one primary passage that supports the stated obligation")
         elif primary is None:
             add(SOURCE_MISSING, f"Primary passage {primary_id!r} does not exist in snapshot "
                 f"{snapshot!r}.", [primary_id])
         elif support_ids and primary_id not in support_ids:
             add(PRIMARY_NOT_SUPPORTING, "Primary passage is not among the supporting passages.",
-                [primary_id])
+                [primary_id],
+                correction="list the primary passage among the supporting passages, or change the primary")
 
         evidence = []
         for pid in dict.fromkeys(([primary_id] if primary_id else []) + support_ids):
             p = passages.get(pid)
+            is_primary = pid == primary_id
             if p is None:
-                if pid != primary_id:
-                    add(SOURCE_MISSING, f"Supporting passage {pid!r} not found in the snapshot.",
-                        [pid], requested="valid supporting passage or removal")
+                if not is_primary:
+                    add(SUPPORTING_INVALID, f"Supporting passage {pid!r} not found in the snapshot.",
+                        [pid], correction="replace with a valid supporting passage or remove it")
                 continue
-            evidence.append(p)
             doc = base_docs.get(A.passage_document_id(p))
+            problem = None
             if doc is None:
-                cat = WRONG_VERSION
-                add(cat, f"Passage {pid!r} belongs to document {A.passage_document_id(p)!r}, "
-                    "which is not a base-version document of this snapshot (latest or unknown).",
-                    [pid])
+                problem = (WRONG_VERSION, f"Passage {pid!r} belongs to document "
+                           f"{A.passage_document_id(p)!r}, which is not a base-version document of "
+                           "this snapshot (latest or unknown).")
             elif snapshot and A.doc_snapshot(doc) and A.doc_snapshot(doc) != snapshot:
-                add(SNAPSHOT_MISMATCH, f"Document snapshot {A.doc_snapshot(doc)!r} differs from "
-                    f"the run snapshot {snapshot!r}.", [pid])
+                problem = (SNAPSHOT_MISMATCH, f"Document snapshot {A.doc_snapshot(doc)!r} differs "
+                           f"from the run snapshot {snapshot!r}.")
+            if problem and not is_primary:
+                # Only the supporting reference is bad: ask for it to be fixed, don't reject the draft.
+                add(SUPPORTING_INVALID, problem[1], [pid],
+                    correction="replace with a base-version supporting passage or remove it")
+                continue
+            if problem:
+                add(problem[0], problem[1], [pid])
+            evidence.append(p)
 
         if primary is not None:
             if verified_page(A.passage_printed_page(primary)) is None:
                 add(PAGE_UNVERIFIED, "Primary passage has no verified positive printed page.",
-                    [primary_id], requested="verified printed-page mapping")
+                    [primary_id], context="verified printed-page mapping for this passage")
             if A.passage_spans_pages(primary):
                 add(PRIMARY_SPANS_PAGES, "Primary passage spans several pages; the cited start "
                     "page may not be where the stated obligation appears.", [primary_id])
@@ -154,13 +166,13 @@ def check_drafts(run_input, pipeline_draft, corpus) -> DeterministicResult:
                 add(NUMERIC_NOT_IN_EVIDENCE,
                     f"Numbers {missing} in the draft do not appear in the cited evidence "
                     "(may be a wording/unit difference or an unsupported value).",
-                    [primary_id] if primary_id else [], requested="check value/unit against source")
+                    [primary_id] if primary_id else [], context="check value/unit against the source")
             if (_EXCEPTION_MARKERS.search(ev_text) and not _EXCEPTION_MARKERS.search(text)
                     and not A.draft_condition(d)):
                 add(POSSIBLE_LOST_CONDITION,
                     "Evidence contains exception/condition wording that the draft text and "
                     "condition field do not carry (heuristic).",
-                    [primary_id] if primary_id else [], requested="confirm no condition was lost")
+                    [primary_id] if primary_id else [], context="confirm no condition or exception was lost")
 
         result.findings += local
         cats = {f.category for f in local}

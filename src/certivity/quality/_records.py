@@ -23,7 +23,8 @@ except Exception:  # noqa: BLE001
         category: str
         explanation: str
         supporting_passage_ids: list[str] = field(default_factory=list)
-        requested_context: str | None = None
+        requested_context: str | None = None      # more source/context needed
+        requested_correction: str | None = None   # what must change in the draft
 
     @dataclass
     class QualityReport:  # fallback
@@ -32,6 +33,7 @@ except Exception:  # noqa: BLE001
         duplicate_mapping: dict[str, str]
         rejected: dict[str, str]
         remaining_issues: list[ReviewFinding]
+        export_mapping: dict[str, str] = field(default_factory=dict)  # draft ID -> requirement ID
 
     @dataclass
     class ValidationError:  # fallback
@@ -47,23 +49,26 @@ except Exception:  # noqa: BLE001
         checked_schema: str | None = None
 
 
-def make_finding(draft_id, category, explanation, supporting=None, requested=None):
+def make_finding(draft_id, category, explanation, supporting=None, requested_context=None,
+                 requested_correction=None):
     return ReviewFinding(
         draft_id=draft_id,
         category=category,
         explanation=explanation,
         supporting_passage_ids=list(supporting or []),
-        requested_context=requested,
+        requested_context=requested_context,
+        requested_correction=requested_correction,
     )
 
 
-def make_report(accepted, findings, duplicate_mapping, rejected, remaining):
+def make_report(accepted, findings, duplicate_mapping, rejected, remaining, export_mapping=None):
     return QualityReport(
         accepted_draft_ids=list(accepted),
         findings=list(findings),
         duplicate_mapping=dict(duplicate_mapping),
         rejected=dict(rejected),
         remaining_issues=list(remaining),
+        export_mapping=dict(export_mapping or {}),
     )
 
 
@@ -88,3 +93,13 @@ def emit(emit_event: Any, stage: str, message: str, completed=None, total=None) 
     if emit_event is None:
         return
     emit_event({"stage": stage, "message": message, "completed": completed, "total": total})
+
+
+def set_export_mapping(report, mapping: dict) -> bool:
+    """Record draft ID -> requirement ID on the report. False if the report type refuses
+    (e.g. the shared contract lacks the field or is frozen); callers then surface a warning."""
+    try:
+        report.export_mapping = dict(mapping)
+        return True
+    except Exception:  # noqa: BLE001
+        return False
