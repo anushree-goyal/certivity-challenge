@@ -123,8 +123,14 @@ def execute_run(run_id: str, store: RunStore, settings: Settings) -> None:
             "input_hash": manifest["input_hash"],
             "corpus_snapshot_id": snapshot_id,
         }
-        if settings.max_model_calls is not None and comps.make_run_config is not None:
-            fields["config"] = comps.make_run_config(max_model_calls=settings.max_model_calls)
+        config_fields = {k: v for k, v in {
+            "max_model_calls": settings.max_model_calls,
+            "max_parallel_sections": settings.max_parallel_sections,
+            # "auto" is the RunConfig default; passing it would build a config only to restate it.
+            "extraction_mode": settings.extraction_mode if settings.extraction_mode != "auto" else None,
+        }.items() if v is not None}
+        if config_fields and comps.make_run_config is not None:
+            fields["config"] = comps.make_run_config(**config_fields)
         run_input = comps.make_run_input(fields)
 
         # One adapter for extraction and review, bounded by the run's own limits: the call budget is enforced
@@ -142,6 +148,8 @@ def execute_run(run_id: str, store: RunStore, settings: Settings) -> None:
         if settings.max_review_calls is not None:
             review_limits["max_calls"] = settings.max_review_calls
         llm_review = comps.create_llm(store.module_dir(run_id, "quality"), **review_limits)
+        if settings.extraction_mode == "economy":
+            llm_review = None  # economy spends nothing: deterministic checks only, reported as not verified
         llm_description = describe_llm(llm)
         store.update(run_id, corpus_snapshot_id=snapshot_id, llm_identity=llm_description.get("model") or "",
                      llm_description=llm_description, model_call_budget=limits.get("max_calls"),
@@ -153,7 +161,8 @@ def execute_run(run_id: str, store: RunStore, settings: Settings) -> None:
 
         emit.set_stage("extraction", "Extracting requirements")
         # Modules exchange their own record objects; the app keeps JSON copies for storage and the view.
-        draft_obj = call_accepting(comps.run_extraction, run_input, corpus, llm, emit, artifacts_dir=agent_dir)
+        draft_obj = call_accepting(comps.run_extraction, run_input, corpus, llm, emit, artifacts_dir=agent_dir,
+                                   category_registry_path=settings.category_registry)
         draft = to_jsonable(draft_obj)
         store.write_artifact(run_id, "pipeline_draft.json", draft)
 

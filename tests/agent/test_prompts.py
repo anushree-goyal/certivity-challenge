@@ -31,6 +31,8 @@ ALL_SCHEMAS = {
     "document_scope": p.DOCUMENT_SCOPE_SCHEMA,
     "extract_obligations": p.EXTRACT_OBLIGATIONS_SCHEMA,
     "revise_obligations": p.REVISE_OBLIGATIONS_SCHEMA,
+    "part_category": p.PART_CATEGORY_SCHEMA,
+    "section_triage": p.SECTION_TRIAGE_SCHEMA,
 }
 
 

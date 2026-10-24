@@ -271,8 +271,12 @@ class RunConfig:
     sequentially, so a 50-passage annex was 9 batches deep on a single worker
     while other workers idled. Larger batches shorten that chain; the limit is
     how much text can be read carefully in one call."""
-    max_batches_per_section: int = 4
+    max_batches_per_section: int = 8
     """Hard ceiling on extraction calls for one section.
+
+    Raised from 4 once a section's batches ran concurrently: the ceiling
+    existed to bound the serial tail, and at 4 a large annex was cut short,
+    which costs recall.
 
     Batches inside a section run sequentially, so without a bound one large
     annex occupies a worker for as long as it likes. A measured run had a
@@ -291,6 +295,33 @@ class RunConfig:
     use_cache: bool = True
     include_uncertain_documents: bool = True
     """Keep ApplicabilityStatus.UNCERTAIN candidates in the inspection plan."""
+    triage_sections: bool = True
+    """Screen planned sections with a cheap model before extraction.
+
+    A rear lamp needs a few dozen of R48's 260 sections; the rest describe
+    other devices or approval paperwork. Skipped sections stay in the coverage
+    ledger as EXCLUDED with the triage reason, so nothing disappears silently."""
+    triage_batch_size: int = 20
+    """Sections per triage call."""
+    max_parallel_triage: int = 16
+    """Concurrent triage calls. Triage calls are small and fast, so this can
+    sit well above ``max_parallel_sections``."""
+    extraction_mode: str = "auto"
+    """"model": every stage asks the model. "economy": no model call at all -
+    relevance from saved category knowledge or wording overlap, one plain-English
+    requirement per obligation paragraph. "auto": the model while it can be
+    used, economy from the moment it cannot (no credit, no key), so a run
+    finishes instead of failing. "lite": like "auto", on the small model
+    (the model adapter picks it), and sections that state no obligation
+    are never sent to it."""
+    cite_superseded_regulations: bool = False
+    """False: a regulation that another selected regulation says it combines
+    (R148 combines R6, R7, R23, R38) is compared and listed, but requirements
+    are cited only from the current one."""
+    reuse_category_knowledge: bool = True
+    """Reuse applicability decisions and triage verdicts recorded by earlier
+    runs of the same part category on the same corpus snapshot, instead of
+    asking the model again."""
     model_overrides: dict[str, str] = field(default_factory=dict)
     """task name -> model id, for tasks that need a different model."""
 

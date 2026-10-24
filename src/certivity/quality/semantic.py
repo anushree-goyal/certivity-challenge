@@ -7,6 +7,7 @@ model did not (validly) review is reported as unreviewed - never silently accept
 from __future__ import annotations
 
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 
 from certivity.contracts import (ImagePayload, LLMConfigurationError, ModelBudgetExceeded,
@@ -49,7 +50,10 @@ SEM_UNREVIEWED = "semantic_unreviewed"
 class SemanticConfig:
     batch_size: int = 5
     max_batch_chars: int = 24_000
-    max_calls: int = 40
+    max_calls: int = 200
+    """At 5 drafts a call, 40 left half of a 391-draft run unreviewed; 200 covers ~1,000 drafts.
+    The run's own model-call budget still bounds the total."""
+    max_parallel: int = 16
     use_vision: bool = True
 
 
@@ -192,20 +196,48 @@ def review_semantically(pipeline_draft, ids, corpus, llm, config: SemanticConfig
     passages = {A.passage_id(p): p for p in A.get_passages(corpus, sorted(wanted))}
     items = [_payload_item(drafts[i], _evidence_for(drafts[i], passages)) for i in ids]
 
+    batches = _batches(items, cfg)
+    planned, over_budget = batches[:cfg.max_calls], batches[cfg.max_calls:]
+    for batch in over_budget:
+        for b in batch:
+            out.unreviewed[b["draft_id"]] = "model-call budget exhausted"
+
+    # Batches are independent, so the calls run concurrently; results are applied below in batch
+    # order, so findings do not depend on which call returns first. Page images are prepared here,
+    # on this thread, before any call is made.
+    work = [(batch, _page_images([drafts[b["draft_id"]] for b in batch], passages, corpus, out.warnings)
+             if cfg.use_vision else []) for batch in planned]
+
+    def call(batch, images):
+        return llm.generate_json(task="quality_review", instructions=REVIEW_INSTRUCTIONS,
+                                 payload={"drafts": batch}, schema=REVIEW_SCHEMA,
+                                 images=images or None, prompt_version=VERSION)
+
+    results: list = [None] * len(work)
+    if work:
+        with ThreadPoolExecutor(max_workers=max(1, min(cfg.max_parallel, len(work))),
+                                thread_name_prefix="review") as pool:
+            futures = {pool.submit(call, batch, images): n for n, (batch, images) in enumerate(work)}
+            for future in as_completed(futures):
+                try:
+                    results[futures[future]] = ("ok", future.result())
+                except Exception as e:  # noqa: BLE001
+                    results[futures[future]] = ("error", e)
+                    if isinstance(e, (LLMConfigurationError, ModelBudgetExceeded)):
+                        for other in futures:  # later calls fail too; do not start them
+                            other.cancel()
+            out.calls = sum(1 for f in futures if not f.cancelled())
+
     fatal = None
-    for batch in _batches(items, cfg):
+    for (batch, _), result in zip(work, results):
         batch_ids = [b["draft_id"] for b in batch]
-        if out.calls >= cfg.max_calls:
-            for i in batch_ids:
-                out.unreviewed[i] = "model-call budget exhausted"
+        if result is None:  # cancelled after a fatal error; reported through `fatal` below
             continue
-        images = (_page_images([drafts[i] for i in batch_ids], passages, corpus, out.warnings)
-                  if cfg.use_vision else [])
-        out.calls += 1
         try:
-            resp = llm.generate_json(task="quality_review", instructions=REVIEW_INSTRUCTIONS,
-                                     payload={"drafts": batch}, schema=REVIEW_SCHEMA,
-                                     images=images or None, prompt_version=VERSION)
+            kind, value = result
+            if kind == "error":
+                raise value
+            resp = value
             out.usage = out.usage.merged_with(usage_of(resp))
             data = A.llm_data(resp)
             reviews = data.get("reviews") if isinstance(data, dict) else None
@@ -214,12 +246,11 @@ def review_semantically(pipeline_draft, ids, corpus, llm, config: SemanticConfig
         except Exception as e:  # noqa: BLE001
             for i in batch_ids:
                 out.unreviewed[i] = f"review call failed: {type(e).__name__}: {e}"
-            if isinstance(e, (LLMConfigurationError, ModelBudgetExceeded)):  # later calls fail too
+            if isinstance(e, (LLMConfigurationError, ModelBudgetExceeded)) and fatal is None:
                 why = ("model adapter not configured" if isinstance(e, LLMConfigurationError)
                        else "run model-call budget exhausted")
                 out.warnings.append(f"{why}; semantic review stopped: {e}")
                 fatal = f"not reviewed: {why} ({e})"
-                break
             continue
 
         by_id: dict[str, list] = {}

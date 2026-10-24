@@ -61,8 +61,17 @@ PROMPT_VERSIONS: dict[str, str] = {
     "product_profile": "v2",
     "candidate_scope": "v2",
     "document_scope": "v2",
-    "extract_obligations": "v7",
-    "revise_obligations": "v2",
+    # v8 (extract_obligations) / v3 (revise_obligations): requirement text in
+    # plain English rather than legal drafting, with values, conditions and
+    # defined terms kept exactly, and no bare paragraph cross-references.
+    "extract_obligations": "v8",
+    "revise_obligations": "v3",
+    # v1 (part_category, section_triage): cheap pre-extraction steps. The part
+    # category lets a repeat run reuse what an earlier run of the same kind of
+    # part learned; triage keeps sections about other devices and approval
+    # paperwork out of the expensive extraction call.
+    "part_category": "v1",
+    "section_triage": "v1",
 }
 
 _SHARED_RULES = """
@@ -81,6 +90,25 @@ Ground rules that apply to every task:
 - Where the source does not establish something, say so: return null for a
   field that allows null, omit an optional field, or return an empty list.
   Writing a plausible value is a failure, not a fallback.
+"""
+
+
+_PLAIN_WORDING_RULES = """
+Wording
+- Write `text` in plain English an engineer can act on, not in legal drafting:
+  "must" / "must not" for "shall" / "shall not"; "if" or "as long as" for
+  "provided that"; "for" for "in respect of"; "even so" or "however" for
+  "notwithstanding". Prefer active voice and one idea per sentence. Drop
+  phrases such as "hereinafter", "the said" and "for the purposes of this
+  Regulation" when they add nothing.
+- Plain wording changes the words, never the meaning. Keep every value, unit,
+  tolerance, range, condition and exception, and keep defined terms, device
+  names, classes and vehicle categories exactly as the source writes them
+  ("category M1", "Class IA", "apparent surface", "reciprocally incorporated").
+  Dropping a condition to make a sentence simpler is an error.
+- Do not put bare paragraph cross-references such as "(see paragraph 5.2.7)"
+  in `text`; the citation carries the location. State what the referenced
+  text requires instead, when the supplied passages say it.
 """
 
 
@@ -329,7 +357,9 @@ Atomicity
 - `text` is a self-contained sentence stating the obligation, including its
   values, units and its condition. A reader must be able to check it against
   the cited passage without the rest of the document.
-
+"""
+    + _PLAIN_WORDING_RULES
+    + """
 Length
 - A long passage almost always states several separate obligations. Split them.
   Review found base passages over 2,000 characters, and the official output caps
@@ -624,6 +654,7 @@ Task-specific rules:
   an exception. If the obligation cannot be stated within the limit without
   losing one of those, answer "unresolved" and say so.
 """
+    + _PLAIN_WORDING_RULES
 )
 
 REVISE_OBLIGATIONS_SCHEMA: dict[str, Any] = {
@@ -648,6 +679,114 @@ REVISE_OBLIGATIONS_SCHEMA: dict[str, Any] = {
                         **_OBLIGATION_SCHEMA,
                         "description": "Supply only for action 'revise'; omit otherwise",
                     },
+                },
+            },
+        }
+    },
+}
+
+
+# --------------------------------------------------------------------------- #
+# Part category: which kind of vehicle part this product is
+# --------------------------------------------------------------------------- #
+
+PART_CATEGORY_INSTRUCTIONS = """
+You classify a vehicle part into a part category, so that later runs on the
+same kind of part can reuse what earlier runs learned about it.
+
+You are given the product profile and the categories already known, each with
+a slug, a label and a description.
+
+Rules:
+
+- Choose "existing" only when the product is the same kind of part as a known
+  category: same device type and the same main functions. A rear combination
+  lamp and a headlamp are different categories; two rear combination lamps
+  from different manufacturers are the same category.
+- Otherwise choose "new" and define the category: a lowercase hyphenated
+  `slug` naming the kind of part (for example "rear-combination-lamp",
+  "exterior-rear-view-mirror", "seat-belt-retractor"), a short `label`, and a
+  one-sentence `description` that would let a later run tell this category
+  apart from similar ones. Name the kind of part, never a product, brand or
+  model.
+- `aliases` lists other names people use for this kind of part.
+- Base the decision on the product profile only.
+"""
+
+PART_CATEGORY_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["decision", "slug", "label", "description", "aliases", "reason"],
+    "properties": {
+        "decision": {"type": "string", "enum": ["existing", "new"]},
+        "slug": {
+            "type": "string",
+            "description": "A known slug for 'existing', a new slug for 'new'",
+        },
+        "label": {"type": "string"},
+        "description": {"type": "string"},
+        "aliases": _string_list(),
+        "reason": {"type": "string"},
+    },
+}
+
+
+# --------------------------------------------------------------------------- #
+# Section triage: which sections are worth a full extraction call
+# --------------------------------------------------------------------------- #
+
+SECTION_TRIAGE_INSTRUCTIONS = """
+You decide, for each section of an applicable regulation, whether it is worth
+a careful requirement-extraction pass for one specific vehicle part.
+
+You see the part category, the product profile, and for each section its
+regulation, paragraph label, heading path and the start of its text.
+
+Answer "extract" when the section could state a requirement on this part:
+- general requirements, installation, geometric visibility, photometric,
+  colour, electrical, marking, durability or test requirements for this kind
+  of device or one of its functions;
+- definitions or tables that carry a measurable condition for it;
+- anything you are unsure about.
+
+Answer "skip" only when the section plainly cannot state a requirement on
+this part:
+- it governs a different device or function that this product does not have
+  (for example headlamp or front-lamp requirements for a rear lamp);
+- it is approval paperwork that binds the authority, not the product
+  (communication forms, approval-number allocation, names and addresses of
+  services, penalties, production definitively discontinued);
+- it is a pure list, figure caption or title with no requirement text.
+
+Markings, approval marks on the device, and requirements that apply to every
+lamp are requirements on this part: answer "extract".
+
+Missing a requirement costs more than reading an extra section, so when in
+doubt answer "extract". Write the `reason` first, then the verdict it leads
+to; a reason that hesitates or calls skipping a judgement call means
+"extract". Return one entry for every section id supplied, using the ids
+exactly as given.
+"""
+
+SECTION_TRIAGE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["sections"],
+    "properties": {
+        "sections": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                # `reason` precedes `verdict` so the verdict follows from the
+                # reasoning; in the other order a low-effort model decided first
+                # and then wrote reasons such as "...so extracting is safer"
+                # under a "skip".
+                "required": ["section_id", "reason", "verdict"],
+                "properties": {
+                    "section_id": {"type": "string"},
+                    "reason": {"type": "string"},
+                    "verdict": {"type": "string", "enum": ["extract", "skip"]},
                 },
             },
         }

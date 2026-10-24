@@ -213,8 +213,13 @@ def test_an_unusable_model_aborts_the_run_instead_of_returning_an_empty_draft(
                 "Your credit balance is too low"
             )
 
+    import dataclasses
+
+    model_only = dataclasses.replace(
+        run_input, config=dataclasses.replace(run_input.config, extraction_mode="model")
+    )
     with pytest.raises(LLMConfigurationError, match="credit balance"):
-        run_extraction(run_input, corpus, UnusableAdapter(script=script))
+        run_extraction(model_only, corpus, UnusableAdapter(script=script))
 
 
 def test_references_the_corpus_detects_are_followed_even_if_unreported(

@@ -43,15 +43,35 @@ from certivity.contracts import (
     TargetKind,
     null_emit,
 )
-from certivity.agent.applicability import assess_applicability
+from certivity.agent.applicability import (
+    apply_consolidation,
+    assess_applicability,
+    reuse_applicability,
+)
 from certivity.agent.artifacts import AgentArtifacts
+from certivity.agent.categories import (
+    PartCategoryRegistry,
+    classify_part_category,
+    corpus_fingerprint,
+)
 from certivity.agent.context import RunContext
+from certivity.agent.economy import (
+    FALLBACK_MODES,
+    economy_applicability,
+    has_obligation_wording,
+    economy_extract_section,
+    economy_profile,
+    match_category,
+    product_terms,
+    prune_uncertain,
+)
 from certivity.agent.extract import extract_section
 from certivity.agent.plan import build_inspection_plan
 from certivity.agent.profile import build_product_profile, profile_payload
 from certivity.agent.prompts import PROMPT_VERSIONS
 from certivity.agent.references import ReferenceTracker
 from certivity.agent.revise import revise_drafts
+from certivity.agent.triage import triage_plan
 
 logger = logging.getLogger(__name__)
 
@@ -63,8 +83,13 @@ def run_extraction(
     emit_event: EmitEvent = null_emit,
     *,
     artifacts_dir: str | os.PathLike[str] | None = None,
+    category_registry_path: str | os.PathLike[str] | None = None,
 ) -> PipelineDraft:
-    """Product understanding, applicability, systematic extraction, references."""
+    """Product understanding, applicability, systematic extraction, references.
+
+    ``category_registry_path`` is the JSON file where part categories and what
+    runs learned about them persist. None keeps them in memory for this run.
+    """
     ctx = RunContext(
         run_input=run_input, corpus=corpus, llm=llm, emit_event=emit_event
     )
@@ -81,35 +106,80 @@ def run_extraction(
 
     ctx.event("agent", f"Extraction started for case {run_input.case_id}")
 
-    try:
-        profile = build_product_profile(ctx)
-    except LLMConfigurationError:
-        # The model is unusable for this whole run - no credential, no credit,
-        # a disabled key. Continuing would produce an empty draft that looks
-        # like a completed run, so this propagates for the caller to mark the
-        # run failed with the provider's own message.
-        ctx.event(
-            "agent",
-            "Run aborted: the model provider is not usable with this configuration",
-            level="error",
-        )
-        raise
-    except (ModelBudgetExceeded, LLMCallError) as exc:
-        # Without a profile there is nothing to decide scope against, so this is
-        # the one stage whose failure ends the run.
-        ctx.warn(f"the product profile could not be built: {exc}", stage="product_profile")
-        return _assemble(
-            ctx, snapshot_id, profile=None, decisions=[], drafts=[], coverage=[],
-            tracker=tracker, artifacts=artifacts, run_input=run_input,
-        )
+    mode = getattr(ctx.config, "extraction_mode", "model")
+    ctx.economy = mode == "economy"
+    if not ctx.economy:
+        try:
+            profile = build_product_profile(ctx)
+        except LLMConfigurationError as exc:
+            # The model is unusable for this whole run - no credential, no
+            # credit, a disabled key. In "auto" mode the run carries on without
+            # it; otherwise an empty draft would look like a completed run, so
+            # this propagates for the caller to mark the run failed.
+            if mode not in FALLBACK_MODES:
+                ctx.event(
+                    "agent",
+                    "Run aborted: the model provider is not usable with this configuration",
+                    level="error",
+                )
+                raise
+            _switch_to_economy(ctx, exc)
+        except (ModelBudgetExceeded, LLMCallError) as exc:
+            # Without a profile there is nothing to decide scope against, so this is
+            # the one stage whose failure ends the run.
+            ctx.warn(f"the product profile could not be built: {exc}", stage="product_profile")
+            return _assemble(
+                ctx, snapshot_id, profile=None, decisions=[], drafts=[], coverage=[],
+                tracker=tracker, artifacts=artifacts, run_input=run_input,
+            )
+    if ctx.economy:
+        profile = economy_profile(run_input.specification_text)
+        ctx.event("product_profile", "Economy mode: product read from the specification text")
 
     artifacts.write_json("product_profile.json", profile)
 
-    try:
-        decisions, selected = assess_applicability(ctx, profile)
-    except (ModelBudgetExceeded, LLMCallError) as exc:
-        ctx.warn(f"applicability assessment stopped early: {exc}", stage="applicability")
-        decisions, selected = [], []
+    registry = PartCategoryRegistry(category_registry_path)
+    corpus_key = corpus_fingerprint(corpus)
+    vocabulary = product_terms(profile, run_input.specification_text)
+    if ctx.economy:
+        category = match_category(ctx, registry, profile, run_input.specification_text)
+    else:
+        category = classify_part_category(ctx, profile, registry)
+    if category is not None:
+        artifacts.write_json("part_category.json", category)
+
+    reused = None
+    if category is not None and ctx.config.reuse_category_knowledge:
+        stored = registry.applicability(category.slug, corpus_key)
+        if stored:
+            reused = reuse_applicability(ctx, stored, category.label)
+    if reused is not None:
+        decisions, selected = reused
+    elif ctx.economy:
+        decisions, selected = economy_applicability(ctx, vocabulary)
+    else:
+        try:
+            decisions, selected = assess_applicability(ctx, profile)
+        except LLMConfigurationError as exc:
+            if mode not in FALLBACK_MODES:
+                raise
+            _switch_to_economy(ctx, exc)
+            decisions, selected = economy_applicability(ctx, vocabulary)
+        except (ModelBudgetExceeded, LLMCallError) as exc:
+            ctx.warn(f"applicability assessment stopped early: {exc}", stage="applicability")
+            decisions, selected = [], []
+        else:
+            # Only a complete assessment is worth replaying for the next run.
+            if category is not None and decisions and not ctx.budget_exhausted:
+                registry.record_applicability(
+                    category.slug, corpus_key, decisions, run_input.run_id
+                )
+    decisions, selected = apply_consolidation(ctx, decisions, selected)
+    if ctx.economy or mode == "lite":
+        decisions, selected = prune_uncertain(
+            ctx, decisions, selected, vocabulary, profile.vehicle_categories
+        )
+    registry.save()
     artifacts.write_json("applicability.json", decisions)
 
     if not selected:
@@ -129,7 +199,13 @@ def run_extraction(
     profile_facts = profile_payload(profile)
     drafts = []
     coverage_by_target = {(item.target_kind, item.target_id): item for item in coverage}
-    total = len(plan)
+    if mode == "lite":
+        plan = _drop_sections_without_obligations(ctx, plan, coverage_by_target)
+    plan = triage_plan(
+        ctx, plan, coverage_by_target, profile, category, registry, corpus_key,
+        vocabulary=vocabulary,
+    )
+    registry.save()
 
     results = _extract_plan(
         ctx, plan, profile_facts, conditions_by_document, tracker, coverage_by_target
@@ -172,6 +248,13 @@ def revise_extraction(
     """
     ctx = RunContext(run_input=run_input, corpus=corpus, llm=llm, emit_event=emit_event)
     artifacts = AgentArtifacts(artifacts_dir)
+    if getattr(ctx.config, "extraction_mode", "model") == "economy" or any(
+        w.startswith("the model cannot be used") for w in draft.warnings
+    ):
+        # Revision is a model task. Without the model the findings stay open and
+        # visible rather than being "resolved" by a call that cannot be made.
+        ctx.event("revise", f"Economy mode: {len(findings)} finding(s) left open, no revision call")
+        return draft
     ctx.event("revise", f"Revising {len(findings)} finding(s)", total=len(findings))
 
     revised, notes = revise_drafts(ctx, draft, findings)
@@ -242,13 +325,23 @@ def _extract_plan(
     done = 0
 
     def work(item):
-        return extract_section(
-            ctx,
-            item,
-            profile_facts,
-            conditions_by_document.get(item.document.document_id, ()),
-            tracker,
-        )
+        if ctx.economy:
+            return economy_extract_section(ctx, item)
+        try:
+            return extract_section(
+                ctx,
+                item,
+                profile_facts,
+                conditions_by_document.get(item.document.document_id, ()),
+                tracker,
+            )
+        except LLMConfigurationError as exc:
+            # The model became unusable mid-run - typically the credit ran out.
+            # In "auto" mode the remaining sections are read without it.
+            if getattr(ctx.config, "extraction_mode", "model") not in FALLBACK_MODES:
+                raise
+            _switch_to_economy(ctx, exc)
+            return economy_extract_section(ctx, item)
 
     def record(item, result, error: Optional[BaseException]) -> None:
         nonlocal done
@@ -327,6 +420,48 @@ def _extract_plan(
                     submit_next()
                 break
         return results
+
+
+def _drop_sections_without_obligations(
+    ctx: RunContext, plan: list, coverage_by_target: dict
+) -> list:
+    """Lite mode: a section with no "shall"/"must" anywhere is not sent to the model.
+
+    Free to decide and it removes headings, lists and descriptive text before
+    any paid call. Such sections stay in the ledger as EXCLUDED with the reason.
+    """
+    kept = []
+    for item in plan:
+        if has_obligation_wording(ctx, item):
+            kept.append(item)
+            continue
+        coverage_by_target[(TargetKind.SECTION, item.section_id)] = CoverageItem(
+            target_kind=TargetKind.SECTION,
+            target_id=item.section_id,
+            status=CoverageStatus.EXCLUDED,
+            explanation="Not sent to the model (lite mode): no obligation wording (shall/must) in the section.",
+            document_id=item.document.document_id,
+        )
+    if len(kept) < len(plan):
+        ctx.event(
+            "plan",
+            f"Lite mode: {len(plan) - len(kept)} of {len(plan)} section(s) state no obligation "
+            "and are not sent to the model",
+        )
+    return kept
+
+
+def _switch_to_economy(ctx: RunContext, exc: BaseException) -> None:
+    with ctx.lock:
+        already = ctx.economy
+        ctx.economy = True
+    if not already:
+        ctx.warn(
+            f"the model cannot be used ({exc}); the rest of this run makes no model "
+            "calls (economy mode): relevance from saved category knowledge or wording, "
+            "one plain-English requirement per obligation paragraph",
+            stage="agent",
+        )
 
 
 def _warn_budget(ctx: RunContext, done: int, total: int) -> None:

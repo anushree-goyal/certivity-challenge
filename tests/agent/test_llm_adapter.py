@@ -510,3 +510,57 @@ def test_a_cached_call_reports_no_latency(tmp_path):
 
     assert cached.cached is True
     assert cached.usage.latency_ms_total == 0.0
+
+
+# --------------------------------------------------------------------------- #
+# Screening tasks on the small model
+# --------------------------------------------------------------------------- #
+
+
+def test_screening_tasks_default_to_haiku_at_low_effort(monkeypatch):
+    from certivity.llm import adapter_from_env
+
+    monkeypatch.delenv("CERTIVITY_MODEL_TRIAGE", raising=False)
+    monkeypatch.delenv("CERTIVITY_EFFORT_TRIAGE", raising=False)
+    adapter = adapter_from_env()
+    for task in ("part_category", "section_triage"):
+        assert adapter.model_for(task) == "claude-haiku-5-5"
+        assert adapter.effort_for(task) == "low"
+    assert adapter.model_for("extract_obligations") == adapter.config.model
+    assert adapter.effort_for("extract_obligations") == adapter.config.effort
+
+
+def test_haiku_requests_carry_no_refusal_fallbacks():
+    adapter, client = make_adapter(
+        [
+            FakeResponse(text='{"answer": "ok"}', model="claude-haiku-5-5"),
+            FakeResponse(text='{"answer": "ok"}'),
+        ],
+        model_overrides={"section_triage": "claude-haiku-5-5"},
+        effort_overrides={"section_triage": "low"},
+    )
+    adapter.generate_json("section_triage", "instructions", {}, SCHEMA)
+    adapter.generate_json("extract", "instructions", {}, SCHEMA)
+
+    triage, extract = client.requests
+    assert triage["model"] == "claude-haiku-5-5"
+    assert triage["output_config"]["effort"] == "low"
+    assert "fallbacks" not in triage
+    # The strong model still gets its fallbacks: Haiku must not switch them off.
+    assert extract["fallbacks"] == "default"
+    assert extract["output_config"]["effort"] == "high"
+
+
+def test_cache_key_includes_the_task_model(tmp_path):
+    cache = CallCache(tmp_path)
+    first, _ = make_adapter([FakeResponse(text='{"answer": "opus"}')], cache=cache)
+    first.generate_json("bulk", "instructions", {}, SCHEMA)
+
+    second, client = make_adapter(
+        [FakeResponse(text='{"answer": "haiku"}', model="claude-haiku-5-5")],
+        cache=cache,
+        model_overrides={"bulk": "claude-haiku-5-5"},
+    )
+    response = second.generate_json("bulk", "instructions", {}, SCHEMA)
+    assert response.cached is False
+    assert response.data == {"answer": "haiku"}

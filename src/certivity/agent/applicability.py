@@ -13,8 +13,11 @@ without any source-code edit.
 
 from __future__ import annotations
 
+import dataclasses
+import re
 from collections import defaultdict
-from typing import Any, Iterable
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Any, Iterable, Optional
 
 from certivity.contracts import (
     ApplicabilityDecision,
@@ -24,6 +27,7 @@ from certivity.contracts import (
     ModelBudgetExceeded,
     ProductProfile,
     SourcePassage,
+    from_jsonable,
 )
 from certivity.agent.context import RunContext
 from certivity.agent.profile import profile_payload
@@ -247,63 +251,78 @@ def assess_applicability(
     shortlist = shortlist_candidates(ctx, profile, documents)
     by_regulation = _group_by_regulation(documents)
 
-    decisions: list[ApplicabilityDecision] = []
+    decided: dict[str, ApplicabilityDecision] = {}
+    candidates: list[tuple[str, list[Document], str, tuple[str, ...]]] = []
     total = len(by_regulation)
-    for position, (regulation, docs) in enumerate(sorted(by_regulation.items()), start=1):
+    done = 0
+    for regulation, docs in sorted(by_regulation.items()):
         is_candidate, reason, unknowns = shortlist.get(regulation, (True, "", ()))
-        if not is_candidate:
-            decisions.append(
-                ApplicabilityDecision(
-                    regulation=regulation,
-                    version_label=docs[0].version_label,
-                    document_ids=tuple(d.document_id for d in docs),
-                    status=ApplicabilityStatus.EXCLUDED,
-                    explanation=(
-                        "Excluded at index screening without reading the scope text: "
-                        + reason
-                    ),
-                    depends_on_unknowns=unknowns,
-                    index_evidence=reason,
-                )
-            )
-            ctx.event(
-                "applicability",
-                f"{regulation}: not a candidate",
-                completed=position,
-                total=total,
-            )
+        if is_candidate:
+            candidates.append((regulation, docs, reason, unknowns))
             continue
-
-        try:
-            decision = decide_document_scope(
-                ctx, profile, regulation, docs, reason, unknowns
-            )
-        except ModelBudgetExceeded:
-            ctx.warn(
-                f"model budget exhausted before {regulation}'s scope was read; it is "
-                "recorded as uncertain and left uninspected",
-                stage="applicability",
-            )
-            decisions.append(
-                ApplicabilityDecision(
-                    regulation=regulation,
-                    version_label=docs[0].version_label,
-                    document_ids=tuple(d.document_id for d in docs),
-                    status=ApplicabilityStatus.UNCERTAIN,
-                    explanation="Scope not read: the run's model budget was exhausted.",
-                    depends_on_unknowns=unknowns,
-                    index_evidence=reason,
-                )
-            )
-            break
-        decisions.append(decision)
-        ctx.event(
-            "applicability",
-            f"{regulation}: {decision.status.value}",
-            completed=position,
-            total=total,
-            affected_ids=decision.scope_evidence[:5],
+        decided[regulation] = ApplicabilityDecision(
+            regulation=regulation,
+            version_label=docs[0].version_label,
+            document_ids=tuple(d.document_id for d in docs),
+            status=ApplicabilityStatus.EXCLUDED,
+            explanation=(
+                "Excluded at index screening without reading the scope text: " + reason
+            ),
+            depends_on_unknowns=unknowns,
+            index_evidence=reason,
         )
+        done += 1
+        ctx.event(
+            "applicability", f"{regulation}: not a candidate", completed=done, total=total
+        )
+
+    # Scope decisions are independent of each other, so they run concurrently.
+    # Serially they were one model call after another - several minutes for a
+    # dozen candidates - before a single section could be read.
+    workers = max(1, int(getattr(ctx.config, "max_parallel_sections", 1) or 1))
+    budget_hit = False
+    if candidates:
+        with ThreadPoolExecutor(
+            max_workers=min(workers, len(candidates)), thread_name_prefix="scope"
+        ) as pool:
+            futures = {
+                pool.submit(
+                    decide_document_scope, ctx, profile, regulation, docs, reason, unknowns
+                ): (regulation, docs, reason, unknowns)
+                for regulation, docs, reason, unknowns in candidates
+            }
+            for future in as_completed(futures):
+                regulation, docs, reason, unknowns = futures[future]
+                done += 1
+                try:
+                    decision = future.result()
+                except ModelBudgetExceeded:
+                    budget_hit = True
+                    decision = ApplicabilityDecision(
+                        regulation=regulation,
+                        version_label=docs[0].version_label,
+                        document_ids=tuple(d.document_id for d in docs),
+                        status=ApplicabilityStatus.UNCERTAIN,
+                        explanation="Scope not read: the run's model budget was exhausted.",
+                        depends_on_unknowns=unknowns,
+                        index_evidence=reason,
+                    )
+                decided[regulation] = decision
+                ctx.event(
+                    "applicability",
+                    f"{regulation}: {decision.status.value}",
+                    completed=done,
+                    total=total,
+                    affected_ids=decision.scope_evidence[:5],
+                )
+    if budget_hit:
+        ctx.warn(
+            "model budget exhausted before every candidate's scope was read; those "
+            "regulations are recorded as uncertain and left uninspected",
+            stage="applicability",
+        )
+
+    decisions = [decided[regulation] for regulation in sorted(decided)]
 
     screened_out = [
         d.regulation
@@ -322,6 +341,127 @@ def assess_applicability(
 
     selected = select_documents(ctx, decisions, documents)
     return decisions, selected
+
+
+def reuse_applicability(
+    ctx: RunContext, stored: dict[str, Any], category_label: str
+) -> Optional[tuple[list[ApplicabilityDecision], list[Document]]]:
+    """Replay decisions an earlier run of the same part category recorded.
+
+    Returns None - and the caller decides afresh - when any stored decision
+    names a document the current snapshot no longer has.
+    """
+    documents = list(ctx.corpus.list_documents(DocumentRole.BASE))
+    known_ids = {d.document_id for d in documents}
+    try:
+        decisions = [
+            from_jsonable(ApplicabilityDecision, entry) for entry in stored.get("decisions") or ()
+        ]
+    except (TypeError, ValueError, KeyError):
+        return None
+    if not decisions or any(
+        document_id not in known_ids for d in decisions for document_id in d.document_ids
+    ):
+        return None
+
+    origin = stored.get("learned_from_run") or "an earlier run"
+    decisions = [
+        dataclasses.replace(
+            d,
+            explanation=(
+                f"Reused for part category '{category_label}' (decided in {origin}): "
+                f"{d.explanation}"
+            ),
+        )
+        for d in decisions
+    ]
+    applicable = [d for d in decisions if d.status is not ApplicabilityStatus.EXCLUDED]
+    ctx.event(
+        "applicability",
+        f"Reused applicability for {category_label}: "
+        + (", ".join(d.regulation for d in applicable) or "no regulation")
+        + f" (learned in {origin})",
+        completed=len(decisions),
+        total=len(decisions),
+    )
+    return decisions, select_documents(ctx, decisions, documents)
+
+
+_COMBINES = re.compile(
+    r"combines the provisions of (?:the )?(?:individual )?(?:UN )?Regulations?\s+Nos?\.?\s*"
+    r"([\d,\sand]+)",
+    re.IGNORECASE,
+)
+
+
+def combined_regulations(ctx: RunContext, document: Document) -> set[str]:
+    """Regulations this one states, in its own introduction, that it combines.
+
+    R148: "This Regulation combines the provisions of individual UN Regulations
+    Nos. 4, 6, 7, 23, 38, 50, 77, 87 and 91 into a single Regulation".
+    """
+    found: set[str] = set()
+    try:
+        sections = ctx.corpus.list_sections(document.document_id)
+    except Exception:
+        return found
+    for section in sections:
+        if "introduction" not in (section.heading or "").lower():
+            continue
+        try:
+            passages = ctx.corpus.get_passages(list(section.primary_passage_ids))
+        except Exception:
+            continue
+        for passage in passages:
+            for match in _COMBINES.finditer(passage.text):
+                found |= {f"UN R{n}" for n in re.findall(r"\d+", match.group(1))}
+    return found
+
+
+def apply_consolidation(
+    ctx: RunContext, decisions: list[ApplicabilityDecision], documents: list[Document]
+) -> tuple[list[ApplicabilityDecision], list[Document]]:
+    """Compare a superseded regulation, but cite only the one that combines it.
+
+    When a selected regulation says it combines an older one that is also
+    selected, the older one stays in the decisions - compared and listed, with
+    the reason - but its requirements are cited from the current regulation
+    only. Everything the old version requires is in the new one, so this
+    removes duplicates without losing a requirement.
+    """
+    if getattr(ctx.config, "cite_superseded_regulations", False):
+        return decisions, documents
+    active = {d.regulation for d in decisions if d.status is not ApplicabilityStatus.EXCLUDED}
+    superseded_by: dict[str, str] = {}
+    for document in documents:
+        if document.regulation not in active:
+            continue
+        for old in combined_regulations(ctx, document) & active:
+            if old != document.regulation:
+                superseded_by.setdefault(old, document.regulation)
+    if not superseded_by:
+        return decisions, documents
+
+    updated = []
+    for decision in decisions:
+        newer = superseded_by.get(decision.regulation)
+        if newer and decision.status is not ApplicabilityStatus.EXCLUDED:
+            decision = dataclasses.replace(
+                decision,
+                status=ApplicabilityStatus.EXCLUDED,
+                explanation=(
+                    f"Compared, not cited: {newer} states in its introduction that it combines "
+                    f"the provisions of {decision.regulation}, so these requirements are cited "
+                    f"from {newer}. {decision.explanation}"
+                ),
+            )
+        updated.append(decision)
+    ctx.event(
+        "applicability",
+        "Superseded versions compared, cited from the current regulation: "
+        + ", ".join(f"{old} -> {new}" for old, new in sorted(superseded_by.items())),
+    )
+    return updated, [d for d in documents if d.regulation not in superseded_by]
 
 
 def select_documents(

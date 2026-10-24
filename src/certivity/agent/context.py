@@ -43,6 +43,9 @@ class RunContext:
     emit_event: EmitEvent = null_emit
     usage: ModelUsage = field(default_factory=ModelUsage)
     warnings: list[str] = field(default_factory=list)
+    economy: bool = False
+    """True once the run makes no more model calls (economy mode, or the model
+    became unusable in "auto" mode). Read by every stage that would call it."""
     budget_exhausted: bool = False
     """Set once the model budget is hit, so the run finishes as partial rather
     than raising out of a half-processed corpus."""

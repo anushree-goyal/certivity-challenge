@@ -52,6 +52,18 @@ DEFAULT_MODEL = "claude-opus-5"
 """Opus 5 is the default. A per-task override can select a cheaper model for
 high-volume tasks once a run is reliable; see ``RunConfig.model_overrides``."""
 
+LITE_MODEL = "claude-haiku-5-5"
+LITE_EFFORT = "medium"
+"""CERTIVITY_EXTRACTION_MODE=lite: interpretation on the small model. Medium
+rather than low effort, because reading a regulation paragraph into separate
+conditional obligations is the step that needs the reasoning."""
+
+TRIAGE_MODEL = "claude-haiku-5-5"
+TRIAGE_EFFORT = "low"
+TRIAGE_TASKS = ("part_category", "section_triage")
+"""Screening tasks that run on the small model unless CERTIVITY_MODEL_TRIAGE
+says otherwise."""
+
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
 """Server-side refusal fallback. A policy decline would otherwise end a run
 mid-corpus, so this is on by default and disabled only by configuration."""
@@ -136,11 +148,13 @@ class StructuredLLMAdapter:
         cache: CacheBackend | None = None,
         max_calls: Optional[int] = None,
         model_overrides: dict[str, str] | None = None,
+        effort_overrides: dict[str, str] | None = None,
         client: Any | None = None,
     ) -> None:
         self.config = config or ProviderConfig()
         self.cache: CacheBackend = cache or NullCache()
         self.model_overrides = dict(model_overrides or {})
+        self.effort_overrides = dict(effort_overrides or {})
         self._budget = _Budget(max_calls=max_calls)
         self._client = client
         self._client_lock = threading.Lock()
@@ -161,6 +175,7 @@ class StructuredLLMAdapter:
             "calls_used": self._budget.calls,
             "max_calls": self._budget.max_calls,
             "model_overrides": self.model_overrides,
+            "effort_overrides": self.effort_overrides,
         }
 
     def credentials_available(self) -> bool:
@@ -213,6 +228,9 @@ class StructuredLLMAdapter:
     def model_for(self, task: str) -> str:
         return self.model_overrides.get(task, self.config.model)
 
+    def effort_for(self, task: str) -> Optional[str]:
+        return self.effort_overrides.get(task, self.config.effort)
+
     # -- the single public call ------------------------------------------- #
 
     def generate_json(
@@ -235,9 +253,11 @@ class StructuredLLMAdapter:
         model = self.model_for(task)
         images = tuple(images or ())
         encoded = [_encode_image(image) for image in images]
-        config = self.config if max_output_tokens is None else replace(
-            self.config, max_output_tokens=max_output_tokens
-        )
+        # The task's own model and effort go into the config, so they are part
+        # of the cache key: an answer from one model is never replayed for another.
+        config = replace(self.config, model=model, effort=self.effort_for(task))
+        if max_output_tokens is not None:
+            config = replace(config, max_output_tokens=max_output_tokens)
 
         key = content_hash(
             "certivity-llm-call-v1",
@@ -425,7 +445,9 @@ class StructuredLLMAdapter:
 
         warnings: list[str] = []
         started = time.monotonic()
-        use_fallbacks = self._fallbacks_available
+        # Haiku has no server-side refusal fallback. Sending the beta for it
+        # would be rejected and switch fallbacks off for every other task too.
+        use_fallbacks = self._fallbacks_available and supports_refusal_fallbacks(model)
         try:
             response = self._send(client, request, use_fallbacks)
         except anthropic.BadRequestError as exc:
@@ -516,6 +538,10 @@ from a malformed body by status code alone, so the message is the only signal
 available."""
 
 
+def supports_refusal_fallbacks(model: str) -> bool:
+    return not model.startswith("claude-haiku")
+
+
 def _is_account_configuration_error(message: str) -> bool:
     lowered = message.lower()
     return any(marker in lowered for marker in _ACCOUNT_CONFIGURATION_MARKERS)
@@ -577,12 +603,23 @@ def adapter_from_env(
         )
         if os.environ.get(var)
     }
+    # The two screening tasks default to the small model at low effort: they
+    # sort sections and name a part, and run before every expensive call.
+    triage_model = os.environ.get("CERTIVITY_MODEL_TRIAGE") or TRIAGE_MODEL
+    triage_effort = os.environ.get("CERTIVITY_EFFORT_TRIAGE", TRIAGE_EFFORT) or None
+    for task in TRIAGE_TASKS:
+        env_overrides.setdefault(task, triage_model)
+    effort_overrides = {task: triage_effort for task in TRIAGE_TASKS}
+
     # An explicit argument always beats the environment.
     merged_overrides = {**env_overrides, **(model_overrides or {})}
 
+    # Lite mode puts every task on the small model unless a model is named
+    # explicitly: roughly 20-40x cheaper per token than the default.
+    lite = os.environ.get("CERTIVITY_EXTRACTION_MODE", "").lower() == "lite"
     config = ProviderConfig(
-        model=os.environ.get("CERTIVITY_MODEL", DEFAULT_MODEL),
-        effort=os.environ.get("CERTIVITY_MODEL_EFFORT", "high") or None,
+        model=os.environ.get("CERTIVITY_MODEL") or (LITE_MODEL if lite else DEFAULT_MODEL),
+        effort=os.environ.get("CERTIVITY_MODEL_EFFORT", LITE_EFFORT if lite else "high") or None,
         max_output_tokens=int(os.environ.get("CERTIVITY_MAX_OUTPUT_TOKENS", "16000")),
         timeout_s=timeout_s if timeout_s is not None else 120.0,
         max_retries=max_retries if max_retries is not None else 2,
@@ -595,6 +632,7 @@ def adapter_from_env(
         cache=cache,
         max_calls=max_calls,
         model_overrides=merged_overrides,
+        effort_overrides=effort_overrides,
     )
 
 

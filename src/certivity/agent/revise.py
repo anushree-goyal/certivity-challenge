@@ -12,10 +12,12 @@ audit.
 from __future__ import annotations
 
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Iterable, Sequence
 
 from certivity.contracts import (
     DraftRequirement,
+    LLMConfigurationError,
     ModelBudgetExceeded,
     PipelineDraft,
     ReviewFinding,
@@ -157,7 +159,8 @@ def revise_drafts(
     replacements: dict[str, DraftRequirement | None] = {}
     notes: list[str] = []
 
-    for position, (section_id, section_drafts) in enumerate(sorted(by_section.items()), 1):
+    work = []
+    for section_id, section_drafts in sorted(by_section.items()):
         section_findings = [f for item in section_drafts for f in by_draft[item.draft_id]]
         passages = _gather_passages(ctx, section_drafts, section_findings)
         if not passages:
@@ -167,35 +170,59 @@ def revise_drafts(
                 stage="revise",
             )
             continue
+        work.append((section_id, section_drafts, section_findings, passages))
 
-        try:
-            response = ctx.call_json(
-                "revise_obligations",
-                REVISE_OBLIGATIONS_INSTRUCTIONS,
-                {
-                    "product": profile_facts,
-                    "section_id": section_id,
-                    "drafts": [_draft_payload(item) for item in section_drafts],
-                    "findings": [
-                        {
-                            "finding_id": f.finding_id,
-                            "draft_id": f.target_id,
-                            "category": f.category.value,
-                            "severity": f.severity.value,
-                            "explanation": f.explanation,
-                            "requested_correction": f.requested_correction,
-                        }
-                        for f in section_findings
-                    ],
-                    "source_passages": _passage_payload(passages),
-                },
-                REVISE_OBLIGATIONS_SCHEMA,
-                prompt_version=PROMPT_VERSIONS["revise_obligations"],
-            )
-        except ModelBudgetExceeded:
+    def call(section_id, section_drafts, section_findings, passages):
+        return ctx.call_json(
+            "revise_obligations",
+            REVISE_OBLIGATIONS_INSTRUCTIONS,
+            {
+                "product": profile_facts,
+                "section_id": section_id,
+                "drafts": [_draft_payload(item) for item in section_drafts],
+                "findings": [
+                    {
+                        "finding_id": f.finding_id,
+                        "draft_id": f.target_id,
+                        "category": f.category.value,
+                        "severity": f.severity.value,
+                        "explanation": f.explanation,
+                        "requested_correction": f.requested_correction,
+                    }
+                    for f in section_findings
+                ],
+                "source_passages": _passage_payload(passages),
+            },
+            REVISE_OBLIGATIONS_SCHEMA,
+            prompt_version=PROMPT_VERSIONS["revise_obligations"],
+        )
+
+    # Sections are revised independently, so the calls run concurrently. The
+    # answers are applied below in section order, so the result does not
+    # depend on which call returns first.
+    workers = max(1, int(getattr(ctx.config, "max_parallel_sections", 1) or 1))
+    outcomes: list = [None] * len(work)
+    if work:
+        with ThreadPoolExecutor(
+            max_workers=min(workers, len(work)), thread_name_prefix="revise"
+        ) as pool:
+            futures = [pool.submit(call, *entry) for entry in work]
+            for index, future in enumerate(futures):
+                try:
+                    outcomes[index] = future.result()
+                except (ModelBudgetExceeded, LLMConfigurationError) as exc:
+                    outcomes[index] = exc
+                    for other in futures[index + 1 :]:
+                        other.cancel()
+                    break
+
+    for position, ((section_id, section_drafts, _, passages), response) in enumerate(
+        zip(work, outcomes), 1
+    ):
+        if response is None or isinstance(response, (ModelBudgetExceeded, LLMConfigurationError)):
             ctx.warn(
-                "model budget exhausted during revision; the remaining findings are "
-                "unresolved and their drafts are unchanged",
+                "the model budget ran out or the model became unusable during revision; "
+                "the remaining findings are unresolved and their drafts are unchanged",
                 stage="revise",
             )
             break

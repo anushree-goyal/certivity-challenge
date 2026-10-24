@@ -13,6 +13,7 @@ requirement: it looks checkable and is not.
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Any, Iterable, Sequence
 
@@ -40,6 +41,10 @@ from certivity.agent.references import (
     follow_references,
     requests_from_extraction,
 )
+
+MAX_PARALLEL_BATCHES = 4
+"""Concurrent batches inside one section. Most sections are one batch; this
+bounds how many extra calls a large annex adds on top of the section workers."""
 
 
 @dataclass
@@ -140,8 +145,8 @@ def extract_section(
         )
         all_batches = all_batches[:cap]
 
-    for batch in all_batches:
-        batch_drafts, batch_resolutions, batch_notes = _extract_batch(
+    def run(batch):
+        return _extract_batch(
             ctx,
             item,
             bundle,
@@ -150,6 +155,22 @@ def extract_section(
             applicability_conditions,
             tracker,
         )
+
+    # A section's batches are independent reads of different passages, so they
+    # run concurrently; serially, one large annex was the last thing a run
+    # waited for. Results are taken in batch order, and the first failure
+    # propagates exactly as it did serially.
+    if len(all_batches) == 1:
+        outcomes = [run(all_batches[0])]
+    else:
+        with ThreadPoolExecutor(
+            max_workers=min(MAX_PARALLEL_BATCHES, len(all_batches)),
+            thread_name_prefix="batch",
+        ) as pool:
+            futures = [pool.submit(run, batch) for batch in all_batches]
+            outcomes = [future.result() for future in futures]
+
+    for batch, (batch_drafts, batch_resolutions, batch_notes) in zip(all_batches, outcomes):
         drafts.extend(batch_drafts)
         resolutions.extend(batch_resolutions)
         notes.extend(batch_notes)

@@ -47,6 +47,9 @@ class Settings:
     max_model_calls: int | None  # None: the contracts' RunConfig default
     max_review_calls: int | None = None  # review's own budget; None: same as max_model_calls
     entry_points: dict[str, str] = field(default_factory=dict)
+    max_parallel_sections: int | None = None  # None: the contracts' RunConfig default
+    category_registry: Path | None = None  # part categories learned across runs; None: not persisted
+    extraction_mode: str = "auto"  # "model" | "economy" (no model calls) | "auto" (economy once the model is unusable) | "lite" (auto on the small model)
 
     @property
     def index_path(self) -> Path:
@@ -94,6 +97,11 @@ def load_settings() -> Settings:
         for name, default in DEFAULT_ENTRY_POINTS.items()
     }
     mode = os.environ.get("CERTIVITY_PIPELINE_MODE", "real").lower()
+    extraction_mode = os.environ.get("CERTIVITY_EXTRACTION_MODE", "auto").lower()
+    # Lite mode costs cents per call, so its defaults favour finishing the run and
+    # finishing it quickly: a budget that covers ~600 interpretation calls plus
+    # review, and wide parallelism. An explicit setting always wins.
+    lite = extraction_mode == "lite"
     if mode not in ("real", "fixture"):
         raise ValueError(f"CERTIVITY_PIPELINE_MODE must be 'real' or 'fixture', got {mode!r}")
     return Settings(
@@ -105,7 +113,13 @@ def load_settings() -> Settings:
         default_team_id=os.environ.get("CERTIVITY_TEAM_ID", ""),
         max_revision_rounds=_int("CERTIVITY_MAX_REVISION_ROUNDS", 2),
         run_time_budget_s=_int("CERTIVITY_RUN_TIME_BUDGET_S", 3 * 3600),
-        max_model_calls=int(os.environ["CERTIVITY_MAX_MODEL_CALLS"]) if os.environ.get("CERTIVITY_MAX_MODEL_CALLS") else None,
+        max_model_calls=(int(os.environ["CERTIVITY_MAX_MODEL_CALLS"]) if os.environ.get("CERTIVITY_MAX_MODEL_CALLS")
+                         else 1500 if lite else None),
         max_review_calls=int(os.environ["CERTIVITY_MAX_REVIEW_CALLS"]) if os.environ.get("CERTIVITY_MAX_REVIEW_CALLS") else None,
         entry_points=entry_points,
+        max_parallel_sections=_int("CERTIVITY_MAX_PARALLEL_SECTIONS", 32 if lite else 0) or None,
+        extraction_mode=extraction_mode,
+        # "off" disables persistence; categories are then relearned on every run.
+        category_registry=(None if os.environ.get("CERTIVITY_CATEGORY_REGISTRY", "").lower() == "off"
+                           else _path("CERTIVITY_CATEGORY_REGISTRY", "data/cache/part_categories.json")),
     )

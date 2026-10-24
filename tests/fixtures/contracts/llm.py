@@ -427,10 +427,33 @@ def default_script() -> dict[str, Any | Responder]:
             )
         return {"decisions": decisions}
 
+    def part_category(payload: Any) -> dict[str, Any]:
+        known = [c["slug"] for c in payload["known_categories"]]
+        slug = "rear-signalling-device"
+        return {
+            "decision": "existing" if slug in known else "new",
+            "slug": slug,
+            "label": "Rear signalling device",
+            "description": "A lamp that signals a vehicle's presence to the rear.",
+            "aliases": ["rear lamp"],
+            "reason": "The profile describes a rear signalling device.",
+        }
+
+    def section_triage(payload: Any) -> dict[str, Any]:
+        # Keep everything: the existing pipeline tests expect every section read.
+        return {
+            "sections": [
+                {"section_id": s["section_id"], "verdict": "extract", "reason": "relevant"}
+                for s in payload["sections"]
+            ]
+        }
+
     return {
         "product_profile": product_profile,
         "candidate_scope": candidate_scope,
         "document_scope": document_scope,
         "extract_obligations": extract_obligations,
         "revise_obligations": revise_obligations,
+        "part_category": part_category,
+        "section_triage": section_triage,
     }
