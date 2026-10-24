@@ -99,3 +99,25 @@ def test_fast_mode_revision_can_be_asked_for_back(monkeypatch):
     monkeypatch.setenv("CERTIVITY_EXTRACTION_MODE", "fast")
     monkeypatch.setenv("CERTIVITY_MAX_REVISION_ROUNDS", "1")
     assert load_settings().max_revision_rounds == 1
+
+
+def test_model_verification_fails_loudly_without_credentials(monkeypatch):
+    """A configured key is not a usable one, and "ready" must not claim it is.
+
+    An exhausted credit balance arrives as a 400 on the first real request, so
+    readiness that only checks for a credential reports a usable account for one
+    that cannot make a single call. This asserts the verification says so rather
+    than raising, because it runs as a go/no-go check.
+    """
+    from certivity.cli import _verify_model_usable
+
+    for name in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(
+        "pathlib.Path.is_dir", lambda self: False, raising=False
+    )
+
+    result = _verify_model_usable()
+    assert result["usable"] is False
+    assert result["reason"] == "account_configuration"
+    assert "credential" in result["detail"].lower()

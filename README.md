@@ -116,6 +116,7 @@ certivity export --latest --out upload.json   # valid JSON from checkpoints; no 
 certivity export --run <id> --from-draft runs/<old>/agent/pipeline_draft.json
 certivity apistats --latest                   # calls, 429s, retries, tokens, cost, diagnosis
 certivity probe --calls 8 --concurrency 4     # controlled latency / rate-limit probe
+certivity health --verify-model               # go/no-go: can the account be billed at all?
 ```
 
 `export` makes no API call, so it works when the provider does not. It runs the
@@ -151,7 +152,7 @@ rather than the SDK so every attempt and every `retry-after` is counted;
 
 The held-out case arrives as a new folder in the participant package. Nothing in the code needs to change.
 
-**Check first that the Anthropic account has credit** (`certivity probe --calls 1`). Without it no extraction is possible, and `certivity export` is the only thing that still produces a file.
+**Check first that the Anthropic account has credit** (`certivity health --verify-model`, which spends one cheap call and exits non-zero with the provider's own message). `certivity health` alone reports a configured key as ready, which an account with no credit also is - that distinction cost a run. Without credit no extraction is possible, and `certivity export` is the only thing that still produces a file.
 
 **One command:** `certivity heldout` does steps 1–4 in one go: pull, download base PDFs, refresh the corpus, then run the first `heldout-*` case. It prints where the validated export was saved. Budgets: `--max-calls N --review-calls M`. Mode: `--fast` for the bounded run. Steps 1–5 below do the same in the UI.
 

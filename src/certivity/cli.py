@@ -48,8 +48,61 @@ def _health(args) -> int:
     from certivity.api.settings import load_settings
 
     report = readiness(load_settings())
+    if getattr(args, "verify_model", False):
+        report["model_call"] = _verify_model_usable()
     print(json.dumps(report, indent=2))
-    return 0 if (report["real_pipeline_ready"] or args.allow_fixture) else 1
+    ok = report["real_pipeline_ready"] or args.allow_fixture
+    if getattr(args, "verify_model", False) and not report["model_call"]["usable"]:
+        print(f"MODEL NOT USABLE: {report['model_call']['detail']}", file=sys.stderr)
+        return 1
+    return 0 if ok else 1
+
+
+def _verify_model_usable() -> dict:
+    """Spend one cheap call to find out whether the account can actually be billed.
+
+    A configured API key is not a usable one. An exhausted credit balance arrives
+    as a 400 on the first real request, so "credentials_configured: true" reports
+    ready for an account that cannot make a single call - which is exactly what
+    happened, and it cost a run. The only honest check is to make one.
+
+    Deliberately the smallest possible request on the cheapest model.
+    """
+    from certivity.contracts import LLMCallError, LLMConfigurationError
+    from certivity.llm import ProviderConfig, StructuredLLMAdapter
+
+    adapter = StructuredLLMAdapter(
+        ProviderConfig(
+            model="claude-haiku-4-5-20251001",
+            effort=None,
+            max_output_tokens=16,
+            timeout_s=30.0,
+            max_retries=0,
+            use_refusal_fallbacks=False,
+            cache_prompt_prefix=False,
+        )
+    )
+    schema = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["ok"],
+        "properties": {"ok": {"type": "boolean"}},
+    }
+    try:
+        adapter.generate_json(
+            "health", "Reply {\"ok\": true}.", {}, schema, prompt_version="health-v1"
+        )
+    except LLMConfigurationError as exc:
+        return {"usable": False, "reason": "account_configuration", "detail": str(exc)[:400]}
+    except LLMCallError as exc:
+        return {"usable": False, "reason": "call_failed", "detail": str(exc)[:400]}
+    except Exception as exc:  # pragma: no cover - unexpected transport problem
+        return {"usable": False, "reason": type(exc).__name__, "detail": str(exc)[:400]}
+    return {
+        "usable": True,
+        "model": adapter.config.model,
+        "telemetry": adapter.telemetry.snapshot()["http"],
+    }
 
 
 def _bootstrap(args) -> int:
@@ -434,6 +487,9 @@ def main(argv: list[str] | None = None) -> int:
 
     health = sub.add_parser("health", help="report component, corpus and model readiness")
     health.add_argument("--allow-fixture", action="store_true", help="exit 0 even if only fixture mode is ready")
+    health.add_argument("--verify-model", action="store_true", dest="verify_model",
+                        help="spend one cheap call to prove the account can be billed "
+                             "(a configured key is not a usable one)")
     health.set_defaults(func=_health)
 
     boot = sub.add_parser("bootstrap", help="build or reuse the base corpus snapshot")
