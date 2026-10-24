@@ -106,8 +106,12 @@ def section_priority(
     cost more than reading the good ones.
     """
     text = " ".join(p.text for p in passages).lower()
-    if not text:
-        return -1.0
+    if not text.strip():
+        # No readable text: nothing to extract, so this must sort last - below
+        # even administrative apparatus, which can at least carry a citable
+        # requirement. Reachable when a corpus read fails, since sections with
+        # no passages never enter the plan in the first place.
+        return -1000.0
 
     score = 0.0
     obligations = sum(text.count(w) for w in _OBLIGATION_WORDS)

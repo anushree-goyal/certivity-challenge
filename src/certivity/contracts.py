@@ -36,7 +36,7 @@ import typing
 from dataclasses import dataclass, field
 from typing import Any, Optional, Protocol, Union, runtime_checkable
 
-CONTRACTS_VERSION = "1.5.0"
+CONTRACTS_VERSION = "1.6.0"
 
 # --------------------------------------------------------------------------- #
 # Enumerations
@@ -260,6 +260,13 @@ class RunConfig:
     max_reference_depth: int = 2
     max_review_rounds: int = 1
     passages_per_batch: int = 6
+    max_parallel_sections: int = 4
+    """How many sections may be extracted concurrently.
+
+    1 is serial. Measured on the real corpus: ~1,201 extraction calls at ~20 s
+    each is 6.7 hours serially, against a 5-hour submission window, so some
+    concurrency is required rather than optional. Kept modest by default
+    because the ceiling is the provider's rate limit, not local CPU."""
     request_timeout_s: float = 120.0
     max_retries: int = 2
     use_cache: bool = True

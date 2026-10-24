@@ -440,3 +440,32 @@ def test_a_genuinely_malformed_request_stays_a_call_error():
     adapter, _ = make_adapter([bad_request("max_tokens: must be greater than 0")])
     with pytest.raises(LLMCallError):
         adapter.generate_json("extract", "instructions", {}, SCHEMA)
+
+
+def test_per_task_model_overrides_come_from_the_environment(monkeypatch, tmp_path):
+    """The cost lever. Extraction is ~95% of a full run's calls, so moving just
+    that task to a cheaper model is most of the saving, while applicability and
+    review keep the stronger model."""
+    from certivity.llm import adapter_from_env
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-not-real")
+    monkeypatch.setenv("CERTIVITY_MODEL_EXTRACT", "claude-sonnet-5")
+    monkeypatch.setenv("CERTIVITY_MODEL_REVIEW", "claude-sonnet-5")
+
+    built = adapter_from_env()
+    assert built.model_for("extract_obligations") == "claude-sonnet-5"
+    assert built.model_for("quality_review") == "claude-sonnet-5"
+    # Untouched tasks keep the default.
+    assert built.model_for("document_scope") == "claude-opus-5"
+    assert built.model_for("product_profile") == "claude-opus-5"
+
+
+def test_an_explicit_override_beats_the_environment(monkeypatch, tmp_path):
+    from certivity.llm import adapter_from_env
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-not-real")
+    monkeypatch.setenv("CERTIVITY_MODEL_EXTRACT", "claude-sonnet-5")
+    built = adapter_from_env(model_overrides={"extract_obligations": "claude-opus-5"})
+    assert built.model_for("extract_obligations") == "claude-opus-5"

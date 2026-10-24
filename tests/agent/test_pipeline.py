@@ -307,7 +307,10 @@ def test_priority_prefers_obligations_and_product_terms_over_admin():
     empty = section_priority(section("Heading only", "7"), [], terms)
 
     assert substantive > admin, "a requirement-bearing section must outrank admin text"
-    assert admin > empty, "an empty section is the least useful thing to spend a call on"
+    # Admin text can still carry a citable requirement - the dev answer key
+    # includes marking and approval provisions - so it must outrank a section
+    # with no readable text at all, which can only waste a call.
+    assert admin > empty, "an unreadable section is the least useful thing to read"
 
 
 def test_priority_reorders_the_plan_without_changing_coverage(
@@ -328,3 +331,98 @@ def test_priority_reorders_the_plan_without_changing_coverage(
 
     assert {i.section_id for i in plan_unranked} == {i.section_id for i in plan_ranked}
     assert len(cov_a) == len(cov_b)
+
+
+# --------------------------------------------------------------------------- #
+# Bounded parallel extraction
+#
+# Required, not an optimisation: ~1,201 extraction calls at ~20 s each is 6.7
+# hours serially against a 5-hour submission window.
+# --------------------------------------------------------------------------- #
+
+
+def _run_with_workers(run_input, corpus, script, workers):
+    from certivity.contracts import RunConfig, RunInput, content_hash
+    from tests.fixtures.contracts import ScriptedLLMAdapter
+
+    cfg = RunConfig(
+        max_model_calls=60,
+        passages_per_batch=run_input.config.passages_per_batch,
+        max_parallel_sections=workers,
+    )
+    scoped = RunInput(
+        run_id=f"run-workers-{workers}",
+        team_id=run_input.team_id,
+        case_id=run_input.case_id,
+        corpus_snapshot_id=run_input.corpus_snapshot_id,
+        input_hash=content_hash("workers", workers),
+        specification_text=run_input.specification_text,
+        config=cfg,
+    )
+    return run_extraction(scoped, corpus, ScriptedLLMAdapter(script=script))
+
+
+def test_parallel_extraction_matches_serial_exactly(run_input, corpus, script):
+    """Concurrency must not change the result, only the wall clock.
+
+    Compared on draft ids, text, citations and coverage. Results are keyed by
+    section and applied in plan order, so completion order cannot leak into the
+    output.
+    """
+    serial = _run_with_workers(run_input, corpus, script, 1)
+    parallel = _run_with_workers(run_input, corpus, script, 4)
+
+    def shape(draft):
+        return [
+            (d.draft_id, d.text, d.primary_passage_id, tuple(d.supporting_passage_ids))
+            for d in draft.draft_requirements
+        ]
+
+    assert shape(serial) == shape(parallel)
+    assert serial.coverage_counts() == parallel.coverage_counts()
+    assert {c.target_id: c.status for c in serial.coverage} == {
+        c.target_id: c.status for c in parallel.coverage
+    }
+    assert serial.partial == parallel.partial
+
+
+def test_parallel_extraction_still_honours_the_model_budget(run_input, corpus, script):
+    """A budget hit mid-flight must degrade coverage, not raise or hang."""
+    from certivity.contracts import CoverageStatus, RunConfig, RunInput, TargetKind, content_hash
+    from tests.fixtures.contracts import ScriptedLLMAdapter
+
+    scoped = RunInput(
+        run_id="run-parallel-budget",
+        team_id=run_input.team_id,
+        case_id=run_input.case_id,
+        corpus_snapshot_id=run_input.corpus_snapshot_id,
+        input_hash=content_hash("parallel-budget"),
+        specification_text=run_input.specification_text,
+        config=RunConfig(max_model_calls=5, max_parallel_sections=4),
+    )
+    draft = run_extraction(scoped, corpus, ScriptedLLMAdapter(script=script, max_calls=5))
+
+    assert draft.partial is True
+    assert any("budget" in w for w in draft.warnings), draft.warnings
+    pending = [
+        c for c in draft.coverage
+        if c.target_kind is TargetKind.SECTION and c.status is CoverageStatus.PENDING
+    ]
+    assert pending, "unread sections must stay visible as pending"
+
+
+def test_usage_totals_survive_concurrent_accumulation(run_input, corpus, script):
+    """Usage is merged from several threads; a lost write would under-report spend."""
+    from tests.fixtures.contracts import ScriptedLLMAdapter
+
+    llm = ScriptedLLMAdapter(script=script)
+    from certivity.contracts import RunConfig, RunInput, content_hash
+
+    scoped = RunInput(
+        run_id="run-usage", team_id=run_input.team_id, case_id=run_input.case_id,
+        corpus_snapshot_id=run_input.corpus_snapshot_id,
+        input_hash=content_hash("usage"), specification_text=run_input.specification_text,
+        config=RunConfig(max_model_calls=60, max_parallel_sections=4),
+    )
+    draft = run_extraction(scoped, corpus, llm)
+    assert draft.usage.calls == len(llm.calls)
