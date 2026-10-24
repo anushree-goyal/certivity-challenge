@@ -244,3 +244,17 @@ def test_references_the_corpus_detects_are_followed_even_if_unreported(
     assert all(r.request is not None for r in draft.unresolved_references), (
         "every resolution must carry the request it answers"
     )
+
+
+def test_sections_are_ordered_naturally_when_the_corpus_gives_no_ordinal():
+    """A plain string sort puts 3.10 before 3.2, silently reordering a document.
+
+    The real corpus reports ordinal=0 for every section, so this fallback is
+    what actually determines reading order today.
+    """
+    from certivity.agent.plan import _natural_label_key
+
+    labels = ["3.10", "3.2", "3.1", "10.1", "2", "3.2.1"]
+    assert sorted(labels, key=_natural_label_key) == [
+        "2", "3.1", "3.2", "3.2.1", "3.10", "10.1",
+    ]
