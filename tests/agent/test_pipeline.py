@@ -193,3 +193,25 @@ def test_usage_and_prompt_versions_are_recorded(run_input, corpus, llm):
     assert draft.usage.calls == len(llm.calls)
     assert draft.prompt_versions["extract_obligations"]
     assert draft.corpus_snapshot_id == syn.SNAPSHOT_ID
+
+
+def test_an_unusable_model_aborts_the_run_instead_of_returning_an_empty_draft(
+    run_input, corpus, script
+):
+    """A missing credential or an empty credit balance is not recoverable.
+
+    Returning a draft with zero obligations would look like a completed run that
+    simply found nothing, which is a materially different and false claim.
+    """
+    from certivity.contracts import LLMConfigurationError
+    from tests.fixtures.contracts import ScriptedLLMAdapter
+
+    class UnusableAdapter(ScriptedLLMAdapter):
+        def generate_json(self, *args, **kwargs):
+            raise LLMConfigurationError(
+                "the model is not usable with this account's configuration: "
+                "Your credit balance is too low"
+            )
+
+    with pytest.raises(LLMConfigurationError, match="credit balance"):
+        run_extraction(run_input, corpus, UnusableAdapter(script=script))

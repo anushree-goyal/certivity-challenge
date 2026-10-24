@@ -37,6 +37,8 @@ from certivity.agent.prompts import (
 )
 from certivity.contracts import (
     ApplicabilityStatus,
+    LLMCallError,
+    LLMConfigurationError,
     CoverageStatus,
     RunConfig,
     TargetKind,
@@ -63,12 +65,48 @@ SPEC = (
 
 @pytest.fixture(scope="module")
 def live_llm():
+    """A usable adapter, or a single clear explanation of why there is none.
+
+    A credential being *present* does not make the model usable: the key can be
+    valid while the account has no credit. That returns HTTP 400, not 401, so it
+    is only detectable by making a call. Preflighting it once here means the
+    whole file reports the real cause once, instead of three downstream
+    assertions each misdiagnosing it as a prompt-quality failure.
+    """
     adapter = create_llm(max_calls=25)
     if not adapter.credentials_available():
         pytest.skip(
             "no provider credential is resolvable; set ANTHROPIC_API_KEY, "
             "ANTHROPIC_AUTH_TOKEN, or run 'ant auth login'"
         )
+
+    tiny_schema = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["ok"],
+        "properties": {"ok": {"type": "boolean"}},
+    }
+    try:
+        adapter.generate_json(
+            "preflight",
+            "Reply with {\"ok\": true} and nothing else.",
+            {},
+            tiny_schema,
+            max_output_tokens=64,
+        )
+    except LLMConfigurationError as exc:
+        # Not a skip: the credential is there, so this is a real blocker the
+        # operator has to act on, and a silent skip would hide it.
+        pytest.fail(
+            "the credential works but the model is not usable - no prompt was "
+            f"tested. Provider said: {exc}",
+            pytrace=False,
+        )
+    except LLMCallError as exc:
+        pytest.fail(f"the preflight call failed: {exc}", pytrace=False)
+
+    print(f"\n--- preflight ok: {adapter.describe()['model']}, "
+          f"{adapter.describe()['credential_source']} ---")
     return adapter
 
 

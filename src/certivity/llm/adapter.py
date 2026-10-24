@@ -429,6 +429,16 @@ class StructuredLLMAdapter:
             response = self._send(client, request, use_fallbacks)
         except anthropic.BadRequestError as exc:
             message = str(exc)
+            if _is_account_configuration_error(message):
+                # "credit balance is too low" and friends arrive as a 400, but
+                # they are account configuration, not a malformed request. They
+                # belong in the same class as a missing credential so the caller
+                # reports "the model is not usable" rather than burying it as a
+                # per-call failure and returning an empty draft.
+                raise LLMConfigurationError(
+                    f"the model is not usable with this account's configuration: "
+                    f"{message}"
+                ) from exc
             if use_fallbacks and ("fallback" in message or "beta" in message):
                 # The deployment does not accept the refusal-fallback beta.
                 # Degrade once, loudly, rather than failing the whole run.
@@ -481,6 +491,28 @@ class StructuredLLMAdapter:
                 **request, betas=[FALLBACK_BETA], fallbacks="default"
             )
         return client.messages.create(**request)
+
+
+_ACCOUNT_CONFIGURATION_MARKERS = (
+    "credit balance",
+    "credit balance is too low",
+    "plans & billing",
+    "billing",
+    "quota",
+    "insufficient",
+    "has been disabled",
+    "spend limit",
+)
+"""Substrings that mark a 400 as an account problem rather than a bad request.
+
+The API returns these as ``invalid_request_error``, which is indistinguishable
+from a malformed body by status code alone, so the message is the only signal
+available."""
+
+
+def _is_account_configuration_error(message: str) -> bool:
+    lowered = message.lower()
+    return any(marker in lowered for marker in _ACCOUNT_CONFIGURATION_MARKERS)
 
 
 def _usage_from_response(response: Any, model: str) -> ModelUsage:

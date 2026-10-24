@@ -391,3 +391,52 @@ def test_a_corrupt_cache_entry_is_a_miss_not_a_crash(tmp_path):
         path.write_text("{ truncated")
 
     assert adapter.generate_json("extract", "instructions", {"k": "v"}, SCHEMA).cached is False
+
+
+# --------------------------------------------------------------------------- #
+# Account configuration vs malformed request
+#
+# Both arrive as HTTP 400 invalid_request_error, so the message is the only way
+# to tell them apart. Conflating them cost a real debugging cycle: a zero credit
+# balance was reported as a per-call failure and the run returned an empty draft
+# that looked successful.
+# --------------------------------------------------------------------------- #
+
+CREDIT_MESSAGE = (
+    "Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', "
+    "'message': 'Your credit balance is too low to access the Anthropic API. Please "
+    "go to Plans & Billing to upgrade or purchase credits.'}}"
+)
+
+
+def test_a_zero_credit_balance_is_a_configuration_error():
+    adapter, client = make_adapter([bad_request(CREDIT_MESSAGE)])
+    with pytest.raises(LLMConfigurationError) as excinfo:
+        adapter.generate_json("extract", "instructions", {}, SCHEMA)
+
+    # The provider's own wording is preserved; a paraphrase would send the user
+    # looking in the wrong place.
+    assert "credit balance" in str(excinfo.value)
+    assert len(client.requests) == 1, "an account problem must not be retried"
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        pytest.param("Your credit balance is too low", id="credit-balance"),
+        pytest.param("This organization has been disabled", id="disabled-org"),
+        pytest.param("You have exceeded your monthly spend limit", id="spend-limit"),
+        pytest.param("Quota exceeded for this workspace", id="quota"),
+    ],
+)
+def test_account_problems_are_all_classified_as_configuration(message):
+    adapter, _ = make_adapter([bad_request(message)])
+    with pytest.raises(LLMConfigurationError):
+        adapter.generate_json("extract", "instructions", {}, SCHEMA)
+
+
+def test_a_genuinely_malformed_request_stays_a_call_error():
+    """The distinction must not swallow real request bugs."""
+    adapter, _ = make_adapter([bad_request("max_tokens: must be greater than 0")])
+    with pytest.raises(LLMCallError):
+        adapter.generate_json("extract", "instructions", {}, SCHEMA)

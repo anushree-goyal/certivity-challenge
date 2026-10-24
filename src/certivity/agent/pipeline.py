@@ -33,6 +33,7 @@ from certivity.contracts import (
     EmitEvent,
     LLMAdapter,
     LLMCallError,
+    LLMConfigurationError,
     ModelBudgetExceeded,
     PipelineDraft,
     ReferenceResolution,
@@ -81,6 +82,17 @@ def run_extraction(
 
     try:
         profile = build_product_profile(ctx)
+    except LLMConfigurationError:
+        # The model is unusable for this whole run - no credential, no credit,
+        # a disabled key. Continuing would produce an empty draft that looks
+        # like a completed run, so this propagates for the caller to mark the
+        # run failed with the provider's own message.
+        ctx.event(
+            "agent",
+            "Run aborted: the model provider is not usable with this configuration",
+            level="error",
+        )
+        raise
     except (ModelBudgetExceeded, LLMCallError) as exc:
         # Without a profile there is nothing to decide scope against, so this is
         # the one stage whose failure ends the run.
