@@ -43,7 +43,8 @@ Environment overrides: `CERTIVITY_PARTICIPANT_PACKAGE` (default `data/participan
 ```python
 from certivity.corpus import open_corpus, corpus_status, ensure_corpus
 
-corpus = open_corpus()                   # CURRENT snapshot, read-only; open_corpus("snap-...") pins one
+corpus = open_corpus("data/cache/corpus")   # CURRENT snapshot, read-only; snapshot_id="snap-..." pins one
+corpus.snapshot_id                       # record with each run
 corpus.list_documents(role="base")       # -> list[Document]; role=None lists every imported role
 corpus.read_scope(document_id)           # -> list[SourcePassage]: title + Scope clause and its sub-paragraphs
 corpus.list_sections(document_id)        # -> list[Section] in reading order (systematic coverage starts here)
@@ -60,9 +61,9 @@ Additions beyond the planned seven methods (listed in `contract-proposal.md`):
 | `list_reference_candidates(passage_ids) -> list[ReferenceRequest]` | References detected at import, ready to pass to `resolve_reference` |
 | `search(query, document_id=None, limit=20)` | SQLite FTS5 navigation aid. Not a coverage mechanism |
 | `get_document(document_id)`, `diagnostics(document_id=None)`, `status()` | Metadata, parse diagnostics, readiness |
-| `document_path(document_id) -> Path` | **Server-only** original PDF path for the backend's `/pdf` route |
+| `get_document_path(document_id) -> Path` | **Server-only** original PDF path for the backend's `/pdf` route (`UnknownId` / `FileNotFoundError`) |
 | `corpus_status()` (module function) | Health-route readiness. Never raises |
-| `ensure_corpus(fetch_missing=False)` | Startup bootstrap: optional fetch, then build or reuse a snapshot |
+| `bootstrap(package_dir, corpus_dir, fetch_missing=False) -> dict` | Startup: optional fetch, then build or reuse a snapshot; returns status (`ready`, `snapshot_id`, counts) |
 
 Errors: `CorpusNotReady` (no completed snapshot) and `UnknownId` (a `KeyError` subclass).
 

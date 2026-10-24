@@ -3,22 +3,32 @@
 Typical use by other components (never query the SQLite file directly)::
 
     from certivity.corpus import open_corpus
-    corpus = open_corpus()                     # the CURRENT completed snapshot, read-only
+    corpus = open_corpus("data/cache/corpus")  # the CURRENT completed snapshot, read-only
+    corpus.snapshot_id                         # identity to record with each run
+    corpus.get_document_path(document_id)      # server-only PDF path for the /pdf route
     for doc in corpus.list_documents("base"):
         for section in corpus.list_sections(doc.document_id):
             bundle = corpus.read_section(section.section_id)
 
 Bootstrap (backend startup or CLI)::
 
-    from certivity.corpus import ensure_corpus
-    status = ensure_corpus(fetch_missing=True)
+    from certivity.corpus import bootstrap
+    status = bootstrap("data/participant-package", "data/cache/corpus")   # status["ready"], status["snapshot_id"]
 """
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from ._contracts import USING_PROVISIONAL_CONTRACTS
 from .config import CorpusPaths, default_paths
 from .reader import CorpusNotReady, SqliteCorpusReader, UnknownId, corpus_status, open_corpus
+
+
+def bootstrap(package_dir: str | Path | None = None, corpus_dir: str | Path | None = None, *, fetch_missing: bool = False) -> dict:
+    """Startup helper: build (or reuse) the snapshot for ``package_dir`` into ``corpus_dir`` and return its status.
+    Downloads missing base PDFs first only when ``fetch_missing`` is set (network access)."""
+    return ensure_corpus(default_paths(package_dir, corpus_dir), fetch_missing=fetch_missing)
 
 
 def ensure_corpus(paths: CorpusPaths | None = None, *, fetch_missing: bool = False, roles: tuple[str, ...] = ("base",)) -> dict:
@@ -45,6 +55,7 @@ __all__ = [
     "CorpusPaths",
     "SqliteCorpusReader",
     "UnknownId",
+    "bootstrap",
     "corpus_status",
     "default_paths",
     "ensure_corpus",

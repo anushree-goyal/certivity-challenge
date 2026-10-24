@@ -87,7 +87,7 @@ def main(argv: list[str] | None = None) -> int:
         _dump(corpus_status(paths))
         return 0
 
-    corpus = open_corpus(args.snapshot, paths)
+    corpus = open_corpus(snapshot_id=args.snapshot, paths=paths)
     if args.cmd == "documents":
         _dump(corpus.list_documents(None))
     elif args.cmd == "sections":

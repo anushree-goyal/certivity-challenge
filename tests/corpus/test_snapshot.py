@@ -7,7 +7,7 @@ import shutil
 
 import pytest
 
-from certivity.corpus import CorpusPaths, corpus_status, open_corpus
+from certivity.corpus import CorpusPaths, UnknownId, bootstrap, corpus_status, open_corpus
 from certivity.corpus.store import build_snapshot, current_snapshot_id
 
 SMALL = ("UN R62", "UN R42")
@@ -57,7 +57,7 @@ def test_build_reports_missing_files_and_reuses_snapshot(tiny_package):
 
 def test_new_file_creates_new_snapshot_and_keeps_old(tiny_package, paths):
     first = build_snapshot(tiny_package, workers=1)
-    old_reader = open_corpus(first.snapshot_id, tiny_package)
+    old_reader = open_corpus(snapshot_id=first.snapshot_id, paths=tiny_package)
     name = "UN_R42_base.pdf"
     dest = tiny_package.package_root / "regulations" / "pdf" / "UN_R42" / "base"
     dest.mkdir(parents=True)
@@ -80,3 +80,21 @@ def test_checksum_mismatch_is_not_imported(tiny_package):
 def test_status_without_snapshot(tmp_path):
     status = corpus_status(CorpusPaths(tmp_path, tmp_path / "cache"))
     assert status["ready"] is False and "build" in status["reason"]
+
+
+def test_bootstrap_and_open_by_corpus_dir(tiny_package):
+    status = bootstrap(tiny_package.package_root, tiny_package.cache_root)
+    assert status["ready"] and status["documents"] == 1
+    reader = open_corpus(tiny_package.cache_root)
+    try:
+        assert reader.snapshot_id == status["snapshot_id"]
+        doc = reader.list_documents()[0]
+        path = reader.get_document_path(doc.document_id)
+        assert path.is_file() and path.name == doc.filename
+        with pytest.raises(UnknownId):
+            reader.get_document_path("nope")
+    finally:
+        reader.close()
+    single = open_corpus(tiny_package.snapshots / status["snapshot_id"])  # a snapshot directory also works
+    assert single.snapshot_id == status["snapshot_id"]
+    single.close()

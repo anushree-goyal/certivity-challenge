@@ -290,6 +290,11 @@ class SqliteCorpusReader:
 
     # --- additions beyond the planned interface (server-side helpers) -------------------------
 
+    def get_document_path(self, document_id: str) -> Path:
+        """Server-only absolute path of the original supplied PDF, for the backend's /api/documents/{id}/pdf route.
+        Raises UnknownId for an unknown document and FileNotFoundError if the file is missing or changed."""
+        return self.document_path(document_id)
+
     def document_path(self, document_id: str) -> Path:
         """Server-only absolute path of the original supplied PDF (for the backend's /pdf route)."""
         doc = self._doc_row(document_id)
@@ -436,8 +441,18 @@ def _regulation_sort_key(regulation: str) -> tuple:
     return (0, int(match.group(1)), regulation) if match else (1, 0, regulation)
 
 
-def open_corpus(snapshot_id: str | None = None, paths: CorpusPaths | None = None) -> SqliteCorpusReader:
-    """Open a completed snapshot read-only. Defaults to the snapshot named in CURRENT."""
+def open_corpus(corpus_dir: str | Path | None = None, *, snapshot_id: str | None = None, paths: CorpusPaths | None = None) -> SqliteCorpusReader:
+    """Open a completed snapshot read-only; the reader's ``snapshot_id`` attribute names it.
+
+    ``corpus_dir`` is the corpus cache root (default ``data/cache/corpus``), whose CURRENT snapshot is opened unless
+    ``snapshot_id`` pins one. A single snapshot directory (one containing ``manifest.json``) is also accepted.
+    """
+    if corpus_dir is not None:
+        corpus_dir = Path(corpus_dir)
+        if (corpus_dir / "manifest.json").is_file():
+            base = paths or default_paths(cache_root=corpus_dir.parent.parent)
+            return SqliteCorpusReader(corpus_dir, base)
+        paths = default_paths(paths.package_root if paths else None, corpus_dir)
     paths = paths or default_paths()
     snapshot_id = snapshot_id or current_snapshot_id(paths)
     if not snapshot_id:
