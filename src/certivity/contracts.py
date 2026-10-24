@@ -36,7 +36,7 @@ import typing
 from dataclasses import dataclass, field
 from typing import Any, Optional, Protocol, Union, runtime_checkable
 
-CONTRACTS_VERSION = "1.1.0"
+CONTRACTS_VERSION = "1.2.0"
 
 # --------------------------------------------------------------------------- #
 # Enumerations
@@ -314,8 +314,12 @@ class SourcePassage:
     heading_ancestry: tuple[str, ...]
     printed_start_page: Optional[str]
     """Printed label of the first page the passage appears on; None if unverified."""
-    printed_page_span: tuple[str, ...] = ()
-    """Every printed label the passage spans, in order."""
+    page_span: tuple[str, ...] = ()
+    """Every **printed** label the passage spans, in order, as strings.
+
+    Printed, not physical: ``pdf_page_indices`` is the physical one. Strings
+    because a printed label is not always an integer (front matter uses roman
+    numerals), and a string can always carry an integer label."""
     pdf_page_indices: tuple[int, ...] = ()
     """Zero-based physical page indices, in order."""
     namespace: str = "main"
@@ -334,8 +338,9 @@ class Section:
     heading: str
     namespace: str
     """Annex-qualified namespace from ``namespace_for``."""
-    number: Optional[str] = None
-    passage_ids: tuple[str, ...] = ()
+    paragraph_label: Optional[str] = None
+    """The section's own citation label, e.g. "6.10.4.2" or "Annex 6 Part 6 3"."""
+    primary_passage_ids: tuple[str, ...] = ()
     """Primary passages, in reading order."""
     depth: int = 0
     ordinal: int = 0
@@ -355,8 +360,9 @@ class SectionBundle:
     section: Section
     primary_passages: tuple[SourcePassage, ...]
     context_passages: tuple[SourcePassage, ...] = ()
-    page_refs: tuple[PageRef, ...] = ()
-    """Table/figure pages worth rendering as images for this section."""
+    visual_pdf_page_indices: tuple[int, ...] = ()
+    """Zero-based physical pages carrying a table or figure for this section,
+    worth rendering as images. Call ``get_page_asset`` for the printed label."""
     notes: tuple[str, ...] = ()
 
 
@@ -461,7 +467,7 @@ class ApplicabilityDecision:
 
 @dataclass(frozen=True)
 class ReferenceRequest:
-    origin_passage_id: str
+    originating_passage_id: str
     raw_reference: str
     """The reference exactly as the source text writes it."""
     target_regulation: Optional[str] = None
@@ -484,9 +490,14 @@ class ReferenceRequest:
 
 @dataclass(frozen=True)
 class ReferenceResolution:
-    request: ReferenceRequest
     status: ReferenceStatus
     explanation: str
+    request: Optional[ReferenceRequest] = None
+    """The request this answers.
+
+    Optional because a corpus implementation need not echo it back;
+    ``follow_references`` backfills it from the request it sent, so anything
+    downstream can rely on it being present."""
     candidate_passage_ids: tuple[str, ...] = ()
     """More than one candidate with status AMBIGUOUS means the corpus found
     several plausible targets and refused to pick one silently."""

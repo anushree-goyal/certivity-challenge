@@ -17,6 +17,7 @@ Three rules hold the whole thing together:
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass, field
 from typing import Any, Iterable
 
@@ -52,6 +53,21 @@ class ReferenceTracker:
         return self.visited.get(request.key())
 
 
+def _with_request(
+    resolution: ReferenceResolution, request: ReferenceRequest
+) -> ReferenceResolution:
+    """Ensure the resolution carries the request it answers.
+
+    A corpus implementation does not have to echo the request back, so this
+    attaches it from what we sent. Everything downstream - the visited set, the
+    per-draft unresolved list - keys on it, so it must always be present by the
+    time a resolution leaves this module.
+    """
+    if resolution.request is not None:
+        return resolution
+    return dataclasses.replace(resolution, request=request)
+
+
 def requests_from_extraction(
     entries: Iterable[dict[str, Any]],
     *,
@@ -68,7 +84,7 @@ def requests_from_extraction(
     for entry in entries or ():
         if not entry.get("needed"):
             continue
-        origin = str(entry.get("origin_passage_id") or "")
+        origin = str(entry.get("originating_passage_id") or "")
         if origin not in valid_passage_ids:
             ctx.warn(
                 f"a cross reference was attributed to passage {origin!r}, which was not "
@@ -81,7 +97,7 @@ def requests_from_extraction(
             continue
         requests.append(
             ReferenceRequest(
-                origin_passage_id=origin,
+                originating_passage_id=origin,
                 raw_reference=raw,
                 target_regulation=entry.get("target_regulation"),
                 target_namespace=entry.get("target_namespace"),
@@ -136,6 +152,7 @@ def follow_references(
                 stage="references",
             )
 
+        resolution = _with_request(resolution, request)
         tracker.record(resolution)
         resolutions.append(resolution)
 

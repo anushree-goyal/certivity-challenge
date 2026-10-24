@@ -287,7 +287,7 @@ def default_script() -> dict[str, Any | Responder]:
             references.extend(
                 [
                     {
-                        "origin_passage_id": ref["passage_id"],
+                        "originating_passage_id": ref["passage_id"],
                         "raw_reference": "Annex 1, paragraph 2.1",
                         "target_regulation": None,
                         "target_namespace": "annex:1",
@@ -299,7 +299,7 @@ def default_script() -> dict[str, Any | Responder]:
                         ),
                     },
                     {
-                        "origin_passage_id": ref["passage_id"],
+                        "originating_passage_id": ref["passage_id"],
                         "raw_reference": "SYNTHETIC REG Z",
                         "target_regulation": "SYNTHETIC REG Z",
                         "target_namespace": None,

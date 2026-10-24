@@ -170,7 +170,7 @@ def _extract_batch(
             "section": {
                 "section_id": section.section_id,
                 "heading": section.heading,
-                "number": section.number,
+                "paragraph_label": section.paragraph_label,
                 "namespace": section.namespace,
                 "parsing_flags": list(section.parsing_flags),
             },
@@ -272,7 +272,7 @@ def _with_unresolved(
     relevant = tuple(
         resolution
         for resolution in unresolved
-        if resolution.request.origin_passage_id in supporting
+        if resolution.request.originating_passage_id in supporting
     )
     if not relevant:
         return draft

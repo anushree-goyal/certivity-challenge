@@ -107,7 +107,7 @@ def test_reference_is_followed_and_unresolvable_one_is_recorded(run_input, corpu
     assert carriers
     for item in carriers:
         for resolution in item.unresolved_references:
-            assert resolution.request.origin_passage_id in item.supporting_passage_ids
+            assert resolution.request.originating_passage_id in item.supporting_passage_ids
 
 
 def test_coverage_is_recorded_for_every_planned_section(run_input, corpus, llm):

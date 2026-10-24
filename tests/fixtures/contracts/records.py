@@ -157,7 +157,7 @@ DRAFT_INTENSITY = DraftRequirement(
 # say so rather than presenting it as complete.
 UNRESOLVED_REFERENCE = ReferenceResolution(
     request=ReferenceRequest(
-        origin_passage_id=syn.A_SPEC_REFERENCE.passage_id,
+        originating_passage_id=syn.A_SPEC_REFERENCE.passage_id,
         raw_reference="SYNTHETIC REG Z",
         target_regulation="SYNTHETIC REG Z",
         target_paragraph="1",

@@ -88,7 +88,7 @@ def _passage(
         paragraph_label=paragraph_label,
         heading_ancestry=tuple(headings),
         printed_start_page=printed,
-        printed_page_span=tuple(printed_span or (printed,)),
+        page_span=tuple(printed_span or (printed,)),
         pdf_page_indices=tuple(pdf_pages),
         namespace=namespace,
         is_table=is_table,
@@ -273,8 +273,8 @@ SECTIONS: tuple[Section, ...] = (
         parent_section_id=None,
         heading="Table of contents",
         namespace=MAIN,
-        number="0",
-        passage_ids=(),
+        paragraph_label="0",
+        primary_passage_ids=(),
         ordinal=0,
     ),
     Section(
@@ -283,8 +283,8 @@ SECTIONS: tuple[Section, ...] = (
         parent_section_id=None,
         heading="1. SCOPE",
         namespace=MAIN,
-        number="1",
-        passage_ids=(A_SCOPE_P1.passage_id,),
+        paragraph_label="1",
+        primary_passage_ids=(A_SCOPE_P1.passage_id,),
         ordinal=1,
     ),
     Section(
@@ -293,8 +293,8 @@ SECTIONS: tuple[Section, ...] = (
         parent_section_id=None,
         heading="2. DEFINITIONS",
         namespace=MAIN,
-        number="2",
-        passage_ids=(A_DEF_P1.passage_id, A_DEF_P2.passage_id),
+        paragraph_label="2",
+        primary_passage_ids=(A_DEF_P1.passage_id, A_DEF_P2.passage_id),
         ordinal=2,
     ),
     Section(
@@ -303,8 +303,8 @@ SECTIONS: tuple[Section, ...] = (
         parent_section_id=None,
         heading="3. SPECIFICATIONS",
         namespace=MAIN,
-        number="3",
-        passage_ids=(
+        paragraph_label="3",
+        primary_passage_ids=(
             A_SPEC_COLOUR.passage_id,
             A_SPEC_INTENSITY.passage_id,
             A_SPEC_REFERENCE.passage_id,
@@ -317,8 +317,8 @@ SECTIONS: tuple[Section, ...] = (
         parent_section_id=None,
         heading="2. TEST PROCEDURE",
         namespace=ANNEX_1,
-        number="2",
-        passage_ids=(A_ANNEX_P1.passage_id, A_ANNEX_TABLE.passage_id),
+        paragraph_label="2",
+        primary_passage_ids=(A_ANNEX_P1.passage_id, A_ANNEX_TABLE.passage_id),
         ordinal=4,
     ),
     Section(
@@ -327,8 +327,8 @@ SECTIONS: tuple[Section, ...] = (
         parent_section_id=None,
         heading="1. SCOPE",
         namespace=MAIN,
-        number="1",
-        passage_ids=(B_SCOPE_P1.passage_id,),
+        paragraph_label="1",
+        primary_passage_ids=(B_SCOPE_P1.passage_id,),
         ordinal=1,
     ),
 )
@@ -383,28 +383,21 @@ class InMemoryCorpusReader:
         if section is None:
             raise KeyError(f"unknown section: {section_id}")
         primary = tuple(
-            self._passages[pid] for pid in section.passage_ids if pid in self._passages
+            self._passages[pid] for pid in section.primary_passage_ids if pid in self._passages
         )
         context: tuple[SourcePassage, ...] = ()
         if include_context and section.section_id == A_SPECS:
             # Scope and the reference-axis definition are the inherited context a
             # correct reading of section 3 needs.
             context = (A_SCOPE_P1, A_DEF_P2)
-        page_refs = tuple(
-            PageRef(
-                document_id=p.document_id,
-                pdf_page_index=p.pdf_page_indices[0],
-                printed_page=p.printed_start_page,
-                reason="table",
-            )
-            for p in primary
-            if p.is_table and p.pdf_page_indices
-        )
         return SectionBundle(
             section=section,
             primary_passages=primary,
             context_passages=context,
-            page_refs=page_refs,
+            visual_pdf_page_indices=tuple(
+                p.pdf_page_indices[0] for p in primary
+                if p.is_table and p.pdf_page_indices
+            ),
             notes=("synthetic fixture bundle",),
         )
 

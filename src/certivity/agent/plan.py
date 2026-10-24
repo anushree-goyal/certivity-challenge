@@ -100,7 +100,7 @@ def build_inspection_plan(
                     )
                 )
                 continue
-            if not section.passage_ids:
+            if not section.primary_passage_ids:
                 coverage.append(
                     CoverageItem(
                         target_kind=TargetKind.SECTION,
@@ -143,7 +143,7 @@ def build_inspection_plan(
 
 def _order_key(section: Section) -> tuple[int, int, str]:
     """Reading order: ordinal when the corpus supplies one, else namespace/number."""
-    return (section.ordinal, section.depth, section.number or section.heading or "")
+    return (section.ordinal, section.depth, section.paragraph_label or section.heading or "")
 
 
 def _apply_section_limit(

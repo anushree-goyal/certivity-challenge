@@ -450,9 +450,9 @@ _OBLIGATION_SCHEMA: dict[str, Any] = {
 _REFERENCE_SCHEMA: dict[str, Any] = {
     "type": "object",
     "additionalProperties": False,
-    "required": ["origin_passage_id", "raw_reference", "needed", "reason"],
+    "required": ["originating_passage_id", "raw_reference", "needed", "reason"],
     "properties": {
-        "origin_passage_id": {"type": "string"},
+        "originating_passage_id": {"type": "string"},
         "raw_reference": {
             "type": "string",
             "description": "The reference exactly as the source writes it",
