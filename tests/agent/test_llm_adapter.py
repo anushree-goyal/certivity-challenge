@@ -469,3 +469,44 @@ def test_an_explicit_override_beats_the_environment(monkeypatch, tmp_path):
     monkeypatch.setenv("CERTIVITY_MODEL_EXTRACT", "claude-sonnet-5")
     built = adapter_from_env(model_overrides={"extract_obligations": "claude-opus-5"})
     assert built.model_for("extract_obligations") == "claude-opus-5"
+
+
+def test_measured_latency_reaches_the_usage_record():
+    """ModelUsage.latency_ms_total is what accumulates across a run.
+
+    The latency was measured per call and attached to the response, but never
+    to the usage record, so every run reported a total of 0 ms and the
+    application had to hide the field.
+    """
+    adapter, _ = make_adapter([FakeResponse(text='{"answer": "ok"}')])
+    response = adapter.generate_json("extract", "instructions", {}, SCHEMA)
+
+    assert response.latency_ms > 0
+    assert response.usage.latency_ms_total == pytest.approx(response.latency_ms)
+
+
+def test_latency_totals_accumulate_across_calls():
+    adapter, _ = make_adapter(
+        [FakeResponse(text='{"answer": "a"}'), FakeResponse(text='{"answer": "b"}')]
+    )
+    first = adapter.generate_json("extract", "instructions", {"n": 1}, SCHEMA)
+    second = adapter.generate_json("extract", "instructions", {"n": 2}, SCHEMA)
+    merged = first.usage.merged_with(second.usage)
+
+    assert merged.latency_ms_total == pytest.approx(
+        first.usage.latency_ms_total + second.usage.latency_ms_total
+    )
+    assert merged.calls == 2
+
+
+def test_a_cached_call_reports_no_latency(tmp_path):
+    """A cache hit made no provider call, so it must not inflate model time."""
+    from certivity.llm.cache import CallCache
+
+    cache = CallCache(tmp_path / "calls")
+    adapter, _ = make_adapter([FakeResponse(text='{"answer": "red"}')], cache=cache)
+    adapter.generate_json("extract", "instructions", {"k": "v"}, SCHEMA)
+    cached = adapter.generate_json("extract", "instructions", {"k": "v"}, SCHEMA)
+
+    assert cached.cached is True
+    assert cached.usage.latency_ms_total == 0.0

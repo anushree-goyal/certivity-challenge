@@ -23,6 +23,7 @@ components, not here.
 from __future__ import annotations
 
 import base64
+import dataclasses
 import json
 import logging
 import mimetypes
@@ -475,7 +476,12 @@ class StructuredLLMAdapter:
         text = "".join(
             block.text for block in response.content if getattr(block, "type", None) == "text"
         )
-        usage = _usage_from_response(response, model)
+        # Carry the measured latency into the usage record, not just onto the
+        # response. ModelUsage.latency_ms_total is what accumulates across a
+        # run, so without this it summed zeros and every run reported 0 ms.
+        usage = dataclasses.replace(
+            _usage_from_response(response, model), latency_ms_total=latency_ms
+        )
         return text, {
             "model": getattr(response, "model", model) or model,
             "latency_ms": latency_ms,

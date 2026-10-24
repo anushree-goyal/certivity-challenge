@@ -699,6 +699,12 @@ class ModelUsage:
     input_tokens: Optional[int] = None
     output_tokens: Optional[int] = None
     latency_ms_total: float = 0.0
+    """Summed provider latency across calls, in milliseconds.
+
+    This is **model time**, not elapsed time. With concurrent extraction the
+    sum exceeds the wall clock roughly in proportion to the worker count, so a
+    UI should label it "total model time" rather than presenting it as run
+    duration."""
     by_model: dict[str, int] = field(default_factory=dict)
     """model id -> call count."""
 
