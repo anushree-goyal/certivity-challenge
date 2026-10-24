@@ -44,7 +44,7 @@ class Evaluate(unittest.TestCase):
         (pkg / "cases" / "c1").mkdir(parents=True)
         write(pkg / "cases" / "c1", "expected.json", [req("A", 1), req("B", 2)])
         sub = write(self.tmp.name, "s.json", [req("A", 1)])
-        r = evaluate_case(sub, "c1", pkg)
+        r = evaluate_case(submission_path=sub, case_id="c1", participant_package=pkg)
         self.assertIsInstance(r, EvaluationReport)
         self.assertAlmostEqual(r.regulation_recall, 0.5)
 

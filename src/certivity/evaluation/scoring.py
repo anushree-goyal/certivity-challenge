@@ -170,19 +170,19 @@ def evaluate_submission(submission_path, expected_path, participant_package_path
                                         run_context).report
 
 
-def answer_file_for(case_id: str, participant_package_path) -> Path | None:
+def answer_file_for(case_id: str, participant_package) -> Path | None:
     """The case's golden answer in the participant package, or None when it ships none
     (hidden test cases). ``case_id`` must be a plain name, never a path."""
     if not isinstance(case_id, str) or not _CASE_ID.match(case_id) or case_id in (".", ".."):
         raise ValueError(f"invalid case_id {case_id!r}")
-    path = Path(participant_package_path) / CASES_REL / case_id / ANSWER_FILE
+    path = Path(participant_package) / CASES_REL / case_id / ANSWER_FILE
     return path if path.is_file() else None
 
 
-def evaluate_case(submission_path, case_id: str, participant_package_path,
+def evaluate_case(submission_path, case_id: str, participant_package,
                   run_context: dict | None = None) -> EvaluationReport | None:
     """Score a submission against its case's answer file; None when the case has no answer file."""
-    answer = answer_file_for(case_id, participant_package_path)
+    answer = answer_file_for(case_id, participant_package)
     if answer is None:
         return None
-    return evaluate_submission(submission_path, answer, participant_package_path, run_context)
+    return evaluate_submission(submission_path, answer, participant_package, run_context)
