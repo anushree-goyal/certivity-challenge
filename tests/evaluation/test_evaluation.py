@@ -1,10 +1,13 @@
 """SYNTHETIC data only. The golden answer is never read here; tiny invented files stand in."""
+import ast
 import json
 import tempfile
 import unittest
 from pathlib import Path
 
-from certivity.evaluation import (compare_candidates, evaluate_submission, list_candidates,
+from certivity.contracts import EvaluationReport
+from certivity.evaluation import (compare_candidates, evaluate_submission,
+                                  evaluate_submission_detailed, list_candidates,
                                   load_candidate, save_candidate)
 
 
@@ -27,11 +30,14 @@ class Evaluate(unittest.TestCase):
         exp = write(self.tmp.name, "e.json", [req("A", 1), req("A", 2), req("B", 5)])
         sub = write(self.tmp.name, "s.json", [req("A", 1), req("C", 9)])
         r = evaluate_submission(sub, exp)
-        self.assertEqual(r.regulation_level["true_positives"], 1)
-        self.assertAlmostEqual(r.regulation_level["recall"], 0.5)
-        self.assertAlmostEqual(r.page_level["precision"], 0.5)
-        self.assertAlmostEqual(r.page_level["recall"], 1 / 3)
-        self.assertIn("NOT measured", r.scope)
+        self.assertIsInstance(r, EvaluationReport)
+        self.assertAlmostEqual(r.regulation_recall, 0.5)
+        self.assertAlmostEqual(r.page_precision, 0.5)
+        self.assertAlmostEqual(r.page_recall, 1 / 3)
+        self.assertTrue(any("NOT measured" in n for n in r.notes))
+        self.assertTrue(any("own computation" in n for n in r.notes))
+        d = evaluate_submission_detailed(sub, exp)
+        self.assertEqual(d.own_regulation_level["true_positives"], 1)
 
     def test_semantic_scores_stay_null(self):
         p = write(self.tmp.name, "s.json", [req("A", 1)])
@@ -42,8 +48,9 @@ class Evaluate(unittest.TestCase):
     def test_miss_categories(self):
         exp = write(self.tmp.name, "e.json", [req("A", 10), req("B", 5), req("D", 1), req("E", 1)])
         sub = write(self.tmp.name, "s.json", [req("A", 11), req("C", 9)])
-        r = evaluate_submission(sub, exp, run_context={"excluded_regulations": ["D"]})
-        c = r.error_categories
+        d = evaluate_submission_detailed(sub, exp, run_context={"excluded_regulations": ["D"]})
+        c = d.error_items
+        self.assertEqual(d.report.error_categories["regulation_not_covered"], 2)  # counts in the contract
         self.assertEqual(c["wrong_version_or_page"][0]["regulation"], "A")
         self.assertEqual(c["applicable_regulation_excluded"][0]["regulation"], "D")
         self.assertEqual(sorted(x["regulation"] for x in c["regulation_not_covered"]), ["B", "E"])
@@ -51,16 +58,18 @@ class Evaluate(unittest.TestCase):
 
     def test_official_scorer_missing_is_reported_not_faked(self):
         p = write(self.tmp.name, "s.json", [req("A", 1)])
-        r = evaluate_submission(p, p, participant_package_path=self.tmp.name)
+        r = evaluate_submission_detailed(p, p, participant_package_path=self.tmp.name)
         self.assertFalse(r.official_local_scorer["ran"])
+        self.assertIn("own computation", r.metrics_source)
 
     def test_official_scorer_output_captured(self):  # STUB scorer: tests wrapper plumbing only
         pkg = Path(self.tmp.name) / "pkg"
         (pkg / "tools").mkdir(parents=True)
         (pkg / "tools" / "score_local.py").write_text("import json; print(json.dumps({'f1': 0.5}))")
         p = write(self.tmp.name, "s.json", [req("A", 1)])
-        r = evaluate_submission(p, p, participant_package_path=pkg)
+        r = evaluate_submission_detailed(p, p, participant_package_path=pkg)
         self.assertEqual(r.official_local_scorer["parsed"], {"f1": 0.5})
+        self.assertIn("own computation", r.metrics_source)  # unusable scorer output is not quoted
 
 
 class Candidates(unittest.TestCase):
@@ -83,8 +92,13 @@ class Boundary(unittest.TestCase):
         for f in root.rglob("*.py"):
             if "evaluation" in f.parts:
                 continue
-            if "expected.json" in f.read_text(encoding="utf-8"):
-                offenders.append(str(f))
+            tree = ast.parse(f.read_text(encoding="utf-8"))
+            docstrings = {id(n.value) for n in ast.walk(tree)
+                          if isinstance(n, ast.Expr) and isinstance(n.value, ast.Constant)}
+            for n in ast.walk(tree):  # string literals in code (docstrings/comments may mention it)
+                if isinstance(n, ast.Constant) and isinstance(n.value, str) \
+                        and "expected.json" in n.value and id(n) not in docstrings:
+                    offenders.append(f"{f}:{n.lineno}")
         self.assertEqual(offenders, [])
 
 

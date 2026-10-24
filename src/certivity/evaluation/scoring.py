@@ -11,7 +11,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from .report import EvaluationReport
+from .report import EvaluationDetails, EvaluationReport
 
 SCOPE = ("regulation/page-level coverage only; requirement-level meaning is NOT measured here "
          "(semantic/platform scores are null until recorded from the scoring platform)")
@@ -119,27 +119,48 @@ def run_official_scorer(package: Path, submission_path, expected_path) -> dict:
     return res
 
 
-def evaluate_submission(submission_path, expected_path, participant_package_path=None,
-                        run_context: dict | None = None) -> EvaluationReport:
+def evaluate_submission_detailed(submission_path, expected_path, participant_package_path=None,
+                                 run_context: dict | None = None) -> EvaluationDetails:
     sub, exp = _load(submission_path), _load(expected_path)
     sp, ep = _pairs(sub), _pairs(exp)
     s_pairs, e_pairs = set(sp), set(ep)
     s_regs, e_regs = {t[0] for t in s_pairs}, {t[0] for t in e_pairs}
-    notes = ["Own computation on regulation and (regulation, version, page) sets. The official "
-             "local scorer also credits a page when its paragraph matches, so quote its numbers "
-             "(official_local_scorer.parsed) when it ran; the platform's page score differs again.",
-             "Category assignments are candidates from file comparison, not confirmed causes. "
-             f"Not derivable here: {', '.join(MANUAL_ONLY)}."]
+    own_reg, own_page = _prf(s_regs, e_regs), _prf(s_pairs, e_pairs)
+    items = classify_misses(s_pairs, e_pairs, run_context)
+
     official = None
     if participant_package_path is not None:
         official = run_official_scorer(Path(participant_package_path), submission_path, expected_path)
-    return EvaluationReport(
-        scope=SCOPE,
+    parsed = (official or {}).get("parsed")
+    if isinstance(parsed, dict) and "regulation_level" in parsed and "page_level" in parsed:
+        source = "official score_local.py"
+        reg, page = parsed["regulation_level"], parsed["page_level"]
+    else:
+        source = "own computation (official scorer did not run)"
+        reg, page = own_reg, own_page
+    notes = [f"Metrics source: {source}.", SCOPE,
+             "Own page metric counts exact (regulation, version, page) matches only; the official "
+             "scorer also credits a page when its paragraph matches, and the platform's page score "
+             "differs again.",
+             "Error categories are candidates from file comparison, not confirmed causes. "
+             f"Not derivable here: {', '.join(MANUAL_ONLY)}."]
+    report = EvaluationReport(
+        regulation_precision=reg["precision"], regulation_recall=reg["recall"], regulation_f1=reg["f1"],
+        page_precision=page["precision"], page_recall=page["recall"], page_f1=page["f1"],
         counts={"submitted_requirements": len(sp), "expected_requirements": len(ep),
-                "submitted_pairs": len(s_pairs), "expected_pairs": len(e_pairs)},
-        regulation_level=_prf(s_regs, e_regs),
-        page_level=_prf(s_pairs, e_pairs),
-        error_categories=classify_misses(s_pairs, e_pairs, run_context),
-        official_local_scorer=official,
-        notes=notes,
+                "submitted_pages": len(s_pairs), "expected_pages": len(e_pairs),
+                "own_page_matches": own_page["true_positives"]},
+        error_categories={k: len(v) for k, v in items.items()},
+        semantic_score=None, platform_score=None,
+        notes=tuple(notes),
     )
+    return EvaluationDetails(report=report, scope=SCOPE, metrics_source=source,
+                             own_regulation_level=own_reg, own_page_level=own_page,
+                             error_items=items, official_local_scorer=official, notes=notes)
+
+
+def evaluate_submission(submission_path, expected_path, participant_package_path=None,
+                        run_context: dict | None = None) -> EvaluationReport:
+    """Contract summary. Use evaluate_submission_detailed for per-item misses and raw scorer output."""
+    return evaluate_submission_detailed(submission_path, expected_path, participant_package_path,
+                                        run_context).report

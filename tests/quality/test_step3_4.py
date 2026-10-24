@@ -1,7 +1,11 @@
 import unittest
 
+from certivity.contracts import ImagePayload, LLMConfigurationError, PageAsset
+
 from certivity.quality import build_submission, review_requirements
 from certivity.quality.limits import MAX_TEXT_CHARS  # noqa: F401
+
+from certivity.quality._records import finding_code
 
 from . import fixtures as F
 from .fixtures import FakeLLM, ok_review
@@ -19,11 +23,11 @@ def reviewer(fn):
 
 
 def cats(rep, did):
-    return {f.category for f in rep.findings if f.draft_id == did}
+    return {finding_code(f) for f in rep.findings if f.draft_id == did}
 
 
 def incomplete(rep):
-    return [f for f in rep.remaining_issues if f.category == "review_incomplete"]
+    return [f for f in rep.remaining_issues if finding_code(f) == "review_incomplete"]
 
 
 GOOD = F.Draft("d1", "Luminous intensity shall be at least 4 cd.", "p-ok", ["p-ok"])
@@ -32,9 +36,9 @@ GOOD = F.Draft("d1", "Luminous intensity shall be at least 4 cd.", "p-ok", ["p-o
 class SemanticReview(unittest.TestCase):
     def test_supported_with_real_quote_accepted_and_complete(self):
         rep, ev = run([GOOD], reviewer(lambda d: ok_review(d["draft_id"])))
-        self.assertEqual(rep.accepted_draft_ids, ["d1"])
+        self.assertEqual(list(rep.accepted_draft_ids), ["d1"])
         self.assertEqual(incomplete(rep), [])
-        self.assertIn("complete", ev[-1]["message"])
+        self.assertIn("complete", ev[-1].message)
 
     def test_fabricated_quote_downgrades_model_approval(self):
         rep, _ = run([GOOD], reviewer(lambda d: ok_review(d["draft_id"], quote="shall glow green")))
@@ -78,15 +82,16 @@ class SemanticReview(unittest.TestCase):
             x["checks"]["unit"] = "unclear"
             return x
         rep, _ = run([GOOD], reviewer(r))
-        f = [f for f in rep.findings if f.category == "semantic_needs_context"][0]
-        self.assertEqual(f.requested_context, "table header page")
+        f = [f for f in rep.findings if finding_code(f) == "semantic_needs_context"][0]
+        self.assertEqual(f.requested_context, (F.P_OK.section_id,))  # resolvable ids
+        self.assertIn("table header page", f.explanation)            # the model's prose
         self.assertNotIn("d1", rep.accepted_draft_ids)
 
     def test_unknown_product_fact_conditional_rule_survives(self):
         d1 = F.Draft("d1", "Lamps shall be red, unless combined with a stop lamp.", "p-exc", ["p-exc"],
                      applicability_condition="only if the lamp is a rear position lamp")
         rep, _ = run([d1], reviewer(lambda d: ok_review(d["draft_id"], quote="shall be red")))
-        self.assertEqual(rep.accepted_draft_ids, ["d1"])
+        self.assertEqual(list(rep.accepted_draft_ids), ["d1"])
 
     def test_model_failure_marks_unreviewed_not_complete(self):
         llm = FakeLLM({"quality_review": lambda p: RuntimeError("timeout"),
@@ -94,7 +99,7 @@ class SemanticReview(unittest.TestCase):
         rep, ev = run([GOOD], llm)
         self.assertEqual(len(incomplete(rep)), 1)
         self.assertIn("d1", incomplete(rep)[0].explanation)
-        self.assertIn("PARTIAL", ev[-1]["message"])
+        self.assertIn("PARTIAL", ev[-1].message)
 
     def test_missing_review_for_a_draft_is_unreviewed(self):
         a = F.Draft("d1", "Intensity at least 4 cd.", "p-ok", ["p-ok"])
@@ -120,18 +125,18 @@ class SemanticReview(unittest.TestCase):
         self.assertIn("4 cd", ev["text"])
 
     def test_table_flagged_passage_sends_page_image(self):
-        tp = F.Passage("p-tab", F.BASE.document_id, "Table: 4 cd min.", "9", 30)
-        tp.parsing_flags, tp.pdf_page_indices = ["table"], [31]
+        tp = F.Passage("p-tab", F.BASE.document_id, "Table: 4 cd min.", "9", 30,
+                       is_table=True, pdf_page_indices=(31,), table_context="Intensity in cd")
         c = F.FakeCorpus([F.BASE], [tp])
-        c.get_page_asset = lambda doc, idx: {"doc": doc, "idx": idx}
+        c.get_page_asset = lambda doc, idx: PageAsset(doc, idx, "30", "image/png", f"/cache/{doc}/{idx}.png")
         llm = reviewer(lambda d: ok_review(d["draft_id"], quote="4 cd min"))
         review_requirements(F.Run(), F.Pipeline([F.Draft("d1", "At least 4 cd.", "p-tab", ["p-tab"])]),
                             c, llm, None)
-        self.assertEqual(llm.calls[0]["images"], [{"doc": F.BASE.document_id, "idx": 31}])
-
-
-class LLMConfigurationError(Exception):
-    """Same class name as the shared adapter's error for a missing credential."""
+        (img,) = llm.calls[0]["images"]
+        self.assertIsInstance(img, ImagePayload)
+        self.assertEqual(img.asset_ref, f"/cache/{F.BASE.document_id}/31.png")
+        self.assertEqual(llm.calls[0]["payload"]["drafts"][0]["evidence"][0]["table_context"],
+                         "Intensity in cd")
 
 
 class MissingCredential(unittest.TestCase):
@@ -178,7 +183,7 @@ class Dedup(unittest.TestCase):
         rep = self._near(lambda g: {"group_id": g["group_id"], "keep": "d1", "duplicates": ["d2"],
                                     "distinct": [], "explanation": "same limits"})
         self.assertEqual(rep.duplicate_mapping, {"d2": "d1"})
-        self.assertEqual(rep.accepted_draft_ids, ["d1"])
+        self.assertEqual(list(rep.accepted_draft_ids), ["d1"])
 
     def test_model_duplicate_claim_overridden_when_conditions_differ(self):
         rep = self._near(lambda g: {"group_id": g["group_id"], "keep": "d1", "duplicates": ["d2"],

@@ -51,10 +51,10 @@ def compare_candidates(a: dict, b: dict) -> dict:
 
 
 def write_report(report, directory, name: str) -> Path:
-    from dataclasses import asdict, is_dataclass
+    from certivity.contracts import to_jsonable
     d = Path(directory)
     d.mkdir(parents=True, exist_ok=True)
     out = d / f"{name}.json"
-    out.write_text(json.dumps(asdict(report) if is_dataclass(report) else report,
+    out.write_text(json.dumps(to_jsonable(report),
                               ensure_ascii=False, indent=2, default=str), encoding="utf-8")
     return out

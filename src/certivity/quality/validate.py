@@ -5,6 +5,8 @@ passed. Passing validation does not establish that the requirements are correct.
 """
 from __future__ import annotations
 
+import datetime
+import hashlib
 import json
 import subprocess
 import sys
@@ -18,6 +20,8 @@ from .limits import (MAX_OUTPUT_BYTES, MAX_REQUIREMENTS, MAX_TEXT_CHARS,
                      REQUIREMENT_KEYS, SUBMISSION_KEYS)
 
 OFFICIAL_VALIDATOR_REL = Path("tools") / "validate.py"
+SCHEMA_REL = Path("schemas") / "submission_main.schema.json"
+INDEX_REL = Path("regulations") / "index.json"
 OFFICIAL_TIMEOUT_S = 120
 
 
@@ -100,6 +104,13 @@ def run_official_validator(submission: dict, package: Path):
     return True, proc.returncode == 0, out
 
 
+def _identity(path: Path):
+    """"<path> sha256:<first 16 hex>" so a run records exactly which file it was checked against."""
+    if not path.is_file():
+        return None
+    return f"{path} sha256:{hashlib.sha256(path.read_bytes()).hexdigest()[:16]}"
+
+
 def validate_submission(submission, participant_package_path):
     package = Path(participant_package_path)
     errors = structural_errors(submission)
@@ -110,6 +121,7 @@ def validate_submission(submission, participant_package_path):
         errors.append(err("$", f"official validator did not run: {output}"))
     elif not passed:
         errors.append(err("$", f"official validator rejected the submission: {output}"))
-    return make_validation_report(valid=not errors and ran and passed, errors=errors,
-                                  official_ran=ran, official_output=output,
-                                  schema=str(package / OFFICIAL_VALIDATOR_REL))
+    return make_validation_report(
+        valid=not errors and ran and passed, errors=errors, official_ran=ran, official_output=output,
+        schema_identity=_identity(package / SCHEMA_REL), index_identity=_identity(package / INDEX_REL),
+        checked_at=datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"))

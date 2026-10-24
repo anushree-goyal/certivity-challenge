@@ -1,52 +1,55 @@
 """SYNTHETIC FIXTURES - invented text, not real regulation content.
 
-Field names mirror the build plan's record table and are ASSUMPTIONS until
-certivity.contracts is published (see src/certivity/quality/_access.py).
+Factories build real certivity.contracts records (1.1.0) so the tests exercise the shared shapes.
 """
-from dataclasses import dataclass, field
+import dataclasses
 from typing import Any
 
+from certivity.contracts import (Document, DocumentRole, DraftRequirement, LLMResponse,
+                                 PipelineDraft, ProductProfile, RunInput, SourcePassage)
+
 SNAP = "snap-1"
+RUN_ID = "run-test"
 
 
-@dataclass
-class Doc:
-    document_id: str
-    regulation: str
-    version_label: str
-    role: str = "base"
-    snapshot_id: str = SNAP
+def Doc(document_id, regulation, version_label, role="base", snapshot_id=SNAP):
+    return Document(document_id=document_id, regulation=regulation, title=f"{regulation} (synthetic)",
+                    role=DocumentRole(role), version_label=version_label,
+                    filename=f"{document_id}.pdf", checksum="0" * 64, snapshot_id=snapshot_id,
+                    page_count=100)
 
 
-@dataclass
-class Passage:
-    passage_id: str
-    document_id: str
-    text: str
-    paragraph_label: Any = "5.1"
-    printed_start_page: Any = 12
-    page_span: Any = (12, 12)
+def Passage(passage_id, document_id, text, paragraph_label="5.1", printed_start_page=12,
+            page_span=None, **kw):
+    page = None if printed_start_page is None else str(printed_start_page)
+    span = tuple(str(x) for x in (page_span or ((printed_start_page,) if page else ())))
+    return SourcePassage(passage_id=passage_id, document_id=document_id,
+                         section_id=f"{document_id}#main/{paragraph_label or 'x'}", text=text,
+                         paragraph_label=paragraph_label, heading_ancestry=(), printed_start_page=page,
+                         printed_page_span=span, **kw)
 
 
-@dataclass
-class Draft:
-    draft_id: str
-    text: str
-    primary_passage_id: Any
-    supporting_passage_ids: list = field(default_factory=list)
-    applicability_condition: Any = None
+def Draft(draft_id, text, primary_passage_id, supporting_passage_ids=(), **kw):
+    support = tuple(supporting_passage_ids)
+    if primary_passage_id and primary_passage_id not in support:  # the contract requires it
+        support = (primary_passage_id,) + support
+    return DraftRequirement(draft_id=draft_id, text=text, supporting_passage_ids=support,
+                            primary_passage_id=primary_passage_id or "", **kw)
 
 
-@dataclass
-class Pipeline:
-    draft_requirements: list
+def Pipeline(drafts):
+    return PipelineDraft(run_id=RUN_ID, corpus_snapshot_id=SNAP, product_profile=ProductProfile(),
+                         draft_requirements=tuple(drafts), is_synthetic_fixture=True)
 
 
-@dataclass
-class Run:
-    team_id: str = "team-x"
-    case_id: str = "case-y"
-    corpus_snapshot_id: str = SNAP
+def Run(team_id="team-x", case_id="case-y", corpus_snapshot_id=SNAP):
+    return RunInput(run_id=RUN_ID, team_id=team_id, case_id=case_id,
+                    corpus_snapshot_id=corpus_snapshot_id, input_hash="h",
+                    specification_text="synthetic rear lamp")
+
+
+def with_accepted(report, ids):
+    return dataclasses.replace(report, accepted_draft_ids=tuple(ids))
 
 
 class FakeCorpus:
@@ -54,8 +57,12 @@ class FakeCorpus:
         self.docs = docs
         self.passages = {p.passage_id: p for p in passages}
 
+    @property
+    def snapshot_id(self):
+        return SNAP
+
     def list_documents(self, role="base"):
-        return [d for d in self.docs if d.role == role]
+        return [d for d in self.docs if d.role == DocumentRole(role)]
 
     def get_passages(self, ids):
         return [self.passages[i] for i in ids if i in self.passages]
@@ -82,12 +89,12 @@ class FakeLLM:
     def __init__(self, script):
         self.script, self.calls = script, []
 
-    def generate_json(self, task, instructions, payload, schema, images=None):
-        self.calls.append({"task": task, "payload": payload, "images": images})
+    def generate_json(self, task, instructions, payload, schema, images=None, **kwargs):
+        self.calls.append({"task": task, "payload": payload, "images": images, **kwargs})
         out = self.script[task](payload)
         if isinstance(out, Exception):
             raise out
-        return type("Resp", (), {"parsed": out})()
+        return LLMResponse(data=out, provider="fake", model="fake", task=task, latency_ms=0.0)
 
 
 def ok_review(did, quote="at least 4 cd", **over):

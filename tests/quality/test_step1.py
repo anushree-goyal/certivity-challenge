@@ -8,6 +8,8 @@ from certivity.quality import (SubmissionBuildError, build_submission,
                                validate_submission)
 from certivity.quality.limits import MAX_TEXT_CHARS
 
+from certivity.quality._records import finding_code
+
 from . import fixtures as F
 
 
@@ -18,7 +20,7 @@ def review(drafts):
 
 
 def cats(rep, did):
-    return {f.category for f in rep.findings if f.draft_id == did}
+    return {finding_code(f) for f in rep.findings if f.draft_id == did}
 
 
 class DeterministicChecks(unittest.TestCase):
@@ -26,7 +28,7 @@ class DeterministicChecks(unittest.TestCase):
         d = F.Draft("d1", "Luminous intensity shall be at least 4 cd and at most 600 cd.",
                     "p-ok", ["p-ok"])
         rep, _ = review([d])
-        self.assertEqual(rep.accepted_draft_ids, ["d1"])
+        self.assertEqual(list(rep.accepted_draft_ids), ["d1"])
         self.assertEqual(rep.rejected, {})
 
     def test_wrong_latest_version_rejected(self):
@@ -66,7 +68,7 @@ class DeterministicChecks(unittest.TestCase):
         d = F.Draft("d1", "Lamps shall be red.", "p-exc", ["p-exc"],
                     applicability_condition="lamp is not combined with a stop lamp")
         rep, _ = review([d])
-        self.assertEqual(rep.accepted_draft_ids, ["d1"])
+        self.assertEqual(list(rep.accepted_draft_ids), ["d1"])
         self.assertNotIn("possible_lost_condition", cats(rep, "d1"))
 
     def test_text_over_limit_not_truncated(self):
@@ -79,32 +81,56 @@ class DeterministicChecks(unittest.TestCase):
         a = F.Draft("d1", "A 4 cd.", "p-ok", ["p-ok"])
         b = F.Draft("d1", "B 4 cd.", "p-ok", ["p-ok"])
         rep, _ = review([a, b])
-        self.assertEqual(rep.accepted_draft_ids, [])
+        self.assertEqual(list(rep.accepted_draft_ids), [])
         self.assertIn("duplicate_draft_id", cats(rep, "d1"))
 
     def test_multi_page_primary_flagged(self):
         rep, _ = review([F.Draft("d1", "Long paragraph.", "p-span", ["p-span"])])
         self.assertIn("primary_spans_pages", cats(rep, "d1"))
 
+    def test_corpus_that_raises_on_unknown_ids_does_not_abort_review(self):
+        class Raising(F.FakeCorpus):  # feature/corpus behaviour: UnknownId instead of omission
+            def get_passages(self, ids):
+                missing = [i for i in ids if i not in self.passages]
+                if missing:
+                    raise KeyError(missing)
+                return super().get_passages(ids)
+        c = F.corpus()
+        c = Raising(c.docs, list(c.passages.values()))
+        ok = F.Draft("d1", "Intensity at least 4 cd.", "p-ok", ["p-ok"])
+        bad = F.Draft("d2", "Anything.", "p-nope", ["p-nope"])
+        rep = review_requirements(F.Run(), F.Pipeline([ok, bad]), c, None, None)
+        self.assertEqual(list(rep.accepted_draft_ids), ["d1"])
+        self.assertIn("d2", rep.rejected)
+
+    def test_unresolved_reference_flagged_without_blocking(self):
+        from certivity.contracts import ReferenceRequest, ReferenceResolution, ReferenceStatus
+        ref = ReferenceResolution(ReferenceRequest("p-ok", "UN R999 Annex 9"),
+                                  ReferenceStatus.OUTSIDE_CORPUS, "not in this snapshot")
+        d = F.Draft("d1", "Intensity at least 4 cd.", "p-ok", ["p-ok"], unresolved_references=(ref,))
+        rep, _ = review([d])
+        self.assertIn("unresolved_reference", cats(rep, "d1"))
+        self.assertEqual(list(rep.accepted_draft_ids), ["d1"])
+
     def test_review_never_claims_semantic_completion(self):
         d = F.Draft("d1", "Intensity at least 4 cd.", "p-ok", ["p-ok"])
         rep, events = review([d])
-        self.assertTrue(any(f.category == "review_incomplete" for f in rep.remaining_issues))
-        self.assertIn("NOT performed", events[-1]["message"])
+        self.assertTrue(any(finding_code(f) == "review_incomplete" for f in rep.remaining_issues))
+        self.assertIn("NOT performed", events[-1].message)
 
     def test_exact_duplicate_mapped_without_model(self):
         a = F.Draft("d1", "Intensity at least 4 cd.", "p-ok", ["p-ok"])
         b = F.Draft("d2", "Intensity at least 4 cd.", "p-ok", ["p-ok"])
         rep, _ = review([a, b])
         self.assertEqual(rep.duplicate_mapping, {"d2": "d1"})
-        self.assertEqual(rep.accepted_draft_ids, ["d1"])
+        self.assertEqual(list(rep.accepted_draft_ids), ["d1"])
 
 
 class Export(unittest.TestCase):
     def _build(self, drafts, accepted=None):
         rep, _ = review(drafts)
         if accepted is not None:
-            rep.accepted_draft_ids = accepted
+            rep = F.with_accepted(rep, accepted)
         return F.Run(), F.Pipeline(drafts), rep
 
     def test_export_shape_and_source_resolution(self):

@@ -7,8 +7,10 @@ when it is not.
 """
 from __future__ import annotations
 
+import dataclasses
+
 from . import _access as A
-from ._records import emit, make_finding, make_report
+from ._records import emit, finding_code, has_request, make_finding, make_report
 from .dedup import exact_duplicates, near_duplicates
 from .deterministic import NEEDS_REVISION, check_drafts
 from .semantic import (SEM_CONTEXT, SEM_REVISION, SemanticConfig, review_semantically)
@@ -36,16 +38,16 @@ def review_requirements(run_input, draft, corpus, llm, emit_event, config: Seman
     needs_rev.update(sem.needs_revision)
     survivors = [i for i in candidates if i not in sem.rejected and i not in sem.needs_revision]
 
-    passages = {A.passage_id(p): p for p in corpus.get_passages(
+    passages = {A.passage_id(p): p for p in A.get_passages(corpus, 
         sorted({A.draft_primary_id(drafts[i]) for i in survivors if A.draft_primary_id(drafts[i])}))}
     near = near_duplicates(drafts, survivors, passages, llm)
     findings += near.findings
     dup_map = {**exact.mapping, **near.mapping}
     accepted = [i for i in survivors if i not in near.mapping]
 
-    remaining = [f for f in findings if f.draft_id in needs_rev
-                 and f.category in (NEEDS_REVISION | {SEM_REVISION, SEM_CONTEXT})]
-    _ensure_requested(remaining)
+    revision_codes = NEEDS_REVISION | {SEM_REVISION, SEM_CONTEXT}
+    findings = _ensure_requested(findings, revision_codes)
+    remaining = [f for f in findings if f.draft_id in needs_rev and finding_code(f) in revision_codes]
     gaps = []
     if sem.unreviewed:
         gaps.append(f"{len(sem.unreviewed)} draft(s) not semantically reviewed: {sorted(sem.unreviewed)}")
@@ -56,8 +58,9 @@ def review_requirements(run_input, draft, corpus, llm, emit_event, config: Seman
     if sem.warnings:
         gaps.append("warnings: " + "; ".join(sem.warnings))
     if gaps:
-        remaining.append(make_finding(None, REVIEW_INCOMPLETE, " | ".join(gaps)))
-    remaining += [f for f in near.findings if f.category == "possible_duplicate_unresolved"]
+        remaining.append(make_finding(None, REVIEW_INCOMPLETE, " | ".join(gaps),
+                                      run_id=A.run_id(run_input)))
+    remaining += [f for f in near.findings if finding_code(f) == "possible_duplicate_unresolved"]
 
     emit(emit_event, "quality",
          f"Review {'PARTIAL' if gaps else 'complete'}: {len(accepted)} accepted, {len(rejected)} rejected, "
@@ -65,19 +68,16 @@ def review_requirements(run_input, draft, corpus, llm, emit_event, config: Seman
          f"{len(sem.unreviewed)} unreviewed; model calls {sem.calls + near.calls}"
          + ("; semantic review NOT performed" if llm is None else ""),
          completed=len(candidates), total=len(candidates))
-    return make_report(accepted, findings, dup_map, rejected, remaining)
+    return make_report(A.run_id(run_input), accepted, findings, dup_map, rejected, remaining,
+                       partial=bool(gaps), usage=sem.usage.merged_with(near.usage))
 
 
-def _ensure_requested(findings) -> None:
+def _ensure_requested(findings, revision_codes) -> list:
     """Invariant: every finding that asks for revision/context carries a requested_* field.
 
     Producers set specific requests; this only fills a generic one if a path forgot, so the app
     never shows a revision-needed finding with nothing to act on. Tests assert it never fires.
     """
-    for f in findings:
-        if A.pick(f, "requested_context") or A.pick(f, "requested_correction"):
-            continue
-        try:
-            f.requested_correction = "resolve: " + (A.pick(f, "explanation", default="") or f.category)
-        except Exception:  # noqa: BLE001
-            pass
+    return [f if finding_code(f) not in revision_codes or has_request(f)
+            else dataclasses.replace(f, requested_correction="resolve: " + f.explanation)
+            for f in findings]

@@ -9,13 +9,18 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
+from certivity.contracts import (ImagePayload, LLMConfigurationError, ModelBudgetExceeded,
+                                 ModelUsage)
+
 from . import _access as A
-from ._records import make_finding
-from .prompts.review_prompt import REVIEW_INSTRUCTIONS, REVIEW_SCHEMA
+from ._records import make_finding, usage_of
+from .prompts.review_prompt import REVIEW_INSTRUCTIONS, REVIEW_SCHEMA, VERSION
 
 CHECKS = ("subject", "scope", "value", "unit", "condition", "exception")
 OK_STATES = {"ok", "not_applicable"}
-TABLE_FLAGS = {"table", "table_layout", "layout_uncertain", "image_only"}  # ASSUMED flag names
+# Parser flags that mean the text layer alone may misread the passage (besides is_table).
+# "table_cell" is from the contract docstring; the rest are a guess until the corpus lists its flags.
+TABLE_FLAGS = {"table_cell", "table", "table_layout", "layout_uncertain", "image_only"}
 
 SEM_SUPPORTED = "semantic_supported"
 SEM_UNSUPPORTED = "semantic_unsupported"
@@ -40,6 +45,7 @@ class SemanticOutcome:
     unreviewed: dict[str, str] = field(default_factory=dict)   # draft_id -> why
     findings: list = field(default_factory=list)
     calls: int = 0
+    usage: ModelUsage = field(default_factory=ModelUsage)
     warnings: list[str] = field(default_factory=list)
 
 
@@ -59,9 +65,14 @@ def _payload_item(draft, evidence) -> dict:
         "text": A.draft_text(draft),
         "applicability_condition": A.draft_condition(draft),
         "primary_passage_id": A.draft_primary_id(draft),
-        "evidence": [{"passage_id": A.passage_id(p), "paragraph": A.passage_paragraph(p),
+        "exceptions": A.draft_exceptions(draft),
+        "unresolved_references": [{"reference": r.request.raw_reference, "status": r.status.value}
+                                  for r in A.draft_unresolved_references(draft)],
+        "evidence": [{"passage_id": A.passage_id(p), "namespace": A.passage_namespace(p),
+                      "paragraph": A.passage_paragraph(p),
                       "printed_page": A.passage_printed_page(p),
-                      "headings": A.passage_heading(p), "text": A.passage_text(p)}
+                      "headings": A.passage_heading(p), "text": A.passage_text(p),
+                      "table_context": A.passage_table_context(p)}
                      for p in evidence],
     }
 
@@ -69,7 +80,7 @@ def _payload_item(draft, evidence) -> dict:
 def _batches(items: list[dict], cfg: SemanticConfig) -> list[list[dict]]:
     out, cur, size = [], [], 0
     for it in items:
-        n = sum(len(e["text"]) for e in it["evidence"]) + len(it["text"])
+        n = sum(len(e["text"]) + len(e["table_context"] or "") for e in it["evidence"]) + len(it["text"])
         if cur and (len(cur) >= cfg.batch_size or size + n > cfg.max_batch_chars):
             out.append(cur)
             cur, size = [], 0
@@ -85,7 +96,7 @@ def _page_images(batch_drafts, passages, corpus, warnings) -> list:
     images, seen = [], set()
     for d in batch_drafts:
         p = passages.get(A.draft_primary_id(d))
-        if p is None or not (set(map(str, A.passage_flags(p))) & TABLE_FLAGS):
+        if p is None or not (A.passage_is_table(p) or set(map(str, A.passage_flags(p))) & TABLE_FLAGS):
             continue
         for idx in A.passage_pdf_page_indices(p):
             key = (A.passage_document_id(p), idx)
@@ -93,14 +104,27 @@ def _page_images(batch_drafts, passages, corpus, warnings) -> list:
                 continue
             seen.add(key)
             try:
-                images.append(corpus.get_page_asset(A.passage_document_id(p), idx))
+                asset = corpus.get_page_asset(A.passage_document_id(p), idx)
+                images.append(ImagePayload(
+                    media_type=asset.media_type, asset_ref=asset.asset_ref,
+                    caption=f"{A.passage_id(p)}: physical page {idx}, printed page {asset.printed_page}"))
             except Exception as e:  # noqa: BLE001
                 warnings.append(f"page image unavailable for {key}: {e}")
     return images
 
 
+def _context_ids(draft, passages) -> tuple[str, ...]:
+    """Section IDs revise_extraction can resolve to the cited text plus its parent context."""
+    ids = [A.draft_section_id(draft)]
+    ids += [A.passage_section_id(p) for p in _evidence_for(draft, passages)]
+    return tuple(dict.fromkeys(i for i in ids if i))
+
+
 def _interpret(review: dict, evidence_text: str):
-    """Return (bucket, explanation, requested_context) or None if the review is unusable."""
+    """Return (bucket, explanation, what_is_missing) or None if the review is unusable.
+
+    what_is_missing is the model's own prose; it goes into the finding's explanation, because
+    the contract's requested_context holds IDs only."""
     verdict = review.get("verdict")
     checks = review.get("checks")
     expl = (review.get("explanation") or "").strip()
@@ -121,7 +145,7 @@ def _interpret(review: dict, evidence_text: str):
         if len(quote) < 8 or quote not in _squash(evidence_text):
             return ("revision", "Model said supported but its evidence quote is missing or does "
                     "not occur in the cited evidence, so the approval cannot be verified. " + expl,
-                    req or "verify against the cited passage")
+                    req)
         return ("supported", expl, None)
     if verdict == "unsupported":
         if not expl:
@@ -149,7 +173,7 @@ def review_semantically(pipeline_draft, ids, corpus, llm, config: SemanticConfig
         wanted |= set(A.draft_supporting_ids(drafts[i]))
         if A.draft_primary_id(drafts[i]):
             wanted.add(A.draft_primary_id(drafts[i]))
-    passages = {A.passage_id(p): p for p in corpus.get_passages(sorted(wanted))}
+    passages = {A.passage_id(p): p for p in A.get_passages(corpus, sorted(wanted))}
     items = [_payload_item(drafts[i], _evidence_for(drafts[i], passages)) for i in ids]
 
     fatal = None
@@ -165,7 +189,8 @@ def review_semantically(pipeline_draft, ids, corpus, llm, config: SemanticConfig
         try:
             resp = llm.generate_json(task="quality_review", instructions=REVIEW_INSTRUCTIONS,
                                      payload={"drafts": batch}, schema=REVIEW_SCHEMA,
-                                     images=images or None)
+                                     images=images or None, prompt_version=VERSION)
+            out.usage = out.usage.merged_with(usage_of(resp))
             data = A.llm_data(resp)
             reviews = data.get("reviews") if isinstance(data, dict) else None
             if not isinstance(reviews, list):
@@ -173,9 +198,11 @@ def review_semantically(pipeline_draft, ids, corpus, llm, config: SemanticConfig
         except Exception as e:  # noqa: BLE001
             for i in batch_ids:
                 out.unreviewed[i] = f"review call failed: {type(e).__name__}: {e}"
-            if type(e).__name__ == "LLMConfigurationError":  # no credential: later calls fail too
-                out.warnings.append(f"model adapter not configured; semantic review skipped: {e}")
-                fatal = f"not reviewed: model adapter not configured ({e})"
+            if isinstance(e, (LLMConfigurationError, ModelBudgetExceeded)):  # later calls fail too
+                why = ("model adapter not configured" if isinstance(e, LLMConfigurationError)
+                       else "run model-call budget exhausted")
+                out.warnings.append(f"{why}; semantic review stopped: {e}")
+                fatal = f"not reviewed: {why} ({e})"
                 break
             continue
 
@@ -198,13 +225,16 @@ def review_semantically(pipeline_draft, ids, corpus, llm, config: SemanticConfig
             ev_ids = [A.passage_id(p) for p in ev]
             cat = {"supported": SEM_SUPPORTED, "rejected": SEM_UNSUPPORTED,
                    "revision": SEM_REVISION, "context": SEM_CONTEXT}[bucket]
+            ctx_ids = _context_ids(drafts[i], passages)
+            if req:
+                expl = f"{expl} Missing: {req}".strip()
             if bucket == "context":
                 out.findings.append(make_finding(
-                    i, cat, expl, ev_ids,
-                    requested_context=req or f"additional context needed to decide: {expl}"))
+                    i, cat, expl, ev_ids, requested_context=ctx_ids,
+                    requested_correction=None if ctx_ids else f"settle with more source: {expl}"))
             elif bucket == "revision":
                 out.findings.append(make_finding(
-                    i, cat, expl, ev_ids, requested_context=req,
+                    i, cat, expl, ev_ids, requested_context=ctx_ids if req else (),
                     requested_correction=expl or "revise the draft to match the evidence"))
             else:
                 out.findings.append(make_finding(i, cat, expl, ev_ids))

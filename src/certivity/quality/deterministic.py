@@ -13,7 +13,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 
 from . import _access as A
-from ._records import make_finding
+from ._records import finding_code, make_finding
 from .limits import MAX_TEXT_CHARS
 
 # Finding categories
@@ -23,17 +23,21 @@ WRONG_VERSION = "wrong_version_or_document"
 SNAPSHOT_MISMATCH = "snapshot_mismatch"
 PAGE_UNVERIFIED = "page_unverified"
 NO_PRIMARY = "no_primary_passage"
-PRIMARY_NOT_SUPPORTING = "primary_not_in_supporting"
 EMPTY_TEXT = "empty_text"
 TEXT_TOO_LONG = "text_too_long"
 DUPLICATE_DRAFT_ID = "duplicate_draft_id"
 NUMERIC_NOT_IN_EVIDENCE = "numeric_not_in_evidence"
 POSSIBLE_LOST_CONDITION = "possible_lost_condition"
 PRIMARY_SPANS_PAGES = "primary_spans_pages"
+PRIMARY_IS_CONTEXT = "primary_is_context_passage"
+UNRESOLVED_REFERENCE = "unresolved_reference"
+
+# Set by extraction when the primary citation is a context/referenced passage (contracts 1.1.0 notes).
+_CONTEXT_PRIMARY_NOTE = "primary citation is a context or referenced passage"
 
 REJECT = {SOURCE_MISSING, WRONG_VERSION, SNAPSHOT_MISMATCH}
-NEEDS_REVISION = {SUPPORTING_INVALID, PAGE_UNVERIFIED, NO_PRIMARY, PRIMARY_NOT_SUPPORTING, EMPTY_TEXT,
-                  TEXT_TOO_LONG, DUPLICATE_DRAFT_ID}
+NEEDS_REVISION = {SUPPORTING_INVALID, PAGE_UNVERIFIED, NO_PRIMARY, EMPTY_TEXT, TEXT_TOO_LONG,
+                  DUPLICATE_DRAFT_ID}
 # everything else is a non-blocking flag for semantic review
 
 _NUM = re.compile(r"\d+(?:[.,]\d+)?")
@@ -43,7 +47,8 @@ _EXCEPTION_MARKERS = re.compile(
 
 
 def verified_page(value) -> int | None:
-    """A usable printed page is a positive integer (or digit string)."""
+    """A usable printed page is a positive integer or digit-only label ("12"). Labels such as
+    "ii" or "A-3" cannot be the integer source.page the official schema requires."""
     if isinstance(value, bool):
         return None
     if isinstance(value, int):
@@ -79,14 +84,14 @@ def check_drafts(run_input, pipeline_draft, corpus) -> DeterministicResult:
         wanted += A.draft_supporting_ids(d)
         if A.draft_primary_id(d):
             wanted.append(A.draft_primary_id(d))
-    passages = {A.passage_id(p): p for p in corpus.get_passages(sorted(set(wanted)))}
+    passages = {A.passage_id(p): p for p in A.get_passages(corpus, sorted(set(wanted)))}
 
     for d in drafts:
         did = A.draft_id(d)
         local: list = []
 
-        def add(category, explanation, supporting=None, context=None, correction=None):
-            local.append(make_finding(did, category, explanation, supporting, context, correction))
+        def add(code, explanation, supporting=None, context=(), correction=None):
+            local.append(make_finding(did, code, explanation, supporting, context, correction))
 
         if not did or id_counts[did] > 1:
             add(DUPLICATE_DRAFT_ID, f"draft_id {did!r} is missing or used more than once; "
@@ -118,10 +123,6 @@ def check_drafts(run_input, pipeline_draft, corpus) -> DeterministicResult:
         elif primary is None:
             add(SOURCE_MISSING, f"Primary passage {primary_id!r} does not exist in snapshot "
                 f"{snapshot!r}.", [primary_id])
-        elif support_ids and primary_id not in support_ids:
-            add(PRIMARY_NOT_SUPPORTING, "Primary passage is not among the supporting passages.",
-                [primary_id],
-                correction="list the primary passage among the supporting passages, or change the primary")
 
         evidence = []
         for pid in dict.fromkeys(([primary_id] if primary_id else []) + support_ids):
@@ -152,11 +153,22 @@ def check_drafts(run_input, pipeline_draft, corpus) -> DeterministicResult:
 
         if primary is not None:
             if verified_page(A.passage_printed_page(primary)) is None:
-                add(PAGE_UNVERIFIED, "Primary passage has no verified positive printed page.",
-                    [primary_id], context="verified printed-page mapping for this passage")
+                add(PAGE_UNVERIFIED, f"Primary passage has no verified positive printed page "
+                    f"(label {A.passage_printed_page(primary)!r}); the official source.page cannot "
+                    "be filled without guessing.", [primary_id],
+                    correction="cite a primary passage whose printed page is verified; if this "
+                    "passage is the right one, its page mapping needs fixing in the corpus")
             if A.passage_spans_pages(primary):
                 add(PRIMARY_SPANS_PAGES, "Primary passage spans several pages; the cited start "
                     "page may not be where the stated obligation appears.", [primary_id])
+        if _CONTEXT_PRIMARY_NOTE in A.draft_notes(d).casefold():
+            add(PRIMARY_IS_CONTEXT, "Extraction cited a context or referenced passage as primary; "
+                "it may not support the obligation on its own.", [primary_id] if primary_id else [])
+
+        for ref in A.draft_unresolved_references(d):
+            add(UNRESOLVED_REFERENCE, f"Reference {ref.request.raw_reference!r} is "
+                f"{ref.status.value}: {ref.explanation} The obligation may depend on text that was "
+                "not read (possible lost reference).", list(ref.candidate_passage_ids))
 
         # Heuristic flags for semantic review (never reasons to reject).
         ev_text = " ".join(A.passage_text(p) for p in evidence)
@@ -166,19 +178,19 @@ def check_drafts(run_input, pipeline_draft, corpus) -> DeterministicResult:
                 add(NUMERIC_NOT_IN_EVIDENCE,
                     f"Numbers {missing} in the draft do not appear in the cited evidence "
                     "(may be a wording/unit difference or an unsupported value).",
-                    [primary_id] if primary_id else [], context="check value/unit against the source")
+                    [primary_id] if primary_id else [])
             if (_EXCEPTION_MARKERS.search(ev_text) and not _EXCEPTION_MARKERS.search(text)
-                    and not A.draft_condition(d)):
+                    and not A.draft_condition(d) and not A.draft_exceptions(d)):
                 add(POSSIBLE_LOST_CONDITION,
                     "Evidence contains exception/condition wording that the draft text and "
                     "condition field do not carry (heuristic).",
-                    [primary_id] if primary_id else [], context="confirm no condition or exception was lost")
+                    [primary_id] if primary_id else [])
 
         result.findings += local
-        cats = {f.category for f in local}
+        cats = {finding_code(f) for f in local}
         if cats & REJECT:
             c = sorted(cats & REJECT)[0]
-            result.rejected[did] = f"{c}: " + next(f.explanation for f in local if f.category == c)
+            result.rejected[did] = next(f.explanation for f in local if finding_code(f) == c)
         elif cats & NEEDS_REVISION:
             c = sorted(cats & NEEDS_REVISION)[0]
             result.needs_revision[did] = c

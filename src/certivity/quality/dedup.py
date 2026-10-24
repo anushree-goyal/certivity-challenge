@@ -10,9 +10,11 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
+from certivity.contracts import ModelUsage
+
 from . import _access as A
-from ._records import make_finding
-from .prompts.review_prompt import DEDUP_INSTRUCTIONS, DEDUP_SCHEMA
+from ._records import make_finding, usage_of
+from .prompts.review_prompt import DEDUP_INSTRUCTIONS, DEDUP_SCHEMA, VERSION
 
 DUPLICATE_REMOVED = "duplicate_removed"
 POSSIBLE_DUPLICATE_UNRESOLVED = "possible_duplicate_unresolved"
@@ -44,6 +46,7 @@ class DedupOutcome:
     findings: list = field(default_factory=list)
     unresolved: list[list[str]] = field(default_factory=list)
     calls: int = 0
+    usage: ModelUsage = field(default_factory=ModelUsage)
 
 
 def exact_duplicates(drafts_by_id: dict, ids: list[str]) -> DedupOutcome:
@@ -121,7 +124,9 @@ def near_duplicates(drafts_by_id, ids, passages, llm) -> DedupOutcome:
     out.calls = 1
     try:
         resp = llm.generate_json(task="quality_dedup", instructions=DEDUP_INSTRUCTIONS,
-                                 payload=payload, schema=DEDUP_SCHEMA, images=None)
+                                 payload=payload, schema=DEDUP_SCHEMA, images=None,
+                                 prompt_version=VERSION)
+        out.usage = usage_of(resp)
         data = A.llm_data(resp)
         verdicts = {v.get("group_id"): v for v in data["groups"] if isinstance(v, dict)}
     except Exception as e:  # noqa: BLE001

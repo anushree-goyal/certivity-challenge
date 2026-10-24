@@ -36,18 +36,27 @@ when the package is present. Nothing here has run against the real corpus, real 
 - Review prompts have never been run on a real model; expect to tune them on real drafts.
 - Honest limits: heuristics (numbers, exception words) are regex-based; table-flag names and PageAsset hand-off to the vision adapter are assumed.
 
-## Contract changes requested from Anushree (she owns contracts.py)
+## Integration with contracts 1.1.0 (merged from `feature/agent`)
 
-- `QualityReport.export_mapping: dict[str, str]` (draft ID -> requirement ID), default `{}`. Filled by `build_submission` with what was actually exported (empty before export, and for drafts excluded at export). Until the field exists, `BuildResult.export_mapping` carries it and a warning is recorded.
-- `ReviewFinding.requested_context: str | None` and `ReviewFinding.requested_correction: str | None`. Every finding that needs revision/context sets at least one (enforced by tests): context = more source needed, correction = what must change in the draft.
+- No fallback records remain; `_access.py` reads contract fields, `_records.py` builds contract records.
+- **Finding codes.** Fine-grained codes (`page_unverified`, `semantic_needs_context`, ...) drive the logic. `_records.CODE_MAP` maps each to a contract `category` + `severity`; the code is kept as an `[code]` prefix of `explanation` and read back with `finding_code()`. Heuristic flags are `informational` and carry no `requested_*`, so they never trigger the revision loop on their own.
+- **`requested_context` holds IDs** (section IDs of the draft and its evidence) that `revise_extraction` resolves; the model's prose about what is missing goes into `explanation`. `requested_correction` stays free text.
+- **Run-level findings** (`review_incomplete`) use `ReviewFinding.for_run`; `QualityReport.partial` is set whenever review did not finish; `run_id` and measured `usage` are filled.
+- **Export** uses `report.with_export_mapping`; `BuildResult.report` is the copy to persist. `build_submission` (dict only) no longer touches the report.
+- **Printed pages are string labels.** Only digit-only labels ("12") can become the integer `source.page`; others need revision.
+- **Vision** gets `ImagePayload` built from `PageAsset`; table passages are detected by `is_table` (or parser flags) and `table_context` is sent with the evidence.
+- **Evaluation** returns the contract `EvaluationReport` (flat metrics, category counts; quotes the official scorer when it ran). `evaluate_submission_detailed` adds per-item misses and raw scorer output.
+- Unresolved references on a draft are flagged (`unresolved_reference`, informational) and sent to semantic review.
+- Checked end to end on Anushree's `PIPELINE_DRAFT` + `InMemoryCorpusReader`: reviewed (partial, no model), exported, and correctly rejected by the official validator because its regulation names are synthetic.
 
-## Questions to resolve with other owners
+## Open with other owners
 
-1. Anushree: exact field names/types in `contracts.py` (edit `_access.py`/`_records.py` only); whether QualityReport has a field for "review incomplete". Partly answered (contracts 1.0.0, branch `feature/agent`, not yet pushed): `RunInput.team_id`, `case_id`, `corpus_snapshot_id` match `_access.py`; `emit_event` takes one `RunEvent` (`_records.emit` now builds one from the fields it declares, else sends a dict); the adapter raises `LLMConfigurationError` without a credential (semantic review now stops after the first such error and marks every remaining draft unreviewed). Still unseen: `RunEvent`, `DraftRequirement`, `SourcePassage`, `QualityReport`, `ReviewFinding` field names.
-2. Anushree: does `PipelineDraft` expose drafts as `draft_requirements`?
-3. Teammate 2: is `list_documents(role="base")` the right way to tell base from latest, and does `get_passages` silently omit unknown IDs?
-4. Anushree: what `images=` accepts in `generate_json` (I pass PageAsset objects from `get_page_asset`), and the passage field names for parsing flags / physical page indices (assumed `parsing_flags`, `pdf_page_indices`).
-5. ~~Participant package: source keys, paragraph, validator CLI.~~ RESOLVED, see "Checked against the participant package".
+1. Anushree: add `ReviewFinding.code: Optional[str]` so the `[code]` prefix can go. Optional dedicated categories instead of `other` for `review_incomplete` / `semantic_unreviewed`.
+2. Teammate 2 (`feature/corpus`, read not merged):
+   - `get_passages` raises `UnknownId` for unknown IDs; the contract says omit them. Quality tolerates both (`_access.get_passages`).
+   - `get_page_asset` builds `PageAsset(printed_page_label=...)`; the contract field is `printed_page`, so it raises `TypeError` with the canonical contracts.
+   - Parser flag names that mean "read the page image" (only `table_cell` is documented).
+3. No run against a real corpus snapshot or a real model yet.
 
 ## Commands
 
