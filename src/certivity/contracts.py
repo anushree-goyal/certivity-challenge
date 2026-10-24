@@ -36,7 +36,7 @@ import typing
 from dataclasses import dataclass, field
 from typing import Any, Optional, Protocol, Union, runtime_checkable
 
-CONTRACTS_VERSION = "1.1.0"
+CONTRACTS_VERSION = "1.5.0"
 
 # --------------------------------------------------------------------------- #
 # Enumerations
@@ -95,6 +95,10 @@ class FindingCategory(str, enum.Enum):
     OUT_OF_SCOPE = "out_of_scope"
     CONTEXT_REQUESTED = "context_requested"
     TOO_LONG = "too_long"
+    REVIEW_INCOMPLETE = "review_incomplete"
+    """Review did not finish - a budget, a timeout, or an unusable model."""
+    SEMANTIC_UNREVIEWED = "semantic_unreviewed"
+    """A draft the semantic pass never reached. Not a judgement about it."""
     OTHER = "other"
 
 
@@ -147,11 +151,52 @@ def document_id_for(regulation: str, version_label: str, checksum: str) -> str:
     return f"{slugify(regulation)}:{slugify(version_label)}:sha256-{checksum[:12]}"
 
 
-def namespace_for(kind: str, label: Optional[str] = None) -> str:
-    """Annex-qualified namespace: ``main``, ``annex:4``, ``appendix:4.1``."""
-    if label is None or label == "":
-        return slugify(kind)
-    return f"{slugify(kind)}:{label.strip().lower()}"
+def namespace_for(*segments: str | tuple[str, Optional[str]]) -> str:
+    """Build a canonical namespace from one or more structural segments.
+
+    Grammar, settled against the structures that actually occur in the supplied
+    PDFs: segments joined by ``/``, each segment either a bare ``kind`` or
+    ``kind:label``, lowercased.
+
+        namespace_for("main")                            -> "main"
+        namespace_for(("annex", "4"))                    -> "annex:4"
+        namespace_for(("annex", "6"), ("part", "6"))     -> "annex:6/part:6"
+        namespace_for(("annex", "4"), ("appendix", "1")) -> "annex:4/appendix:1"
+        namespace_for(("annex", "5"), "appendix")        -> "annex:5/appendix"
+        namespace_for(("appendix", "2"))                 -> "appendix:2"
+        namespace_for("introduction")                    -> "introduction"
+        namespace_for(("part", "I"))                     -> "part:i"
+
+    An unnumbered division is a bare kind, which is why
+    ``annex:5/appendix`` and ``appendix:2`` are both expressible.
+
+    This is the **machine** form, used for matching, ID construction and
+    reference resolution. The human citation string belongs in
+    ``paragraph_label``; do not reconstruct one from a namespace.
+    """
+    parts: list[str] = []
+    for segment in segments:
+        if isinstance(segment, tuple):
+            kind, label = segment
+        else:
+            kind, label = segment, None
+        kind = slugify(kind)
+        if label is None or str(label).strip() == "":
+            parts.append(kind)
+        else:
+            parts.append(f"{kind}:{slugify(str(label))}")
+    return "/".join(parts) if parts else "main"
+
+
+def parse_namespace(namespace: str) -> tuple[tuple[str, Optional[str]], ...]:
+    """Inverse of ``namespace_for``, for display and for structural comparison."""
+    out: list[tuple[str, Optional[str]]] = []
+    for part in namespace.split("/"):
+        if not part:
+            continue
+        kind, _, label = part.partition(":")
+        out.append((kind, label or None))
+    return tuple(out)
 
 
 def section_id_for(document_id: str, namespace: str, number: str) -> str:
@@ -159,9 +204,24 @@ def section_id_for(document_id: str, namespace: str, number: str) -> str:
     return f"{document_id}#{namespace}/{number.strip()}"
 
 
-def passage_id_for(section_id: str, ordinal: int) -> str:
-    """``<section_id>@003`` - ordinal is the passage's order inside its section."""
-    return f"{section_id}@{ordinal:03d}"
+def passage_id_for(
+    document_id: str, namespace: str, label: str, ordinal: int = 1
+) -> str:
+    """``<document_id>#annex:4/2.1.3@001`` - keyed on the paragraph label.
+
+    Deliberately **not** derived from a section ID. A passage ID keyed on its
+    section would change whenever sectioning changed, which would invalidate
+    every cached model call, every saved run and every citation in an exported
+    submission. Keyed on the label, an ID survives re-sectioning as long as the
+    source's own label does.
+
+    ``ordinal`` disambiguates within one label - a continuation paragraph, a
+    table row, or an unlabelled passage attributed to its nearest preceding
+    label. It is 1 for the overwhelmingly common single-passage case, and the
+    ``@NNN`` suffix is always present so a passage ID can never collide with the
+    section ID of the same label.
+    """
+    return f"{document_id}#{namespace}/{str(label).strip()}@{ordinal:03d}"
 
 
 def content_hash(*parts: Any) -> str:
@@ -300,6 +360,9 @@ class Document:
     index_entry: dict[str, Any] = field(default_factory=dict)
     """Verbatim index.json entry, so scope decisions can cite the index."""
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "role", DocumentRole(self.role))
+
 
 @dataclass(frozen=True)
 class SourcePassage:
@@ -310,12 +373,26 @@ class SourcePassage:
     section_id: str
     text: str
     paragraph_label: Optional[str]
-    """e.g. "2.1", or None when the text carries no paragraph label."""
+    """The **citation form**, ready to copy to the submission's ``source.paragraph``.
+
+    For a main-body paragraph that is just the label (``6.10.4.2``); inside a
+    division it carries the division (``Annex 6 Part 6 3``). None when the text
+    carries no label at all. The machine form of the division lives in
+    ``namespace``; this field is the human citation and the corpus builds it,
+    because only the corpus knows the document's structure."""
     heading_ancestry: tuple[str, ...]
     printed_start_page: Optional[str]
     """Printed label of the first page the passage appears on; None if unverified."""
-    printed_page_span: tuple[str, ...] = ()
-    """Every printed label the passage spans, in order."""
+    page_span: tuple[str, ...] = ()
+    """The **printed** labels the passage spans, in order, as strings.
+
+    Every label where the corpus knows them; first and last alone is acceptable
+    where it stores only the extent. Callers must therefore treat this as the
+    span's endpoints, not as a complete page-by-page enumeration.
+
+    Printed, not physical: ``pdf_page_indices`` is the physical one. Strings
+    because a printed label is not always an integer (front matter uses roman
+    numerals), and a string can always carry an integer label."""
     pdf_page_indices: tuple[int, ...] = ()
     """Zero-based physical page indices, in order."""
     namespace: str = "main"
@@ -324,6 +401,15 @@ class SourcePassage:
     is_table: bool = False
     table_context: Optional[str] = None
     """Table headings and footnotes needed to read a table cell correctly."""
+
+    def __post_init__(self) -> None:
+        for name in (
+            "heading_ancestry",
+            "page_span",
+            "pdf_page_indices",
+            "parsing_flags",
+        ):
+            object.__setattr__(self, name, tuple(getattr(self, name)))
 
 
 @dataclass(frozen=True)
@@ -334,13 +420,18 @@ class Section:
     heading: str
     namespace: str
     """Annex-qualified namespace from ``namespace_for``."""
-    number: Optional[str] = None
-    passage_ids: tuple[str, ...] = ()
+    paragraph_label: Optional[str] = None
+    """The section's own citation label, e.g. "6.10.4.2" or "Annex 6 Part 6 3"."""
+    primary_passage_ids: tuple[str, ...] = ()
     """Primary passages, in reading order."""
     depth: int = 0
     ordinal: int = 0
     """Position in the document's reading order; the inspection plan sorts on it."""
     parsing_flags: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "primary_passage_ids", tuple(self.primary_passage_ids))
+        object.__setattr__(self, "parsing_flags", tuple(self.parsing_flags))
 
 
 @dataclass(frozen=True)
@@ -355,9 +446,15 @@ class SectionBundle:
     section: Section
     primary_passages: tuple[SourcePassage, ...]
     context_passages: tuple[SourcePassage, ...] = ()
-    page_refs: tuple[PageRef, ...] = ()
-    """Table/figure pages worth rendering as images for this section."""
+    visual_pdf_page_indices: tuple[int, ...] = ()
+    """Zero-based physical pages carrying a table or figure for this section,
+    worth rendering as images. Call ``get_page_asset`` for the printed label."""
     notes: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        for name in ("primary_passages", "context_passages",
+                     "visual_pdf_page_indices", "notes"):
+            object.__setattr__(self, name, tuple(getattr(self, name)))
 
 
 @dataclass(frozen=True)
@@ -461,7 +558,7 @@ class ApplicabilityDecision:
 
 @dataclass(frozen=True)
 class ReferenceRequest:
-    origin_passage_id: str
+    originating_passage_id: str
     raw_reference: str
     """The reference exactly as the source text writes it."""
     target_regulation: Optional[str] = None
@@ -484,14 +581,25 @@ class ReferenceRequest:
 
 @dataclass(frozen=True)
 class ReferenceResolution:
-    request: ReferenceRequest
     status: ReferenceStatus
     explanation: str
+    request: Optional[ReferenceRequest] = None
+    """The request this answers.
+
+    Optional because a corpus implementation need not echo it back;
+    ``follow_references`` backfills it from the request it sent, so anything
+    downstream can rely on it being present."""
     candidate_passage_ids: tuple[str, ...] = ()
     """More than one candidate with status AMBIGUOUS means the corpus found
     several plausible targets and refused to pick one silently."""
     resolved_document_id: Optional[str] = None
     resolved_section_id: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "status", ReferenceStatus(self.status))
+        object.__setattr__(
+            self, "candidate_passage_ids", tuple(self.candidate_passage_ids)
+        )
 
     @property
     def is_usable(self) -> bool:
@@ -675,6 +783,13 @@ class ReviewFinding:
     passages. Prose about what is missing belongs in ``explanation``; this field
     is machine-actionable, so a sentence here resolves to nothing."""
     requested_correction: Optional[str] = None
+    code: Optional[str] = None
+    """The reviewer's own fine-grained code, e.g. ``page_unverified``.
+
+    ``category`` is the shared vocabulary all four components agree on; this is
+    the reviewer's finer distinction within it, carried through to the run
+    record and the UI. It exists so a code need not be smuggled into
+    ``explanation`` as a prefix."""
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "category", FindingCategory(self.category))
@@ -694,6 +809,7 @@ class ReviewFinding:
                     self.target_id,
                     self.category.value,
                     self.explanation,
+                    self.code,
                 )[:12],
             )
 
@@ -741,6 +857,26 @@ class ReviewFinding:
     def draft_id(self) -> Optional[str]:
         """The draft this finding concerns, or None if it concerns something else."""
         return self.target_id if self.target_kind is TargetKind.DRAFT else None
+
+    @property
+    def is_actionable(self) -> bool:
+        """Whether this finding asks extraction to do something.
+
+        True when the reviewer requested a correction or more context, or when
+        severity is blocking or revision-requested. An informational finding
+        that requests nothing - a heuristic flag, a duplicate note, an
+        unreviewed draft - is a record, not a request, and spending model calls
+        on it would be waste.
+
+        ``revise_extraction`` and the API layer both read this, so the trigger
+        condition is defined once here rather than guessed in two places.
+        """
+        if self.requested_correction or self.requested_context:
+            return True
+        return self.severity in (
+            FindingSeverity.BLOCKING,
+            FindingSeverity.REVISION_REQUESTED,
+        )
 
 
 @dataclass(frozen=True)
@@ -1009,6 +1145,33 @@ class CorpusReader(Protocol):
 
     def get_page_asset(self, document_id: str, pdf_page_index: int) -> PageAsset:
         """Render or fetch one physical page. ``pdf_page_index`` is zero-based."""
+
+    def get_document(self, document_id: str) -> Document:
+        """One document's metadata."""
+
+    def list_reference_candidates(
+        self, passage_ids: typing.Sequence[str]
+    ) -> list[ReferenceRequest]:
+        """Cross references the corpus already detected in those passages.
+
+        Returned ready to hand to ``resolve_reference``. This matters for
+        recall: without it, following a reference depends entirely on the model
+        noticing it in the text, and a missed reference is silent.
+        """
+
+
+@runtime_checkable
+class CorpusSearch(Protocol):
+    """Optional search, for navigation and reference resolution only.
+
+    Separate from ``CorpusReader`` because search is explicitly **not** the
+    coverage mechanism - systematic reading is - so an implementation must not
+    be required to provide it.
+    """
+
+    def search(
+        self, query: str, document_id: str | None = None, limit: int = 20
+    ) -> list[SourcePassage]: ...
 
 
 @runtime_checkable

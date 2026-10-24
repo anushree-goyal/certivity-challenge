@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 
 from certivity.agent import revise_extraction, run_extraction
+from certivity.agent.prompts import PROMPT_VERSIONS
 from certivity.contracts import (
     FindingCategory,
     FindingSeverity,
@@ -150,7 +151,9 @@ def test_a_correction_replaces_the_draft_and_records_its_ancestry(
     assert replacement.applicability_condition
     assert replacement.draft_id != target.draft_id
     assert revised.draft_by_id(target.draft_id) is None
-    assert replacement.prompt_version == "v1"
+    # Reference the source of truth rather than a literal, so a prompt-version
+    # bump does not fail a test that is about revision ancestry.
+    assert replacement.prompt_version == PROMPT_VERSIONS["revise_obligations"]
 
 
 def test_a_correction_citing_an_unsupplied_passage_is_refused(
@@ -267,3 +270,52 @@ def test_usage_accumulates_across_extraction_and_revision(
         run_input, extracted, [finding_for(target.draft_id)], corpus, llm
     )
     assert revised.usage.calls == extracted.usage.calls + len(llm.calls)
+
+
+def test_informational_findings_requesting_nothing_do_not_trigger_revision(
+    run_input, corpus, script, extracted
+):
+    """A heuristic flag, a duplicate note or an unreviewed draft is a record,
+    not a request. Revising on it would spend model calls to change nothing.
+
+    This is the trigger rule the API layer also reads, via
+    ReviewFinding.is_actionable, so the two cannot disagree.
+    """
+    from certivity.contracts import FindingSeverity
+
+    target = extracted.draft_requirements[0]
+    informational = finding_for(
+        target.draft_id,
+        category=FindingCategory.DUPLICATE,
+        explanation="possible duplicate, not resolved",
+        severity=FindingSeverity.INFORMATIONAL,
+    )
+    assert informational.is_actionable is False
+
+    llm = ScriptedLLMAdapter(script=script)
+    revised = revise_extraction(run_input, extracted, [informational], corpus, llm)
+
+    assert revised.draft_requirements == extracted.draft_requirements
+    assert llm.calls == [], "no model call should be made for a record-only finding"
+    assert any("informational finding" in w for w in revised.warnings)
+
+
+def test_an_informational_finding_that_requests_context_is_still_acted_on(
+    run_input, corpus, script, extracted
+):
+    """Severity alone does not decide: an explicit request does."""
+    from certivity.contracts import FindingSeverity
+
+    target = extracted.draft_requirements[0]
+    requesting = finding_for(
+        target.draft_id,
+        category=FindingCategory.CONTEXT_REQUESTED,
+        explanation="needs the scope condition",
+        severity=FindingSeverity.INFORMATIONAL,
+        requested_context=(syn.A_SCOPE,),
+    )
+    assert requesting.is_actionable is True
+
+    llm = ScriptedLLMAdapter(script=script)
+    revise_extraction(run_input, extracted, [requesting], corpus, llm)
+    assert llm.calls, "a requested context must reach extraction"

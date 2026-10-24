@@ -42,13 +42,27 @@ The flagged cases stay accepted until semantic review decides them; without a mo
 - 22 near-duplicate groups stay unresolved without a model (all kept).
 - A figure caption is merged into a paragraph's text (R148 3.3.1.2 ends with "Figure I Examples of the arrangement ..."); reported to Teammate 2.
 
-## Corpus contract gaps (reported to Teammate 2)
+## Corpus contract gaps (RETRACTED in part)
 
-`feature/corpus` still builds several records with provisional field names, which raise `TypeError` with `certivity.contracts`:
+This section was written against contracts 1.1.0. Contracts 1.2.0 adopted Teammate 2's field
+names as canonical, so the renames originally listed here were inverted: `paragraph_label`,
+`primary_passage_ids`, `page_span`, `visual_pdf_page_indices` and `originating_passage_id` are
+**correct** in `feature/corpus`. The fault was on the quality side, which was still on 1.1.0. The local
+`_passage`/`_section` patch used for this check should be discarded.
 
-- `Section`: `paragraph_label`, `primary_passage_ids` -> contract `number`, `passage_ids` (+ `depth`, `ordinal`).
-- `SourcePassage`: `page_span` -> `printed_page_span` (string labels); also `namespace`, `is_table`, `table_context`.
-- `SectionBundle`: `visual_pdf_page_indices` -> `page_refs`.
-- `ReferenceResolution`: positional `(status, ids, explanation)` and `request.originating_passage_id` -> contract `(request, status, explanation, candidate_passage_ids)` and `origin_passage_id`.
+One real bug remains: `ReferenceResolution(...)` is built with positional arguments. Use keywords
+that match the current contract.
 
-Only `_passage` and `_section` were patched locally for this check.
+## Corpus defect: flattened superscript exponents (fixed in `feature/corpus` df6c058)
+
+Parsers before df6c058 flattened superscript exponents: the PDF's 4·10⁰ and 1.40·10² arrived as
+"4∙100" and "1.40∙102", so 42 cd showed up as "4.2∙101". No text-against-passage check can catch
+that, because the requirement and its cited passage carry the same corrupted string.
+
+df6c058 keeps superscripts explicit: `4∙10^0`, `cm^2`, and `^1` after text for a footnote marker.
+The quality numeric check now reads that notation (`normalise_numbers`: 4∙10^0 = 4, cm^2 = cm²,
+footnote markers dropped), and the review prompt (`review-v2`) explains it to the model.
+
+**Any snapshot built before df6c058 still has the corrupted values**, including `snap-e3d43fb50521`
+used by checkpoint 2. Do not report numeric accuracy from drafts extracted on such a snapshot;
+rebuild the snapshot and re-extract first.

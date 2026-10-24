@@ -107,7 +107,7 @@ def test_reference_is_followed_and_unresolvable_one_is_recorded(run_input, corpu
     assert carriers
     for item in carriers:
         for resolution in item.unresolved_references:
-            assert resolution.request.origin_passage_id in item.supporting_passage_ids
+            assert resolution.request.originating_passage_id in item.supporting_passage_ids
 
 
 def test_coverage_is_recorded_for_every_planned_section(run_input, corpus, llm):
@@ -215,3 +215,46 @@ def test_an_unusable_model_aborts_the_run_instead_of_returning_an_empty_draft(
 
     with pytest.raises(LLMConfigurationError, match="credit balance"):
         run_extraction(run_input, corpus, UnusableAdapter(script=script))
+
+
+def test_references_the_corpus_detects_are_followed_even_if_unreported(
+    run_input, corpus, script
+):
+    """Reference recall must not depend on the model noticing a citation.
+
+    The script here reports no references at all. The corpus detects them, so
+    the annex target must still be inspected.
+    """
+    from tests.fixtures.contracts import ScriptedLLMAdapter
+
+    original = script["extract_obligations"]
+
+    def silent(payload):
+        data = original(payload)
+        data["references"] = []
+        return data
+
+    script["extract_obligations"] = silent
+    draft = run_extraction(run_input, corpus, ScriptedLLMAdapter(script=script))
+
+    statuses = {r.status for r in draft.unresolved_references}
+    assert ReferenceStatus.OUTSIDE_CORPUS in statuses, (
+        "the corpus-detected reference was never followed"
+    )
+    assert all(r.request is not None for r in draft.unresolved_references), (
+        "every resolution must carry the request it answers"
+    )
+
+
+def test_sections_are_ordered_naturally_when_the_corpus_gives_no_ordinal():
+    """A plain string sort puts 3.10 before 3.2, silently reordering a document.
+
+    The real corpus reports ordinal=0 for every section, so this fallback is
+    what actually determines reading order today.
+    """
+    from certivity.agent.plan import _natural_label_key
+
+    labels = ["3.10", "3.2", "3.1", "10.1", "2", "3.2.1"]
+    assert sorted(labels, key=_natural_label_key) == [
+        "2", "3.1", "3.2", "3.2.1", "3.10", "10.1",
+    ]

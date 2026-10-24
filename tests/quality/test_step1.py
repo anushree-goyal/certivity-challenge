@@ -105,8 +105,9 @@ class DeterministicChecks(unittest.TestCase):
 
     def test_unresolved_reference_flagged_without_blocking(self):
         from certivity.contracts import ReferenceRequest, ReferenceResolution, ReferenceStatus
-        ref = ReferenceResolution(ReferenceRequest("p-ok", "UN R999 Annex 9"),
-                                  ReferenceStatus.OUTSIDE_CORPUS, "not in this snapshot")
+        ref = ReferenceResolution(status=ReferenceStatus.OUTSIDE_CORPUS,
+                                  explanation="not in this snapshot",
+                                  request=ReferenceRequest("p-ok", "UN R999 Annex 9"))
         d = F.Draft("d1", "Intensity at least 4 cd.", "p-ok", ["p-ok"], unresolved_references=(ref,))
         rep, _ = review([d])
         self.assertIn("unresolved_reference", cats(rep, "d1"))
@@ -124,6 +125,36 @@ class DeterministicChecks(unittest.TestCase):
         rep, _ = review([a, b])
         self.assertEqual(rep.duplicate_mapping, {"d2": "d1"})
         self.assertEqual(list(rep.accepted_draft_ids), ["d1"])
+
+
+class CorpusNumberNotation(unittest.TestCase):
+    """The corpus writes 4∙10^0 for 4, cm^2 for cm², and ^1 after text for a footnote marker."""
+
+    def check(self, passage_text, draft_text):
+        p = F.Passage("p-exp", F.BASE.document_id, passage_text, "6.4", 30)
+        c = F.FakeCorpus([F.BASE], [p])
+        rep = review_requirements(F.Run(), F.Pipeline([F.Draft("d1", draft_text, "p-exp", ["p-exp"])]),
+                                  c, None, None)
+        return cats(rep, "d1")
+
+    def test_exponent_form_matches_plain_value(self):
+        self.assertNotIn("numeric_not_in_evidence",
+                         self.check("Maximum 4.2∙10^1 cd and minimum 4∙10^0 cd.",
+                                    "The intensity shall be at most 42 cd and at least 4 cd."))
+
+    def test_exponent_form_still_catches_a_wrong_value(self):
+        self.assertIn("numeric_not_in_evidence",
+                      self.check("Maximum 4.2∙10^1 cd.", "The intensity shall be at most 4.2 cd."))
+
+    def test_unit_power_is_not_a_value(self):
+        self.assertNotIn("numeric_not_in_evidence",
+                         self.check("The apparent surface shall be at least 100 cm^2.",
+                                    "The apparent surface shall be at least 100 cm²."))
+
+    def test_footnote_marker_is_not_a_value(self):
+        self.assertNotIn("numeric_not_in_evidence",
+                         self.check("Rear position lamps^1 shall be red.",
+                                    "Rear position lamps shall be red^2."))
 
 
 class Export(unittest.TestCase):

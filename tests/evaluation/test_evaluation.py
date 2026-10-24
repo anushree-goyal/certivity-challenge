@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 from certivity.contracts import EvaluationReport
-from certivity.evaluation import (compare_candidates, evaluate_submission,
+from certivity.evaluation import (compare_candidates, evaluate_case, evaluate_submission,
                                   evaluate_submission_detailed, list_candidates,
                                   load_candidate, save_candidate)
 
@@ -38,6 +38,28 @@ class Evaluate(unittest.TestCase):
         self.assertTrue(any("own computation" in n for n in r.notes))
         d = evaluate_submission_detailed(sub, exp)
         self.assertEqual(d.own_regulation_level["true_positives"], 1)
+
+    def test_evaluate_case_reads_the_case_answer_file(self):
+        pkg = Path(self.tmp.name) / "pkg"
+        (pkg / "cases" / "c1").mkdir(parents=True)
+        write(pkg / "cases" / "c1", "expected.json", [req("A", 1), req("B", 2)])
+        sub = write(self.tmp.name, "s.json", [req("A", 1)])
+        r = evaluate_case(sub, "c1", pkg)
+        self.assertIsInstance(r, EvaluationReport)
+        self.assertAlmostEqual(r.regulation_recall, 0.5)
+
+    def test_evaluate_case_without_answer_file_is_none(self):
+        pkg = Path(self.tmp.name) / "pkg"
+        (pkg / "cases" / "hidden").mkdir(parents=True)
+        sub = write(self.tmp.name, "s.json", [req("A", 1)])
+        self.assertIsNone(evaluate_case(sub, "hidden", pkg))
+        self.assertIsNone(evaluate_case(sub, "no-such-case", pkg))
+
+    def test_evaluate_case_rejects_a_path_as_case_id(self):
+        sub = write(self.tmp.name, "s.json", [req("A", 1)])
+        for bad in ("../c1", "c1/../..", "", ".."):
+            with self.assertRaises(ValueError):
+                evaluate_case(sub, bad, self.tmp.name)
 
     def test_semantic_scores_stay_null(self):
         p = write(self.tmp.name, "s.json", [req("A", 1)])

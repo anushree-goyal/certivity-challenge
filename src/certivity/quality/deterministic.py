@@ -11,6 +11,7 @@ from __future__ import annotations
 import re
 from collections import Counter
 from dataclasses import dataclass, field
+from decimal import Decimal, InvalidOperation
 
 from . import _access as A
 from ._records import finding_code, make_finding
@@ -32,7 +33,7 @@ PRIMARY_SPANS_PAGES = "primary_spans_pages"
 PRIMARY_IS_CONTEXT = "primary_is_context_passage"
 UNRESOLVED_REFERENCE = "unresolved_reference"
 
-# Set by extraction when the primary citation is a context/referenced passage (contracts 1.1.0 notes).
+# Set by extraction when the primary citation is a context/referenced passage (contracts 1.5.0 notes).
 _CONTEXT_PRIMARY_NOTE = "primary citation is a context or referenced passage"
 
 REJECT = {SOURCE_MISSING, WRONG_VERSION, SNAPSHOT_MISMATCH}
@@ -41,6 +42,12 @@ NEEDS_REVISION = {SUPPORTING_INVALID, PAGE_UNVERIFIED, NO_PRIMARY, EMPTY_TEXT, T
 # everything else is a non-blocking flag for semantic review
 
 _NUM = re.compile(r"\d+(?:[.,]\d+)?")
+# The corpus writes exponents with "^": 4∙10^0 (= 4), 100 cm^2 (= 100 cm²), and a footnote
+# marker as ^1 directly after text ("lamps^1 shall").
+_SCIENTIFIC = re.compile(r"(\d+(?:[.,]\d+)?)\s*[∙·⋅×*]\s*10\s*\^\s*([-−]?\d+)")
+_UNIT_POWER = re.compile(r"(?<![A-Za-z])(mm|cm|dm|km|m|s)\^([-−]?\d)(?!\d)")
+_FOOTNOTE = re.compile(r"(?<=[^\d\s^])\^\d+")
+_SUPERSCRIPT = str.maketrans("-−0123456789", "⁻⁻⁰¹²³⁴⁵⁶⁷⁸⁹")
 _EXCEPTION_MARKERS = re.compile(
     r"\b(unless|except|provided that|only if|only when|does not apply|shall not apply|"
     r"with the exception)\b", re.I)
@@ -59,8 +66,23 @@ def verified_page(value) -> int | None:
     return None
 
 
+def _scientific(m: re.Match) -> str:
+    try:
+        value = Decimal(m.group(1).replace(",", ".")).scaleb(int(m.group(2).replace("−", "-")))
+    except InvalidOperation:
+        return m.group(0)
+    return format(value.normalize(), "f")
+
+
+def normalise_numbers(text: str) -> str:
+    """Corpus exponent notation to plain values, so 42 and 4.2∙10^1 compare equal."""
+    text = _SCIENTIFIC.sub(_scientific, text)
+    text = _UNIT_POWER.sub(lambda m: m.group(1) + m.group(2).translate(_SUPERSCRIPT), text)
+    return _FOOTNOTE.sub("", text)
+
+
 def _numbers(text: str) -> set[str]:
-    return {m.replace(",", ".") for m in _NUM.findall(text)}
+    return {m.replace(",", ".") for m in _NUM.findall(normalise_numbers(text))}
 
 
 @dataclass

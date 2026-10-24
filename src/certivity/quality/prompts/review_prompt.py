@@ -1,5 +1,5 @@
 """Review prompt text and output schema (owned by Teammate 3). Bump VERSION on any edit."""
-VERSION = "review-v1"
+VERSION = "review-v2"
 
 REVIEW_INSTRUCTIONS = """\
 You are an independent reviewer of draft regulatory obligations. For each draft you are given
@@ -19,6 +19,9 @@ Use "ok", "problem", "unclear" or "not_applicable" for each check.
 Rules:
 - Tables: numeric or table-derived claims are only supported if the headers, units and footnotes
   needed to read them are visible. If they are not, mark the check "unclear" and say what you need.
+- Number notation in the evidence: "^" marks an exponent, so "4∙10^0" is 4, "4.2∙10^1" is 42 and
+  "100 cm^2" is 100 cm². A "^" plus digits directly after a word (e.g. "lamps^1") is a footnote
+  marker, not a value. A draft writing the plain value (42 cd) matches evidence in this notation.
 - A conditional rule stays valid when the product fact that triggers it is unknown. Never treat
   an unknown product fact as a reason to mark a conditional obligation unsupported.
 - Verdict "supported": every check is ok or not_applicable. You MUST give evidence_quote, a short

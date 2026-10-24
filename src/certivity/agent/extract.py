@@ -18,6 +18,7 @@ from typing import Any, Iterable, Sequence
 
 from certivity.contracts import (
     DraftRequirement,
+    ReferenceRequest,
     NumericValue,
     ObligationKind,
     ReferenceResolution,
@@ -170,7 +171,7 @@ def _extract_batch(
             "section": {
                 "section_id": section.section_id,
                 "heading": section.heading,
-                "number": section.number,
+                "paragraph_label": section.paragraph_label,
                 "namespace": section.namespace,
                 "parsing_flags": list(section.parsing_flags),
             },
@@ -211,6 +212,10 @@ def _extract_batch(
             valid_passage_ids=allowed,
             ctx=ctx,
         )
+        # Add the references the corpus detected itself. Relying only on the
+        # model to notice a cross reference makes a miss silent; a parser pass
+        # over the same passages does not have that failure mode.
+        requests = _merge_corpus_candidates(ctx, requests, batch)
         new_requests = [r for r in requests if not tracker.seen(r)]
         if not new_requests or pass_index >= ctx.config.max_reference_depth:
             # Record the resolutions of references we are not chasing further, so
@@ -257,6 +262,42 @@ def _dedupe_resolutions(
     return list(by_key.values())
 
 
+def _merge_corpus_candidates(
+    ctx: RunContext,
+    requests: list[ReferenceRequest],
+    batch: list[SourcePassage],
+) -> list[ReferenceRequest]:
+    """Union of the model's references and the corpus's detected candidates.
+
+    Deduplicated on ``ReferenceRequest.key()``, so a reference both found is
+    followed once. A corpus that does not implement detection simply contributes
+    nothing.
+    """
+    lister = getattr(ctx.corpus, "list_reference_candidates", None)
+    if not callable(lister):
+        return requests
+    try:
+        detected = list(lister([p.passage_id for p in batch]))
+    except Exception as exc:
+        ctx.warn(
+            f"the corpus could not list reference candidates: {exc}", stage="references"
+        )
+        return requests
+
+    by_key = {r.key(): r for r in requests}
+    added = 0
+    for candidate in detected:
+        if candidate.key() not in by_key:
+            by_key[candidate.key()] = candidate
+            added += 1
+    if added:
+        ctx.event(
+            "references",
+            f"The corpus detected {added} cross reference(s) the extraction did not report",
+        )
+    return list(by_key.values())
+
+
 def _with_unresolved(
     draft: DraftRequirement,
     unresolved: tuple[ReferenceResolution, ...],
@@ -272,7 +313,7 @@ def _with_unresolved(
     relevant = tuple(
         resolution
         for resolution in unresolved
-        if resolution.request.origin_passage_id in supporting
+        if resolution.request.originating_passage_id in supporting
     )
     if not relevant:
         return draft
@@ -340,13 +381,18 @@ def _build_drafts(
 
         notes = entry.get("notes")
         if primary not in primary_candidate_ids:
-            # Allowed, because an obligation can sit in an inherited condition,
-            # but the reviewer needs to know the citation is not section-primary.
-            marker = (
-                "Primary citation is a context or referenced passage rather than a "
-                "primary passage of this section."
+            # The obligation belongs to the section that owns this passage, and
+            # that section is read in its own right. Keeping it here as well
+            # produced the same requirement twice under two citations in a live
+            # run, so it is dropped rather than flagged.
+            ctx.warn(
+                f"an obligation in {section_id} was cited to {primary!r}, a context "
+                "or referenced passage rather than a primary passage of this "
+                "section; it was dropped because the section owning that passage "
+                "is inspected separately",
+                stage="extract",
             )
-            notes = f"{notes} {marker}".strip() if notes else marker
+            continue
 
         try:
             kind = ObligationKind(entry.get("obligation_kind") or "mandatory")

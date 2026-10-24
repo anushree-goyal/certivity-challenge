@@ -53,12 +53,56 @@ def test_contracts_module_imports_no_feature_implementation():
 def test_the_same_paragraph_in_two_namespaces_has_different_ids():
     """Paragraph 2.1 in Annex 4 is not paragraph 2.1 in the main body."""
     document_id = c.document_id_for("UN R148", "03 series", "abc123def456")
-    main = c.section_id_for(document_id, c.namespace_for("main"), "2.1")
-    annex = c.section_id_for(document_id, c.namespace_for("annex", "4"), "2.1")
+    main_ns = c.namespace_for("main")
+    annex_ns = c.namespace_for(("annex", "4"))
 
+    main = c.section_id_for(document_id, main_ns, "2.1")
+    annex = c.section_id_for(document_id, annex_ns, "2.1")
     assert main != annex
     assert "annex:4" in annex
-    assert c.passage_id_for(main, 1) != c.passage_id_for(annex, 1)
+
+    assert c.passage_id_for(document_id, main_ns, "2.1") != c.passage_id_for(
+        document_id, annex_ns, "2.1"
+    )
+
+
+def test_namespace_grammar_covers_the_structures_in_the_real_pdfs():
+    """These eight shapes all occur in the supplied regulations, so the grammar
+    is settled against them rather than invented."""
+    assert c.namespace_for("main") == "main"
+    assert c.namespace_for(("annex", "4")) == "annex:4"
+    assert c.namespace_for(("annex", "6"), ("part", "6")) == "annex:6/part:6"
+    assert c.namespace_for(("annex", "4"), ("appendix", "1")) == "annex:4/appendix:1"
+    # An unnumbered division is a bare kind.
+    assert c.namespace_for(("annex", "5"), "appendix") == "annex:5/appendix"
+    assert c.namespace_for(("appendix", "2")) == "appendix:2"
+    assert c.namespace_for("introduction") == "introduction"
+    assert c.namespace_for(("part", "I")) == "part:i"
+
+    for namespace in ("main", "annex:6/part:6", "annex:5/appendix", "part:i"):
+        assert c.namespace_for(*c.parse_namespace(namespace)) == namespace
+
+
+def test_a_passage_id_survives_resectioning():
+    """A passage ID must not depend on how the document was split into sections.
+
+    If it did, changing section size would invalidate every cached model call,
+    every saved run and every citation already exported.
+    """
+    document_id = c.document_id_for("UN R150", "base", "abc123def456")
+    namespace = c.namespace_for(("annex", "6"), ("part", "6"))
+
+    passage = c.passage_id_for(document_id, namespace, "3")
+    assert passage == f"{document_id}#annex:6/part:6/3@001"
+
+    # The same label under a different parent section yields the same ID.
+    assert passage == c.passage_id_for(document_id, namespace, " 3 ")
+
+    # And it can never collide with the section ID of the same label.
+    assert passage != c.section_id_for(document_id, namespace, "3")
+
+    # A second passage under one label is distinguishable.
+    assert c.passage_id_for(document_id, namespace, "3", 2).endswith("@002")
 
 
 def test_document_id_distinguishes_version_and_file_identity():
@@ -385,3 +429,56 @@ def test_make_event_produces_a_run_event_with_a_timestamp():
     assert isinstance(event, c.RunEvent)
     assert event.timestamp and event.stage == "quality"
     assert event.completed == 3 and event.total == 10
+
+
+# --------------------------------------------------------------------------- #
+# Tolerating a plain-Python implementation
+#
+# The corpus component builds records from SQLite rows: enum fields arrive as
+# strings and JSON columns as lists. Coercing here rather than demanding the
+# caller import the enums avoids a silent failure mode - a string status never
+# matches an enum member, so `is_usable` would be False for every reference and
+# nothing would ever resolve, with no error raised anywhere.
+# --------------------------------------------------------------------------- #
+
+
+def test_a_plain_string_status_still_matches_the_enum():
+    resolution = c.ReferenceResolution(
+        status="resolved",
+        explanation="found it",
+        candidate_passage_ids=["doc#main/2.1@001"],
+    )
+    assert resolution.status is c.ReferenceStatus.RESOLVED
+    assert resolution.is_usable is True
+    assert isinstance(resolution.candidate_passage_ids, tuple)
+
+
+def test_a_plain_string_document_role_still_matches_the_enum():
+    document = c.Document(
+        document_id="d", regulation="UN R148", title="t", role="base",
+        version_label="base", filename="f.pdf", checksum="abc",
+        snapshot_id="snap", page_count=10,
+    )
+    assert document.role is c.DocumentRole.BASE
+
+
+def test_lists_from_json_columns_are_normalised_to_tuples():
+    passage = c.SourcePassage(
+        passage_id="p", document_id="d", section_id="s", text="t",
+        paragraph_label="2.1",
+        heading_ancestry=["ANNEX 1", "2. TESTS"],   # json.loads gives lists
+        printed_start_page="9",
+        page_span=["9", "10"],
+        pdf_page_indices=[8, 9],
+        parsing_flags=["spans_pages"],
+    )
+    for value in (passage.heading_ancestry, passage.page_span,
+                  passage.pdf_page_indices, passage.parsing_flags):
+        assert isinstance(value, tuple)
+
+    section = c.Section(
+        section_id="s", document_id="d", parent_section_id=None,
+        heading="h", namespace="annex:1", primary_passage_ids=["p1", "p2"],
+        parsing_flags=["x"],
+    )
+    assert isinstance(section.primary_passage_ids, tuple)

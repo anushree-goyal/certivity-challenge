@@ -8,10 +8,22 @@ Every prompt version is recorded in ``PipelineDraft.prompt_versions`` and is
 part of the model-call cache key, so editing text here correctly misses the
 cache instead of returning a previous run's reasoning.
 
-Schema style: every property is ``required`` and nullable where the source may
-not establish a value. A model that cannot omit a field has to say ``null``
-explicitly, which is the distinction the whole pipeline depends on - "the
-source does not state this" is information, and an absent key is not.
+Schema style. Two rules, the second forced on us by the provider:
+
+1. A field whose ``null`` is *load-bearing* stays ``required`` and nullable, so
+   the model must state "the source does not establish this" rather than
+   quietly omitting it. ``ProductFact.value`` and
+   ``DraftRequirement.applicability_condition`` are the cases that matter: an
+   explicit null there is a finding, not an absence.
+2. Every other optional field is a plain type left out of ``required``, and an
+   absent key reads as ``None``.
+
+Rule 2 exists because ``output_config.format`` rejects a schema with more than
+**16** union-typed parameters (``{"type": ["string", "null"]}`` or ``anyOf``)
+with HTTP 400 - the compilation cost is exponential. Nullable-everywhere put
+``PRODUCT_PROFILE_SCHEMA`` at 18 and the whole run failed before its first
+obligation. ``tests/agent/test_prompts.py`` counts unions per schema so this
+cannot regress.
 """
 
 from __future__ import annotations
@@ -19,11 +31,25 @@ from __future__ import annotations
 from typing import Any
 
 PROMPT_VERSIONS: dict[str, str] = {
-    "product_profile": "v1",
-    "candidate_scope": "v1",
-    "document_scope": "v1",
-    "extract_obligations": "v1",
-    "revise_obligations": "v1",
+    # v2: schemas reshaped to fit the provider's 16-union limit.
+    # v3 (extract_obligations): the first live run returned a scope statement as
+    # an obligation and restated the regulation's whole scope as the condition on
+    # every draft.
+    # v4 (extract_obligations): v3 then produced each obligation twice - once
+    # from the section that owns it and once from a section that merely received
+    # it as context or as a followed reference. A primary citation must now be a
+    # primary passage of the section being read.
+    # v5 (extract_obligations): from the quality component's review of the real
+    # corpus - split long passages, because 5 base "shall" passages exceed the
+    # 2,000-character export limit; cite the narrowest passage, because 89
+    # primary passages span several pages and the citation carries the start
+    # page; and fill `values` whenever the obligation turns on a number, so
+    # numeric checks need not re-parse the text.
+    "product_profile": "v2",
+    "candidate_scope": "v2",
+    "document_scope": "v2",
+    "extract_obligations": "v5",
+    "revise_obligations": "v2",
 }
 
 _SHARED_RULES = """
@@ -39,13 +65,30 @@ Ground rules that apply to every task:
   the decimal separator the source uses. Never convert units.
 - Preserve conditions and exceptions. A requirement that applies "except for
   vehicles of category X" is not the same requirement without that clause.
-- Where the source does not establish something, return null or an empty list.
+- Where the source does not establish something, say so: return null for a
+  field that allows null, omit an optional field, or return an empty list.
   Writing a plausible value is a failure, not a fallback.
 """
 
 
 def _nullable(kind: str) -> dict[str, Any]:
+    """A field the model must answer, with null as a meaningful answer.
+
+    Costs one of the provider's 16 union slots, so reserve it for fields where
+    an explicit null carries information.
+    """
     return {"type": [kind, "null"]}
+
+
+def _optional(kind: str, description: str | None = None) -> dict[str, Any]:
+    """A field the model may omit. Costs no union slot.
+
+    The caller reads these with ``.get()``, so an absent key is ``None``.
+    """
+    schema: dict[str, Any] = {"type": kind}
+    if description:
+        schema["description"] = description
+    return schema
 
 
 def _string_list() -> dict[str, Any]:
@@ -89,7 +132,10 @@ Task-specific rules:
 _FACT_SCHEMA: dict[str, Any] = {
     "type": "object",
     "additionalProperties": False,
-    "required": ["key", "value", "basis", "evidence", "notes"],
+    # `value` stays required-and-nullable: an explicit null is how the model
+    # reports a property that is named but not established, and that null is
+    # what later keeps a regulation in scope.
+    "required": ["key", "value", "basis", "evidence"],
     "properties": {
         "key": {"type": "string", "description": "Short snake_case name of the property"},
         "value": _nullable("string"),
@@ -99,18 +145,20 @@ _FACT_SCHEMA: dict[str, Any] = {
             "items": {
                 "type": "object",
                 "additionalProperties": False,
-                "required": ["source", "quote", "location"],
+                "required": ["source"],
                 "properties": {
                     "source": {
                         "type": "string",
                         "description": "'specification' or the supplied drawing id",
                     },
-                    "quote": _nullable("string"),
-                    "location": _nullable("string"),
+                    "quote": _optional("string", "Verbatim words relied on, if any"),
+                    "location": _optional(
+                        "string", "Heading, line range, or a described drawing region"
+                    ),
                 },
             },
         },
-        "notes": _nullable("string"),
+        "notes": _optional("string", "Reasoning, for an inferred or downgraded fact"),
     },
 }
 
@@ -125,7 +173,6 @@ PRODUCT_PROFILE_SCHEMA: dict[str, Any] = {
         "functions",
         "materials",
         "unknowns",
-        "summary",
     ],
     "properties": {
         "product_type": _nullable("string"),
@@ -135,7 +182,7 @@ PRODUCT_PROFILE_SCHEMA: dict[str, Any] = {
         "functions": {"type": "array", "items": _FACT_SCHEMA},
         "materials": {"type": "array", "items": _FACT_SCHEMA},
         "unknowns": _string_list(),
-        "summary": _nullable("string"),
+        "summary": _optional("string"),
     },
 }
 
@@ -235,7 +282,6 @@ DOCUMENT_SCOPE_SCHEMA: dict[str, Any] = {
         "scope_evidence",
         "conditions",
         "depends_on_unknowns",
-        "notes",
     ],
     "properties": {
         "status": {"type": "string", "enum": ["applicable", "uncertain", "excluded"]},
@@ -246,7 +292,7 @@ DOCUMENT_SCOPE_SCHEMA: dict[str, Any] = {
         },
         "conditions": _string_list(),
         "depends_on_unknowns": _string_list(),
-        "notes": _nullable("string"),
+        "notes": _optional("string"),
     },
 }
 
@@ -271,18 +317,36 @@ Atomicity
   values, units and its condition. A reader must be able to check it against
   the cited passage without the rest of the document.
 
+Length
+- A long passage almost always states several separate obligations. Split them.
+  Review found base passages over 2,000 characters, and the official output caps
+  a requirement at 2,000 - so a single draft restating a whole passage is both
+  non-atomic and unexportable.
+- Never shorten by dropping a value, a unit, a condition or an exception. If one
+  genuinely indivisible obligation cannot be stated within about 1,800
+  characters, return it anyway and say so in `notes` rather than truncating it.
+
 Citation
 - `supporting_passage_ids` lists every supplied passage you used, including
   context passages that carry an inherited condition.
+- Where several supplied passages state the obligation, cite the **narrowest**
+  one. A passage may span several printed pages, and the citation carries that
+  passage's starting page, so citing a broad passage for an obligation that
+  appears on its later page cites the wrong page. Prefer the passage whose text
+  is the obligation.
 - `primary_passage_id` must be the one passage that states the obligation
   itself. It must appear in `supporting_passage_ids`. The official output
   carries a single source, and this is it.
-- If the obligation only exists by combining passages, so that no single
-  passage states it, set `primary_passage_id` to the passage closest to the
-  operative wording and explain the combination in `notes`. Do not silently
-  cite a context passage as if it stated the rule.
-- Context passages are supplied for interpretation. Do not attribute an
-  obligation to a context passage when a primary passage states it.
+- `primary_passage_id` must be one of the **primary** passages. Context and
+  referenced passages may appear in `supporting_passage_ids` and may inform the
+  wording, but they must never be the primary citation.
+- Do not return an obligation that a context or referenced passage states on its
+  own. Every section of this regulation is read in its own right, so that
+  obligation is extracted where it belongs. Returning it here as well produces
+  the same requirement twice with two different citations.
+- Use context and referenced passages to state *this* section's obligation
+  correctly - to carry in an inherited condition, resolve a defined term, or
+  supply a value the section points to.
 
 Kind
 - "mandatory": a constraint that must hold.
@@ -301,8 +365,11 @@ Conditions and exceptions
   so rather than asserting that it applies.
 
 Values
-- `values` captures each number the obligation turns on, so a reviewer can
-  check it mechanically. Copy the value as written, as a string.
+- `values` captures **every** number the obligation turns on, so a reviewer can
+  check it mechanically against the cited text. Copy each value exactly as
+  written, as a string, keeping the source's decimal separator. An obligation
+  with a limit, a tolerance or a range and an empty `values` list is an error.
+- Leave `values` empty only when the obligation turns on no number at all.
 
 Tables
 - A table cell is only meaningful with its row and column headers and its
@@ -318,6 +385,30 @@ References
 - A reference does not mean the whole referenced regulation applies. It means
   the referenced provision is incorporated for the stated purpose only.
 
+What is not an obligation
+- A statement of the regulation's scope or field of application is not an
+  obligation. "This Regulation applies to devices of category X on vehicles of
+  category Y" tells you *whether* the regulation applies; it is recorded
+  separately as applicability. Never return scope text as a requirement.
+- A pure definition is not an obligation. "'Reference axis' means the axis
+  marked on the device" is a definition. It becomes a "definition_rule" only
+  when it also imposes something measurable or testable - for example a limit,
+  a tolerance, a required marking or a stated method.
+- Marking, labelling, installation, test and documentation provisions **are**
+  obligations. Do not exclude them as administrative.
+
+Conditions: only what distinguishes this obligation
+- The regulation's own scope is already recorded once, for the regulation as a
+  whole. Do not restate it in `applicability_condition` on every obligation.
+- Put in `applicability_condition` only the condition that narrows this
+  obligation *within* the regulation - a device category, a marking, a mounting
+  position, a voltage, a test state, a date.
+- If the obligation applies to everything the regulation covers, with no further
+  condition, use null. That null is a claim that there is no narrowing
+  condition, so do not use it to avoid stating one that exists.
+- `text` must still read as a self-contained sentence, so a condition that is
+  part of the obligation's own wording stays in `text`.
+
 Empty is a valid answer
 - A section that states no obligation returns an empty `obligations` list. Say
   why in `section_note`. Inventing an obligation to fill the list is the worst
@@ -328,28 +419,33 @@ Empty is a valid answer
 _VALUE_SCHEMA: dict[str, Any] = {
     "type": "object",
     "additionalProperties": False,
-    "required": ["quantity", "value", "unit", "comparator"],
+    "required": ["value"],
     "properties": {
-        "quantity": _nullable("string"),
-        "value": _nullable("string"),
-        "unit": _nullable("string"),
-        "comparator": _nullable("string"),
+        "quantity": _optional("string", "What is measured, e.g. 'luminous intensity'"),
+        "value": {
+            "type": "string",
+            "description": "Copied exactly as written, including the decimal separator",
+        },
+        "unit": _optional("string"),
+        "comparator": _optional(
+            "string", "e.g. '>=', '<=', 'between', '=', 'max', 'min'"
+        ),
     },
 }
 
 _OBLIGATION_SCHEMA: dict[str, Any] = {
     "type": "object",
     "additionalProperties": False,
+    # `applicability_condition` stays required-and-nullable: null must mean "this
+    # obligation is genuinely unconditional", which is a claim, not an omission.
     "required": [
         "text",
         "supporting_passage_ids",
         "primary_passage_id",
         "obligation_kind",
         "applicability_condition",
-        "applicability_reason",
         "exceptions",
         "values",
-        "notes",
     ],
     "properties": {
         "text": {"type": "string"},
@@ -365,37 +461,30 @@ _OBLIGATION_SCHEMA: dict[str, Any] = {
             ],
         },
         "applicability_condition": _nullable("string"),
-        "applicability_reason": _nullable("string"),
+        "applicability_reason": _optional(
+            "string", "Why this obligation reaches the product in front of you"
+        ),
         "exceptions": _string_list(),
         "values": {"type": "array", "items": _VALUE_SCHEMA},
-        "notes": _nullable("string"),
+        "notes": _optional("string"),
     },
 }
 
 _REFERENCE_SCHEMA: dict[str, Any] = {
     "type": "object",
     "additionalProperties": False,
-    "required": [
-        "origin_passage_id",
-        "raw_reference",
-        "target_regulation",
-        "target_namespace",
-        "target_paragraph",
-        "needed",
-        "reason",
-    ],
+    "required": ["originating_passage_id", "raw_reference", "needed", "reason"],
     "properties": {
-        "origin_passage_id": {"type": "string"},
+        "originating_passage_id": {"type": "string"},
         "raw_reference": {
             "type": "string",
             "description": "The reference exactly as the source writes it",
         },
-        "target_regulation": _nullable("string"),
-        "target_namespace": {
-            "type": ["string", "null"],
-            "description": "'main', or 'annex:<label>' / 'appendix:<label>' when stated",
-        },
-        "target_paragraph": _nullable("string"),
+        "target_regulation": _optional("string", "Only when the text names one"),
+        "target_namespace": _optional(
+            "string", "'main', or 'annex:<label>' / 'appendix:<label>' when stated"
+        ),
+        "target_paragraph": _optional("string"),
         "needed": {"type": "boolean"},
         "reason": {"type": "string"},
     },
@@ -404,7 +493,7 @@ _REFERENCE_SCHEMA: dict[str, Any] = {
 EXTRACT_OBLIGATIONS_SCHEMA: dict[str, Any] = {
     "type": "object",
     "additionalProperties": False,
-    "required": ["obligations", "references", "needs_context", "section_note"],
+    "required": ["obligations", "references", "needs_context"],
     "properties": {
         "obligations": {"type": "array", "items": _OBLIGATION_SCHEMA},
         "references": {"type": "array", "items": _REFERENCE_SCHEMA},
@@ -413,7 +502,7 @@ EXTRACT_OBLIGATIONS_SCHEMA: dict[str, Any] = {
             "items": {"type": "string"},
             "description": "What could not be read correctly from the supplied context",
         },
-        "section_note": _nullable("string"),
+        "section_note": _optional("string"),
     },
 }
 
@@ -464,7 +553,7 @@ REVISE_OBLIGATIONS_SCHEMA: dict[str, Any] = {
             "items": {
                 "type": "object",
                 "additionalProperties": False,
-                "required": ["draft_id", "action", "explanation", "obligation"],
+                "required": ["draft_id", "action", "explanation"],
                 "properties": {
                     "draft_id": {"type": "string"},
                     "action": {
@@ -473,8 +562,8 @@ REVISE_OBLIGATIONS_SCHEMA: dict[str, Any] = {
                     },
                     "explanation": {"type": "string"},
                     "obligation": {
-                        "anyOf": [_OBLIGATION_SCHEMA, {"type": "null"}],
-                        "description": "Required for 'revise'; null otherwise",
+                        **_OBLIGATION_SCHEMA,
+                        "description": "Supply only for action 'revise'; omit otherwise",
                     },
                 },
             },

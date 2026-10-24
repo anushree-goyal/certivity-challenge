@@ -1,4 +1,4 @@
-"""Single place where this module reads fields from shared contract records (contracts 1.1.0).
+"""Single place where this module reads fields from shared contract records (contracts 1.5.0).
 
 Kept as small accessors so a contract change is absorbed here rather than across the module.
 """
@@ -111,7 +111,7 @@ def passage_printed_page(p: Any) -> Any:
 
 
 def passage_spans_pages(p: Any) -> bool:
-    return len(set(p.printed_page_span)) > 1 or "spans_pages" in p.parsing_flags
+    return len(set(p.page_span)) > 1 or "spans_pages" in p.parsing_flags
 
 
 def passage_flags(p: Any) -> list:

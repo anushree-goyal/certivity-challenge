@@ -176,7 +176,7 @@ def run_extraction(
         )
         ctx.event(
             "extract",
-            f"{item.document.regulation} {item.section.number or item.section.heading}: "
+            f"{item.document.regulation} {item.section.paragraph_label or item.section.heading}: "
             f"{len(result.drafts)} obligation(s)",
             completed=position,
             total=total,

@@ -93,11 +93,15 @@ def test_unsupplied_supporting_ids_are_dropped_but_the_draft_survives(
     assert any("unsupplied supporting passage id" in w for w in draft.warnings)
 
 
-def test_citing_a_context_passage_as_primary_is_flagged_for_review(
+def test_an_obligation_cited_to_a_context_passage_is_dropped(
     run_input, corpus, script
 ):
-    """Allowed, because an obligation can rest on an inherited condition - but
-    the reviewer must be told the citation is not section-primary."""
+    """Context passages are evidence, not citations.
+
+    The section that owns a context passage is inspected in its own right, so
+    attributing an obligation to it here yields the same requirement twice under
+    two different citations - which a live run did produce before this guard.
+    """
 
     def extract(payload: Any) -> dict[str, Any]:
         context = payload["context_passages"]
@@ -125,9 +129,8 @@ def test_citing_a_context_passage_as_primary_is_flagged_for_review(
     script["extract_obligations"] = extract
     draft, _ = run_with(script, run_input, corpus)
 
-    assert draft.draft_requirements
-    item = draft.draft_requirements[0]
-    assert item.notes and "context or referenced passage" in item.notes
+    assert draft.draft_requirements == ()
+    assert any("was dropped because the section owning" in w for w in draft.warnings)
 
 
 def test_identical_obligation_repeated_in_one_batch_is_collapsed(

@@ -177,6 +177,28 @@ def test_a_real_run_produces_honest_source_backed_output(live_llm):
 
     assert draft.draft_requirements, "a real model extracted nothing at all"
 
+    # No two drafts may state the same obligation. A live run produced each of
+    # two obligations twice - once from the section that owns the passage and
+    # once from a section that received it as context or as a followed
+    # reference - which would put the same requirement in the submission twice
+    # under two different citations.
+    normalised = [
+        " ".join(item.text.lower().split()) for item in draft.draft_requirements
+    ]
+    repeats = {t for t in normalised if normalised.count(t) > 1}
+    assert not repeats, f"the same obligation was extracted more than once: {repeats}"
+
+    # Scope statements are applicability, not requirements.
+    scope_cited = [
+        item
+        for item in draft.draft_requirements
+        if item.primary_passage_id == syn.A_SCOPE_P1.passage_id
+    ]
+    assert not scope_cited, (
+        "the regulation's scope statement was returned as an obligation: "
+        f"{[i.text for i in scope_cited]}"
+    )
+
     # Every indexed regulation must be decided, and the irrelevant one must not
     # be reported as applicable.
     decisions = {d.regulation: d for d in draft.applicability_decisions}

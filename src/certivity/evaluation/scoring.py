@@ -7,6 +7,7 @@ as accuracy.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -16,6 +17,9 @@ from .report import EvaluationDetails, EvaluationReport
 SCOPE = ("regulation/page-level coverage only; requirement-level meaning is NOT measured here "
          "(semantic/platform scores are null until recorded from the scoring platform)")
 SCORER_REL = Path("tools") / "score_local.py"
+CASES_REL = Path("cases")
+ANSWER_FILE = "expected.json"
+_CASE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 # Miss categories from the brief. Several cannot be told apart from output files alone.
 CAT_REG_NOT_COVERED = "regulation_not_covered"          # umbrella: see run_context to refine
@@ -164,3 +168,21 @@ def evaluate_submission(submission_path, expected_path, participant_package_path
     """Contract summary. Use evaluate_submission_detailed for per-item misses and raw scorer output."""
     return evaluate_submission_detailed(submission_path, expected_path, participant_package_path,
                                         run_context).report
+
+
+def answer_file_for(case_id: str, participant_package_path) -> Path | None:
+    """The case's golden answer in the participant package, or None when it ships none
+    (hidden test cases). ``case_id`` must be a plain name, never a path."""
+    if not isinstance(case_id, str) or not _CASE_ID.match(case_id) or case_id in (".", ".."):
+        raise ValueError(f"invalid case_id {case_id!r}")
+    path = Path(participant_package_path) / CASES_REL / case_id / ANSWER_FILE
+    return path if path.is_file() else None
+
+
+def evaluate_case(submission_path, case_id: str, participant_package_path,
+                  run_context: dict | None = None) -> EvaluationReport | None:
+    """Score a submission against its case's answer file; None when the case has no answer file."""
+    answer = answer_file_for(case_id, participant_package_path)
+    if answer is None:
+        return None
+    return evaluate_submission(submission_path, answer, participant_package_path, run_context)

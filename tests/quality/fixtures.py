@@ -1,6 +1,6 @@
 """SYNTHETIC FIXTURES - invented text, not real regulation content.
 
-Factories build real certivity.contracts records (1.1.0) so the tests exercise the shared shapes.
+Factories build real certivity.contracts records (1.5.0) so the tests exercise the shared shapes.
 """
 import dataclasses
 from typing import Any
@@ -26,7 +26,7 @@ def Passage(passage_id, document_id, text, paragraph_label="5.1", printed_start_
     return SourcePassage(passage_id=passage_id, document_id=document_id,
                          section_id=f"{document_id}#main/{paragraph_label or 'x'}", text=text,
                          paragraph_label=paragraph_label, heading_ancestry=(), printed_start_page=page,
-                         printed_page_span=span, **kw)
+                         page_span=span, **kw)
 
 
 def Draft(draft_id, text, primary_passage_id, supporting_passage_ids=(), **kw):
