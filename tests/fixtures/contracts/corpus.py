@@ -48,7 +48,7 @@ DOC_A = document_id_for(REG_A, "00 series", "aaaa1111bbbb2222")
 DOC_B = document_id_for(REG_B, "01 series", "cccc3333dddd4444")
 
 MAIN = namespace_for("main")
-ANNEX_1 = namespace_for("annex", "1")
+ANNEX_1 = namespace_for(("annex", "1"))
 
 
 def _sec(document_id: str, namespace: str, number: str) -> str:
@@ -72,6 +72,7 @@ def _passage(
     document_id: str,
     namespace: str,
     paragraph_label: str | None,
+    id_label: str | None = None,
     headings: Sequence[str],
     printed: str,
     printed_span: Sequence[str] = (),
@@ -81,7 +82,9 @@ def _passage(
     flags: Sequence[str] = (),
 ) -> SourcePassage:
     return SourcePassage(
-        passage_id=passage_id_for(section_id, ordinal),
+        passage_id=passage_id_for(
+            document_id, namespace, id_label or paragraph_label or f"x{ordinal}", ordinal
+        ),
         document_id=document_id,
         section_id=section_id,
         text=text,
@@ -214,7 +217,8 @@ A_ANNEX_P1 = _passage(
     "after 30 minutes of operation.",
     document_id=DOC_A,
     namespace=ANNEX_1,
-    paragraph_label="2.1",
+    paragraph_label="Annex 1 2.1",
+    id_label="2.1",
     headings=("ANNEX 1", "2. TEST PROCEDURE"),
     printed="9",
     pdf_pages=(8,),
@@ -225,7 +229,8 @@ A_ANNEX_TABLE = _passage(
     "SX-1 | 4 | 12",
     document_id=DOC_A,
     namespace=ANNEX_1,
-    paragraph_label="2.2",
+    paragraph_label="Annex 1 2.2",
+    id_label="2.2",
     headings=("ANNEX 1", "2. TEST PROCEDURE"),
     printed="10",
     pdf_pages=(9,),
@@ -423,10 +428,13 @@ class InMemoryCorpusReader:
             )
 
         namespace = request.target_namespace
+        def bare(label: str | None) -> str | None:
+            return label.split()[-1] if label else None
+
         matches = [
             p
             for p in self._passages.values()
-            if p.paragraph_label == paragraph
+            if bare(p.paragraph_label) == paragraph
             and (namespace is None or p.namespace == namespace)
         ]
         if not matches:
@@ -455,6 +463,52 @@ class InMemoryCorpusReader:
             resolved_document_id=resolved.document_id,
             resolved_section_id=resolved.section_id,
         )
+
+    def get_document(self, document_id: str) -> Document:
+        document = next(
+            (d for d in self._documents if d.document_id == document_id), None
+        )
+        if document is None:
+            raise KeyError(f"unknown document: {document_id}")
+        return document
+
+    def list_reference_candidates(
+        self, passage_ids: Sequence[str]
+    ) -> list[ReferenceRequest]:
+        """References detected in the supplied passages.
+
+        The fixture detects the two the corpus would find in paragraph 3.3, so
+        reference following can be exercised without relying on the model to
+        spot them in the text.
+        """
+        found: list[ReferenceRequest] = []
+        for passage_id in passage_ids:
+            passage = self._passages.get(passage_id)
+            if passage is None:
+                continue
+            if "Annex 1, paragraph 2.1" in passage.text:
+                found.append(
+                    ReferenceRequest(
+                        originating_passage_id=passage_id,
+                        raw_reference="Annex 1, paragraph 2.1",
+                        target_namespace=ANNEX_1,
+                        target_paragraph="2.1",
+                        origin_document_id=passage.document_id,
+                        reason="detected by the corpus",
+                    )
+                )
+            if "SYNTHETIC REG Z" in passage.text:
+                found.append(
+                    ReferenceRequest(
+                        originating_passage_id=passage_id,
+                        raw_reference="SYNTHETIC REG Z",
+                        target_regulation="SYNTHETIC REG Z",
+                        target_paragraph="1",
+                        origin_document_id=passage.document_id,
+                        reason="detected by the corpus",
+                    )
+                )
+        return found
 
     def get_page_asset(self, document_id: str, pdf_page_index: int) -> PageAsset:
         document = next((d for d in self._documents if d.document_id == document_id), None)

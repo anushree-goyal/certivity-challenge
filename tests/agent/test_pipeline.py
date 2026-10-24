@@ -215,3 +215,32 @@ def test_an_unusable_model_aborts_the_run_instead_of_returning_an_empty_draft(
 
     with pytest.raises(LLMConfigurationError, match="credit balance"):
         run_extraction(run_input, corpus, UnusableAdapter(script=script))
+
+
+def test_references_the_corpus_detects_are_followed_even_if_unreported(
+    run_input, corpus, script
+):
+    """Reference recall must not depend on the model noticing a citation.
+
+    The script here reports no references at all. The corpus detects them, so
+    the annex target must still be inspected.
+    """
+    from tests.fixtures.contracts import ScriptedLLMAdapter
+
+    original = script["extract_obligations"]
+
+    def silent(payload):
+        data = original(payload)
+        data["references"] = []
+        return data
+
+    script["extract_obligations"] = silent
+    draft = run_extraction(run_input, corpus, ScriptedLLMAdapter(script=script))
+
+    statuses = {r.status for r in draft.unresolved_references}
+    assert ReferenceStatus.OUTSIDE_CORPUS in statuses, (
+        "the corpus-detected reference was never followed"
+    )
+    assert all(r.request is not None for r in draft.unresolved_references), (
+        "every resolution must carry the request it answers"
+    )

@@ -36,7 +36,7 @@ import typing
 from dataclasses import dataclass, field
 from typing import Any, Optional, Protocol, Union, runtime_checkable
 
-CONTRACTS_VERSION = "1.2.0"
+CONTRACTS_VERSION = "1.3.0"
 
 # --------------------------------------------------------------------------- #
 # Enumerations
@@ -147,11 +147,52 @@ def document_id_for(regulation: str, version_label: str, checksum: str) -> str:
     return f"{slugify(regulation)}:{slugify(version_label)}:sha256-{checksum[:12]}"
 
 
-def namespace_for(kind: str, label: Optional[str] = None) -> str:
-    """Annex-qualified namespace: ``main``, ``annex:4``, ``appendix:4.1``."""
-    if label is None or label == "":
-        return slugify(kind)
-    return f"{slugify(kind)}:{label.strip().lower()}"
+def namespace_for(*segments: str | tuple[str, Optional[str]]) -> str:
+    """Build a canonical namespace from one or more structural segments.
+
+    Grammar, settled against the structures that actually occur in the supplied
+    PDFs: segments joined by ``/``, each segment either a bare ``kind`` or
+    ``kind:label``, lowercased.
+
+        namespace_for("main")                            -> "main"
+        namespace_for(("annex", "4"))                    -> "annex:4"
+        namespace_for(("annex", "6"), ("part", "6"))     -> "annex:6/part:6"
+        namespace_for(("annex", "4"), ("appendix", "1")) -> "annex:4/appendix:1"
+        namespace_for(("annex", "5"), "appendix")        -> "annex:5/appendix"
+        namespace_for(("appendix", "2"))                 -> "appendix:2"
+        namespace_for("introduction")                    -> "introduction"
+        namespace_for(("part", "I"))                     -> "part:i"
+
+    An unnumbered division is a bare kind, which is why
+    ``annex:5/appendix`` and ``appendix:2`` are both expressible.
+
+    This is the **machine** form, used for matching, ID construction and
+    reference resolution. The human citation string belongs in
+    ``paragraph_label``; do not reconstruct one from a namespace.
+    """
+    parts: list[str] = []
+    for segment in segments:
+        if isinstance(segment, tuple):
+            kind, label = segment
+        else:
+            kind, label = segment, None
+        kind = slugify(kind)
+        if label is None or str(label).strip() == "":
+            parts.append(kind)
+        else:
+            parts.append(f"{kind}:{slugify(str(label))}")
+    return "/".join(parts) if parts else "main"
+
+
+def parse_namespace(namespace: str) -> tuple[tuple[str, Optional[str]], ...]:
+    """Inverse of ``namespace_for``, for display and for structural comparison."""
+    out: list[tuple[str, Optional[str]]] = []
+    for part in namespace.split("/"):
+        if not part:
+            continue
+        kind, _, label = part.partition(":")
+        out.append((kind, label or None))
+    return tuple(out)
 
 
 def section_id_for(document_id: str, namespace: str, number: str) -> str:
@@ -159,9 +200,24 @@ def section_id_for(document_id: str, namespace: str, number: str) -> str:
     return f"{document_id}#{namespace}/{number.strip()}"
 
 
-def passage_id_for(section_id: str, ordinal: int) -> str:
-    """``<section_id>@003`` - ordinal is the passage's order inside its section."""
-    return f"{section_id}@{ordinal:03d}"
+def passage_id_for(
+    document_id: str, namespace: str, label: str, ordinal: int = 1
+) -> str:
+    """``<document_id>#annex:4/2.1.3@001`` - keyed on the paragraph label.
+
+    Deliberately **not** derived from a section ID. A passage ID keyed on its
+    section would change whenever sectioning changed, which would invalidate
+    every cached model call, every saved run and every citation in an exported
+    submission. Keyed on the label, an ID survives re-sectioning as long as the
+    source's own label does.
+
+    ``ordinal`` disambiguates within one label - a continuation paragraph, a
+    table row, or an unlabelled passage attributed to its nearest preceding
+    label. It is 1 for the overwhelmingly common single-passage case, and the
+    ``@NNN`` suffix is always present so a passage ID can never collide with the
+    section ID of the same label.
+    """
+    return f"{document_id}#{namespace}/{str(label).strip()}@{ordinal:03d}"
 
 
 def content_hash(*parts: Any) -> str:
@@ -310,7 +366,13 @@ class SourcePassage:
     section_id: str
     text: str
     paragraph_label: Optional[str]
-    """e.g. "2.1", or None when the text carries no paragraph label."""
+    """The **citation form**, ready to copy to the submission's ``source.paragraph``.
+
+    For a main-body paragraph that is just the label (``6.10.4.2``); inside a
+    division it carries the division (``Annex 6 Part 6 3``). None when the text
+    carries no label at all. The machine form of the division lives in
+    ``namespace``; this field is the human citation and the corpus builds it,
+    because only the corpus knows the document's structure."""
     heading_ancestry: tuple[str, ...]
     printed_start_page: Optional[str]
     """Printed label of the first page the passage appears on; None if unverified."""
@@ -1020,6 +1082,33 @@ class CorpusReader(Protocol):
 
     def get_page_asset(self, document_id: str, pdf_page_index: int) -> PageAsset:
         """Render or fetch one physical page. ``pdf_page_index`` is zero-based."""
+
+    def get_document(self, document_id: str) -> Document:
+        """One document's metadata."""
+
+    def list_reference_candidates(
+        self, passage_ids: typing.Sequence[str]
+    ) -> list[ReferenceRequest]:
+        """Cross references the corpus already detected in those passages.
+
+        Returned ready to hand to ``resolve_reference``. This matters for
+        recall: without it, following a reference depends entirely on the model
+        noticing it in the text, and a missed reference is silent.
+        """
+
+
+@runtime_checkable
+class CorpusSearch(Protocol):
+    """Optional search, for navigation and reference resolution only.
+
+    Separate from ``CorpusReader`` because search is explicitly **not** the
+    coverage mechanism - systematic reading is - so an implementation must not
+    be required to provide it.
+    """
+
+    def search(
+        self, query: str, document_id: str | None = None, limit: int = 20
+    ) -> list[SourcePassage]: ...
 
 
 @runtime_checkable

@@ -254,7 +254,7 @@ def default_script() -> dict[str, Any | Responder]:
                     + [
                         p["passage_id"]
                         for p in payload["context_passages"]
-                        if p["paragraph_label"] == "2.2"
+                        if p["passage_id"] == syn.A_DEF_P2.passage_id
                     ],
                     "primary_passage_id": intensity["passage_id"],
                     "obligation_kind": "mandatory",

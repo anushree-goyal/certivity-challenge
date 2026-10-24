@@ -53,12 +53,56 @@ def test_contracts_module_imports_no_feature_implementation():
 def test_the_same_paragraph_in_two_namespaces_has_different_ids():
     """Paragraph 2.1 in Annex 4 is not paragraph 2.1 in the main body."""
     document_id = c.document_id_for("UN R148", "03 series", "abc123def456")
-    main = c.section_id_for(document_id, c.namespace_for("main"), "2.1")
-    annex = c.section_id_for(document_id, c.namespace_for("annex", "4"), "2.1")
+    main_ns = c.namespace_for("main")
+    annex_ns = c.namespace_for(("annex", "4"))
 
+    main = c.section_id_for(document_id, main_ns, "2.1")
+    annex = c.section_id_for(document_id, annex_ns, "2.1")
     assert main != annex
     assert "annex:4" in annex
-    assert c.passage_id_for(main, 1) != c.passage_id_for(annex, 1)
+
+    assert c.passage_id_for(document_id, main_ns, "2.1") != c.passage_id_for(
+        document_id, annex_ns, "2.1"
+    )
+
+
+def test_namespace_grammar_covers_the_structures_in_the_real_pdfs():
+    """These eight shapes all occur in the supplied regulations, so the grammar
+    is settled against them rather than invented."""
+    assert c.namespace_for("main") == "main"
+    assert c.namespace_for(("annex", "4")) == "annex:4"
+    assert c.namespace_for(("annex", "6"), ("part", "6")) == "annex:6/part:6"
+    assert c.namespace_for(("annex", "4"), ("appendix", "1")) == "annex:4/appendix:1"
+    # An unnumbered division is a bare kind.
+    assert c.namespace_for(("annex", "5"), "appendix") == "annex:5/appendix"
+    assert c.namespace_for(("appendix", "2")) == "appendix:2"
+    assert c.namespace_for("introduction") == "introduction"
+    assert c.namespace_for(("part", "I")) == "part:i"
+
+    for namespace in ("main", "annex:6/part:6", "annex:5/appendix", "part:i"):
+        assert c.namespace_for(*c.parse_namespace(namespace)) == namespace
+
+
+def test_a_passage_id_survives_resectioning():
+    """A passage ID must not depend on how the document was split into sections.
+
+    If it did, changing section size would invalidate every cached model call,
+    every saved run and every citation already exported.
+    """
+    document_id = c.document_id_for("UN R150", "base", "abc123def456")
+    namespace = c.namespace_for(("annex", "6"), ("part", "6"))
+
+    passage = c.passage_id_for(document_id, namespace, "3")
+    assert passage == f"{document_id}#annex:6/part:6/3@001"
+
+    # The same label under a different parent section yields the same ID.
+    assert passage == c.passage_id_for(document_id, namespace, " 3 ")
+
+    # And it can never collide with the section ID of the same label.
+    assert passage != c.section_id_for(document_id, namespace, "3")
+
+    # A second passage under one label is distinguishable.
+    assert c.passage_id_for(document_id, namespace, "3", 2).endswith("@002")
 
 
 def test_document_id_distinguishes_version_and_file_identity():

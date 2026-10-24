@@ -1,6 +1,6 @@
 # Answers for the corpus component's contract proposal
 
-**From:** Anushree (contracts owner) · **To:** Julia · **Contracts version:** 1.2.0
+**From:** Anushree (contracts owner) · **To:** Julia · **Contracts version:** 1.3.0
 
 Your `docs/corpus/contract-proposal.md`, answered point by point. I verified
 these by merging `feature/corpus` into `feature/agent` and diffing your records
@@ -107,3 +107,160 @@ tomorrow. Please say how to build one (`python -m certivity.corpus bootstrap
 Everything else on my side is verified: 107 tests passing, and the prompts are
 validated against a live model — which found and fixed three real bugs,
 including a provider schema limit that made every real run fail.
+
+
+---
+
+# Round 2: answers to the twelve follow-up questions
+
+All of these are implemented and pushed on `feature/agent` at contracts
+**1.3.0**. `git fetch origin && git merge origin/feature/agent`.
+
+### 1. Is `contracts.py` final enough? When does it reach `main`? May I base on your branch?
+
+**Yes, code against it**, and **yes, base `feature/corpus` on `feature/agent`** —
+that is the right move today and needs no permission. The module has been stable
+through three rounds of your feedback and 110 passing tests; the changes in 1.2.0
+and 1.3.0 were *towards* your implementation, not away from it.
+
+`main` is still the initial commit, which is the real problem. I am proposing we
+merge `feature/agent` to `main` immediately so everyone shares a base. Until
+that happens, branch off `feature/agent`.
+
+### 2. Namespace format
+
+**Your proposal, exactly as written.** It is now the grammar:
+
+| Structure | Namespace |
+| --- | --- |
+| main body | `main` |
+| Annex 4 | `annex:4` |
+| Annex 6 Part 6 (R150, R48) | `annex:6/part:6` |
+| Annex 4 Appendix 1 (R10, R49) | `annex:4/appendix:1` |
+| unnumbered Annex 5 Appendix (R3) | `annex:5/appendix` |
+| main-body Appendix 2 (R10) | `appendix:2` |
+| Introduction (R148, R171) | `introduction` |
+| Part I (GTR 9 rationale) | `part:i` |
+
+Grammar: segments joined by `/`, each `kind` or `kind:label`, lowercased; an
+unnumbered division is a bare kind. Built with
+`namespace_for(("annex", "6"), ("part", "6"))` and reversible with
+`parse_namespace()`. I dropped my `annex:4` / `appendix:4.1` scheme — it could
+not express `annex:6/part:6` at all, so your real-document cases decided it.
+
+### 3. IDs — and your stability concern
+
+**Your concern is right and I changed the contract.** A passage ID keyed on its
+section would change whenever sectioning changed, invalidating every cached
+model call, every saved run and every citation already exported. That is a worse
+problem than the one it solved.
+
+Passage IDs are now **keyed on the label**:
+
+```python
+passage_id_for(document_id, namespace, label, ordinal=1)
+# un-r150:base:sha256-abc#annex:6/part:6/3@001
+section_id_for(document_id, namespace, label)
+# un-r150:base:sha256-abc#annex:6/part:6/3
+```
+
+`ordinal` disambiguates within one label — a continuation paragraph, a table
+row, or an unlabelled passage attributed to its nearest preceding label. It is
+`1` for the common case. The `@NNN` suffix is always present so a passage ID can
+never collide with the section ID of the same label. Please **use these
+helpers**, so all four components generate byte-identical IDs.
+
+### 4. `paragraph_label`: bare or citation form?
+
+**Citation form** — `Annex 6 Part 6 3`, `6.10.4.2`. You build it, because only
+the corpus knows the document's structure, and Teammate 3 copies it straight to
+`source.paragraph`. That it already matches `expected.json` settles it.
+
+The machine form lives in `namespace`; nobody reconstructs a citation from a
+namespace. Use the **bare** label for the `label` argument of the ID helpers, so
+IDs stay compact and stable.
+
+### 5. `printed_start_page` / `page_span` as strings
+
+**Yes, `"50"` is exactly right.** `str()` at construction is all I need.
+
+Please keep deriving it from the footer rather than from `physical + 1`. That
+the offset is constant in these PDFs is a property of this corpus, not a rule,
+and your per-page verification is the thing that would catch a document where it
+is not.
+
+### 6. `get_passages` omitting unknown IDs
+
+**Yes, switch to omitting.** The contract is "unknown IDs are omitted, not
+invented". The caller already warns when a resolved reference comes back with
+fewer passages than requested, so an omission is visible rather than silent.
+
+### 7. `read_scope`: all of Definitions, or only product-relevant ones?
+
+**All of it** — scope, application and the whole definitions clause, in document
+order. Two reasons:
+
+- Filtering by "mentions the product" needs to know the product, which is a
+  semantic decision and therefore mine, not the corpus's.
+- A definition that never mentions the product can still carry an operative
+  condition. The plan is explicit that definitions are not blanket-excluded, and
+  the live run confirmed it: a definition imposing a 1,5-degree limit was
+  correctly extracted as a requirement.
+
+Volume is my problem, not yours: I cap scope passages per decision and warn when
+I truncate.
+
+### 8. Tables: is caption + column headers enough?
+
+**Ship caption + header row now** — it is far better than nothing and unblocks
+you.
+
+Footnotes are worth a follow-up if you get time, and I can show you why rather
+than assert it. In the live run the model produced *"the values applying at
+25 °C (footnote (a))"* **only** because the footnote text was in
+`table_context`. Without it a cell reads as an unconditional limit when it is
+actually conditional — a wrong requirement that looks perfectly citable.
+
+A cheap interim step: if a cell's text contains a footnote marker, append any
+footnote-looking text found on the same page. Imprecise, but it preserves the
+qualification instead of dropping it. Please also set `is_table` explicitly;
+keep the `kind:table` flag too.
+
+### 9. `page_refs` reasons
+
+**Moot — I removed `page_refs` and took your field instead.** `SectionBundle`
+now has `visual_pdf_page_indices: tuple[int, ...]` and `PageRef` is gone. A
+viewer gets the printed label from `get_page_asset`, so wrapping each index in a
+record only duplicated that lookup. No reason strings needed.
+
+### 10. `list_documents` order
+
+**index.json order preferred, but it is not load-bearing** — I group by
+regulation and sort internally, so your numeric sort would not break anything.
+Index order is simply more reproducible against the supplied file. Do not spend
+time on it if something else is pending.
+
+### 11. The three extra methods
+
+**`get_document` and `list_reference_candidates` are now in the `CorpusReader`
+Protocol.** `search` is a separate optional `CorpusSearch` Protocol, because
+search must never be required of an implementation — systematic reading is the
+coverage mechanism, and search only assists navigation and reference
+resolution.
+
+`list_reference_candidates` is **already wired in and tested**: extraction takes
+the union of the references the model reported and the ones you detected,
+deduplicated on the request key. There is a test proving the annex reference is
+still followed when the model reports no references at all. This directly
+improves reference recall, because a reference the model fails to notice is
+otherwise silently lost. Thank you for proposing it — it was the most valuable
+item in your proposal.
+
+### 12. Still blocking me
+
+A corpus snapshot. Your tests need
+`data/participant-package/regulations/index.json`, so 14 real-corpus tests skip
+and 4 snapshot tests error here. Please send the exact bootstrap command and a
+rough build time for the base role. Extraction against real regulation text is
+the one thing in my component that has never been tested, and the held-out case
+opens tomorrow at 08:00.
