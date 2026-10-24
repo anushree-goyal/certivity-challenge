@@ -65,7 +65,7 @@ DEFAULT_ENTRY_POINTS = {
     "build_submission": "certivity.quality:build_submission",
     "validate_submission": "certivity.quality:validate_submission",
     "evaluate_submission": "certivity.evaluation:evaluate_submission",
-    "run_input_record": "certivity.contracts:RunInput",
+    "make_run_input": "certivity.contracts:make_run_input",
 }
 
 

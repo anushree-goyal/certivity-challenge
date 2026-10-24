@@ -8,12 +8,14 @@ exercised before the real modules exist. Fixture output is never presented as re
 from __future__ import annotations
 
 import importlib
+import inspect
 import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
+from certivity.api.serialization import to_jsonable
 from certivity.api.settings import Settings
 
 
@@ -39,7 +41,7 @@ def resolve(entry_point: str) -> Any:
 class Components:
     mode: str
     open_corpus: Callable[[], Any]
-    create_llm: Callable[[], Any]
+    create_llm: Callable[[Path], Any]  # takes the run's agent/ folder for the model-call cache
     run_extraction: Callable[..., Any]
     revise_extraction: Callable[..., Any] | None
     review_requirements: Callable[..., Any]
@@ -50,22 +52,47 @@ class Components:
 
 
 REQUIRED = ("open_corpus", "create_llm", "run_extraction", "review_requirements",
-            "build_submission", "validate_submission", "run_input_record")
+            "build_submission", "validate_submission", "make_run_input")
 OPTIONAL = ("revise_extraction", "evaluate_submission")
 
 
-def _record_factory(record_type: Any) -> Callable[[dict[str, Any]], Any]:
+def _record_factory(factory: Any) -> Callable[[dict[str, Any]], Any]:
+    """Wraps contracts.make_run_input (keyword-only)."""
     def make(fields: dict[str, Any]) -> Any:
         try:
-            return record_type(**fields)
+            return factory(**fields)
         except TypeError as exc:
             raise ComponentError(
-                f"RunInput does not accept the app's fields {sorted(fields)}: {exc}. "
-                "Align certivity.contracts.RunInput and api/pipeline.py at the integration checkpoint."
+                f"make_run_input does not accept the app's fields {sorted(fields)}: {exc}. "
+                "Align certivity.contracts and api/pipeline.py at the integration checkpoint."
             ) from exc
-        except Exception as exc:  # pydantic ValidationError and similar
+        except Exception as exc:  # ValueError from RunInput.__post_init__ and similar
             raise ComponentError(f"RunInput rejected the app's input: {exc}") from exc
     return make
+
+
+def call_accepting(func: Callable[..., Any], *args: Any, **optional: Any) -> Any:
+    """Call func, passing only the optional keyword arguments its signature accepts."""
+    try:
+        params = inspect.signature(func).parameters
+    except (TypeError, ValueError):
+        return func(*args)
+    if any(p.kind == p.VAR_KEYWORD for p in params.values()):
+        return func(*args, **optional)
+    return func(*args, **{k: v for k, v in optional.items() if k in params})
+
+
+def describe_llm(llm: Any) -> dict[str, Any]:
+    """The adapter's secret-free self-description (llm.describe()), or what can be inferred without it."""
+    describe = getattr(llm, "describe", None)
+    if callable(describe):
+        return to_jsonable(describe())
+    identity = getattr(llm, "identity", None) or getattr(llm, "model", None)
+    return {"model": str(identity) if identity else None}
+
+
+def llm_configured(description: dict[str, Any]) -> bool:
+    return description.get("credentials_configured", True) is not False
 
 
 def load_components(settings: Settings, mode: str | None = None) -> Components:
@@ -92,14 +119,14 @@ def load_components(settings: Settings, mode: str | None = None) -> Components:
     return Components(
         mode="real",
         open_corpus=lambda: open_corpus(settings.corpus_dir),
-        create_llm=create_llm,
+        create_llm=lambda agent_dir: call_accepting(create_llm, cache_dir=Path(agent_dir) / "llm-cache"),
         run_extraction=loaded["run_extraction"],
         revise_extraction=loaded["revise_extraction"],
         review_requirements=loaded["review_requirements"],
         build_submission=loaded["build_submission"],
         validate_submission=loaded["validate_submission"],
         evaluate_submission=loaded["evaluate_submission"],
-        make_run_input=_record_factory(loaded["run_input_record"]),
+        make_run_input=_record_factory(loaded["make_run_input"]),
     )
 
 
@@ -182,9 +209,11 @@ def readiness(settings: Settings) -> dict[str, Any]:
     llm_report: dict[str, Any] = {"ready": False, "configuration": model_configuration()}
     if modules["create_llm"]["ready"]:
         try:
-            llm = resolve(settings.entry_points["create_llm"])()
-            identity = getattr(llm, "identity", None) or getattr(llm, "model", None)
-            llm_report.update(ready=True, identity=str(identity) if identity else None)
+            description = describe_llm(resolve(settings.entry_points["create_llm"])())
+            llm_report.update(ready=llm_configured(description), identity=description.get("model"),
+                              description=description)
+            if not llm_report["ready"]:
+                llm_report["error"] = "No model credentials configured (see docs/agent/dependencies.md)."
         except Exception as exc:
             llm_report["error"] = _short(exc)
     report["llm"] = llm_report

@@ -150,6 +150,8 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
             spec_bytes = await spec_file.read()
         elif spec_text.strip():
             spec_bytes = spec_text.encode("utf-8")
+        if spec_bytes is not None and not spec_bytes.strip():
+            spec_bytes = None  # an empty file is no specification
         if spec_bytes is not None:
             if len(spec_bytes) > MAX_SPEC_BYTES:
                 raise HTTPException(413, "Specification is larger than 2 MB")
@@ -269,8 +271,8 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
 
     @app.post("/api/runs/{run_id}/cancel")
     def cancel_run(run_id: str) -> dict[str, Any]:
-        """Queued runs stop at once. Running runs stop at their next progress event; a model call already
-        in flight finishes first."""
+        """Queued runs stop at once. Running runs stop at the next stage boundary: the current stage
+        (e.g. extraction) finishes first."""
         m = get_manifest(run_id)
         state = RunState(m["state"])
         if state.finished:

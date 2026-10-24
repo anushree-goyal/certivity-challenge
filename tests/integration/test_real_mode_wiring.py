@@ -14,7 +14,7 @@ def _real_settings(settings):
         "open_corpus": "open_corpus", "create_llm": "create_llm", "run_extraction": "run_extraction",
         "revise_extraction": "revise_extraction", "review_requirements": "review_requirements",
         "build_submission": "build_submission", "validate_submission": "validate_submission",
-        "run_input_record": "RunInput"}.items()}
+        "make_run_input": "make_run_input"}.items()}
     eps["evaluate_submission"] = "tests.integration.fake_modules:missing"  # optional: absent is fine
     return dataclasses.replace(settings, pipeline_mode="real", entry_points={**settings.entry_points, **eps})
 
@@ -29,6 +29,9 @@ def test_real_mode_passes_module_records_between_stages(settings):
         assert status["state"] == "partial", status["errors"]
         assert status["corpus_snapshot_id"] == "fake-snapshot-1"
         assert fake_modules.CALLS == ["extract", "review", "revise:1", "review"]
+        agent_dir = client.app.state.store.module_dir(run["run_id"], "agent")
+        assert fake_modules.SEEN == {"cache_dir": agent_dir / "llm-cache", "artifacts_dir": agent_dir}
+        assert status_llm(client, run["run_id"]) == "fake-model"
 
         view = client.get(f"/api/runs/{run['run_id']}/results").json()
         assert view["view_warnings"] == []  # explicit export_mapping was used, not export order
@@ -54,3 +57,23 @@ def test_cached_reuse_only_for_identical_fresh_runs(settings):
                                                     "reuse_cached": "true"}).json()
         assert other_team["origin"] == "fresh"
         wait_finished(client, other_team["run_id"])
+
+
+def status_llm(client, run_id):
+    return client.app.state.store.read(run_id)["llm_identity"]
+
+
+def test_missing_model_credentials_fail_before_any_work(settings):
+    fake_modules.CALLS.clear()
+    fake_modules.CREDENTIALS[0] = False
+    try:
+        with TestClient(create_app(_real_settings(settings))) as client:
+            health = client.get("/api/health").json()
+            assert health["llm"]["ready"] is False and health["real_pipeline_ready"] is False
+            assert health["llm"]["description"]["credentials_configured"] is False
+            run = client.post("/api/runs", data={"package_case": "dev-rear-lamp", "team_id": "team-07"}).json()
+            status = wait_finished(client, run["run_id"])
+            assert status["state"] == "failed" and "No model credentials" in status["errors"][0]["message"]
+            assert fake_modules.CALLS == []
+    finally:
+        fake_modules.CREDENTIALS[0] = True

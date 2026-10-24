@@ -66,7 +66,7 @@ export function RunDetail({ runId, onFinished }: { runId: string; onFinished: ()
             {p?.total ? <span className="muted"> ({p.completed ?? 0} / {p.total})</span> : null}
             {" "}
             {status.cancel_requested ? (
-              <span className="muted small">Cancelling: stops at the next progress step.</span>
+              <span className="muted small">Cancelling: stops when the current stage finishes.</span>
             ) : (
               <button className="secondary" onClick={() => api.cancel(runId).catch((e) => setError(String(e.message)))}>Cancel run</button>
             )}

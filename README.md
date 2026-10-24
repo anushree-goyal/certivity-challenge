@@ -47,7 +47,7 @@ Headless run of one case: `certivity run --case dev-rear-lamp --team team-07`.
 
 Run states: `queued`, `running`, `completed` (valid output, full coverage, no open issues), `partial` (valid output but pending/failed coverage or open review issues), `failed`. A server restart marks unfinished runs `failed` with `interrupted: true`. A cached run (opt-in "reuse cached") reuses a fresh run with the same input, team/case, corpus snapshot, component versions and model settings, and is labelled "cached result".
 
-Per-run folders: `agent/` (Anushree), `quality/` (Teammate 3), `app/` (app). Their paths are passed in `RunInput.config.artifact_dirs`.
+Per-run folders: `agent/` (Anushree), `quality/` (Teammate 3), `app/` (app). The agent receives its folder as `artifacts_dir=`, and the model-call cache lives in `agent/llm-cache/`.
 
 ## HTTP API
 
@@ -59,7 +59,7 @@ Per-run folders: `agent/` (Anushree), `quality/` (Teammate 3), `app/` (app). The
 | `GET /api/runs/{id}/submission` | the exact validated JSON, or 409 with the reason |
 | `GET /api/runs/{id}/input/{name}` | the stored input files |
 | `PUT /api/runs/{id}/platform-metrics` | record scores read off the organizer platform (never computed here) |
-| `POST /api/runs/{id}/cancel` | queued runs stop at once; running runs stop at their next progress event |
+| `POST /api/runs/{id}/cancel` | queued runs stop at once; running runs stop when the current stage finishes |
 | `GET /api/compare?a=&b=` | cited regulations/pages/paragraphs that differ between two runs (not a semantic comparison) |
 | `GET /api/documents[/{id}/pdf \| /{id}/pages/{pdf_page_index}]` | source documents of the loaded snapshot; page index is zero-based; `?snapshot_id=` refuses a mismatched snapshot |
 | `GET /api/cases`, `GET /api/health` | participant-package cases; readiness |
@@ -69,10 +69,10 @@ Per-run folders: `agent/` (Anushree), `quality/` (Teammate 3), `app/` (app). The
 Entry points are configurable (`CERTIVITY_EP_*` in `.env.example`). Defaults:
 
 - **Corpus:** `certivity.corpus:open_corpus(corpus_dir) -> CorpusReader`, which exposes a `snapshot_id` attribute and the planned methods. For the PDF route, provide `get_document_path(document_id) -> Path`. A `PageAsset` provides `content` bytes, or a local file path in `asset_path`. Optional: `certivity.corpus:bootstrap(package_dir, corpus_dir)`.
-- **LLM:** `certivity.llm:create_llm() -> adapter`. Exposing `identity` or `model` shows it in health. It must raise a clear error when credentials are missing.
-- **Agent:** `run_extraction` / `revise_extraction` use the plan signatures. The app builds `RunInput(run_id, team_id, case_id, specification_text, drawing_paths, input_hash, corpus_snapshot_id, config)`. If `contracts.RunInput` uses other names, the run fails with a message listing both field sets.
+- **LLM (confirmed, contracts 1.0.0):** `certivity.llm:create_llm(cache_dir=run/agent/llm-cache)`. `/api/health` shows `llm.describe()` as-is (secret-free). If `credentials_configured` is false, a real run fails at the loading stage with that reason, before any work.
+- **Agent (confirmed):** `run_extraction(run_input, corpus, llm, emit_event, artifacts_dir=run/agent)`. The app builds the record with `contracts.make_run_input(run_id=, team_id=, case_id=, corpus_snapshot_id=, specification_text=, drawing_paths=, input_hash=)`, which is keyword-only and turns paths into `DrawingRef`s. Empty input is refused at upload, because `RunInput` rejects it.
 - **Quality:** a finding triggers revision when any `requested_*` field is set, unless the report has `needs_revision: false`. Please add `export_mapping: {draft_id: requirement_id}` to `QualityReport`. Without it, the app infers the mapping from export order and shows a warning.
-- `emit_event` accepts a `RunEvent` record, a dict, or keyword arguments.
+- `emit_event` accepts a `RunEvent` record, a dict, or keyword arguments. It never raises into a module, so cancel takes effect when the current stage finishes.
 
 `tests/integration/test_contract_conformance.py` checks these signatures as soon as a module is merged. Until then it is skipped. `tests/integration/test_real_mode_wiring.py` runs real mode against dataclass stand-ins.
 

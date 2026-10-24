@@ -20,8 +20,9 @@ PLANNED = {
 }
 CORPUS_METHODS = ["list_documents", "read_scope", "list_sections", "read_section", "get_passages",
                   "resolve_reference", "get_page_asset"]
-RUN_INPUT_FIELDS = ["run_id", "team_id", "case_id", "specification_text", "drawing_paths", "input_hash",
-                    "corpus_snapshot_id", "config"]
+# Keywords the app passes to contracts.make_run_input (keyword-only).
+RUN_INPUT_KWARGS = ["run_id", "team_id", "case_id", "specification_text", "drawing_paths", "input_hash",
+                    "corpus_snapshot_id"]
 
 
 def _load(name):
@@ -41,12 +42,20 @@ def test_entry_point_accepts_planned_positional_arguments(name):
         f"{name}{inspect.signature(func)} cannot take the app's {len(PLANNED[name])} positional arguments {PLANNED[name]}")
 
 
-def test_run_input_accepts_app_fields():
-    record = _load("run_input_record")
-    fields = (getattr(record, "model_fields", None) or getattr(record, "__dataclass_fields__", None)
-              or inspect.signature(record).parameters)
-    missing = [f for f in RUN_INPUT_FIELDS if f not in fields]
-    assert not missing, f"RunInput lacks fields the app sends: {missing}. Align contracts.py with api/pipeline.py."
+def test_make_run_input_accepts_app_keywords():
+    params = inspect.signature(_load("make_run_input")).parameters
+    if any(p.kind == p.VAR_KEYWORD for p in params.values()):
+        return
+    missing = [k for k in RUN_INPUT_KWARGS if k not in params]
+    assert not missing, f"make_run_input lacks keywords the app sends: {missing}. Align contracts.py with api/pipeline.py."
+
+
+def test_create_llm_accepts_cache_dir_and_describes_itself():
+    create_llm = _load("create_llm")
+    assert "cache_dir" in inspect.signature(create_llm).parameters
+    description = create_llm().describe()
+    assert "credentials_configured" in description
+    assert not any("key" in k.lower() and isinstance(v, str) and len(v) > 20 for k, v in description.items())
 
 
 def test_corpus_reader_has_planned_methods(settings):

@@ -11,7 +11,9 @@ import time
 import traceback
 from typing import Any
 
-from certivity.api.components import ComponentError, load_components, snapshot_id_of
+from certivity.api.components import (
+    ComponentError, call_accepting, describe_llm, llm_configured, load_components, snapshot_id_of,
+)
 from certivity.api.serialization import first, to_jsonable
 from certivity.api.settings import Settings
 from certivity.run_store import RunState, RunStore
@@ -19,13 +21,18 @@ from certivity.run_store.store import now_iso
 
 
 class EventSink:
-    """The emit_event callback handed to modules. Accepts a RunEvent record, a dict, or keywords."""
+    """The emit_event callback handed to modules. Accepts a RunEvent record, a dict, or keywords.
+
+    It never raises into a module (the agent swallows callback errors anyway), so cancellation is
+    checked by the app at stage boundaries instead.
+    """
 
     def __init__(self, store: RunStore, run_id: str):
         self.store, self.run_id = store, run_id
         self.stage = "starting"
 
     def set_stage(self, stage: str, message: str) -> None:
+        self.check_cancelled()
         self.stage = stage
         self.store.update(self.run_id, stage=stage)
         self({"stage": stage, "message": message})
@@ -35,7 +42,6 @@ class EventSink:
             raise RunCancelled()
 
     def __call__(self, event: Any = None, **fields: Any) -> None:
-        self.check_cancelled()
         data = to_jsonable(event) if event is not None else {}
         if not isinstance(data, dict):
             data = {"message": str(data)}
@@ -48,7 +54,7 @@ class EventSink:
 
 
 class RunCancelled(Exception):
-    """Raised at the next progress event after a user asks to cancel."""
+    """Raised at the next stage boundary after a user asks to cancel."""
 
 
 def _needs_revision(report: dict) -> list[int]:
@@ -95,9 +101,15 @@ def execute_run(run_id: str, store: RunStore, settings: Settings) -> None:
         snapshot_id = snapshot_id_of(corpus)
         if snapshot_id is None:
             warnings.append("Corpus did not report a snapshot_id.")
-        llm = comps.create_llm()
-        store.update(run_id, corpus_snapshot_id=snapshot_id,
-                     llm_identity=str(getattr(llm, "identity", None) or getattr(llm, "model", None) or ""))
+        agent_dir = store.module_dir(run_id, "agent")
+        llm = comps.create_llm(agent_dir)
+        llm_description = describe_llm(llm)
+        store.update(run_id, corpus_snapshot_id=snapshot_id, llm_identity=llm_description.get("model") or "",
+                     llm_description=llm_description)
+        if not llm_configured(llm_description):
+            # The adapter refuses calls without credentials; fail now with the reason, before any work.
+            raise ComponentError("No model credentials are configured, so no requirements can be extracted. "
+                                 "Set the model environment variables (docs/agent/dependencies.md) and restart.")
 
         run_dir = store.run_dir(run_id)
         run_input = comps.make_run_input({
@@ -108,16 +120,11 @@ def execute_run(run_id: str, store: RunStore, settings: Settings) -> None:
             "drawing_paths": [str(run_dir / "input" / n) for n in manifest.get("drawing_files", [])],
             "input_hash": manifest["input_hash"],
             "corpus_snapshot_id": snapshot_id,
-            "config": {
-                "max_revision_rounds": settings.max_revision_rounds,
-                "time_budget_s": settings.run_time_budget_s,
-                "artifact_dirs": {m: str(store.module_dir(run_id, m)) for m in ("agent", "quality")},
-            },
         })
 
         emit.set_stage("extraction", "Extracting requirements")
         # Modules exchange their own record objects; the app keeps JSON copies for storage and the view.
-        draft_obj = comps.run_extraction(run_input, corpus, llm, emit)
+        draft_obj = call_accepting(comps.run_extraction, run_input, corpus, llm, emit, artifacts_dir=agent_dir)
         draft = to_jsonable(draft_obj)
         store.write_artifact(run_id, "pipeline_draft.json", draft)
 
@@ -136,7 +143,8 @@ def execute_run(run_id: str, store: RunStore, settings: Settings) -> None:
                 break
             rounds += 1
             emit.set_stage("revision", f"Revision round {rounds}: {len(pending)} finding(s)")
-            draft_obj = comps.revise_extraction(run_input, draft_obj, _findings_of(report_obj, pending), corpus, llm, emit)
+            draft_obj = call_accepting(comps.revise_extraction, run_input, draft_obj, _findings_of(report_obj, pending),
+                                       corpus, llm, emit, artifacts_dir=agent_dir)
             draft = to_jsonable(draft_obj)
             store.write_artifact(run_id, f"pipeline_draft.round{rounds}.json", draft)
             emit.set_stage("review", f"Re-reviewing after round {rounds}")

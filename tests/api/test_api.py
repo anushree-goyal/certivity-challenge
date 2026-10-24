@@ -32,6 +32,8 @@ def test_input_validation(settings):
         assert client.post("/api/runs", data={"case_id": "x"}).status_code == 422
         bad = client.post("/api/runs", data={"case_id": "x"}, files={"drawings": ("a.gif", b"GIF89a", "image/gif")})
         assert bad.status_code == 422
+        empty = client.post("/api/runs", data={"case_id": "x"}, files={"spec_file": ("spec.md", b"  \n", "text/markdown")})
+        assert empty.status_code == 422  # RunInput would reject it later; refuse at upload instead
         unknown = client.post("/api/runs", data={"package_case": "no-such-case"})
         assert unknown.status_code == 422
         no_team = client.post("/api/runs", data={"case_id": "x", "spec_text": "lamp", "team_id": " "})

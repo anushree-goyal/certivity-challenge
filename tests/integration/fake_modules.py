@@ -7,21 +7,43 @@ and that real-mode wiring works without fixture_mode. Not a substitute for the o
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+from pathlib import Path
 from typing import Any
 
 from certivity.api import fixture_mode
 
 
 @dataclass
+class DrawingRef:
+    drawing_id: str
+    media_type: str
+    asset_ref: str
+    caption: str | None = None
+
+
+@dataclass
 class RunInput:
+    # Field order and required/optional split as in contracts.py 1.0.0 (Anushree).
     run_id: str
     team_id: str
     case_id: str
-    specification_text: str | None
-    drawing_paths: list[str]
-    input_hash: str
     corpus_snapshot_id: str | None
-    config: dict[str, Any]
+    input_hash: str
+    specification_text: str | None = None
+    drawings: tuple[DrawingRef, ...] = ()
+    config: Any = None
+
+    def __post_init__(self):
+        if not self.specification_text and not self.drawings:
+            raise ValueError("RunInput needs specification_text or drawings")
+
+
+def make_run_input(*, run_id, team_id, case_id, corpus_snapshot_id, specification_text=None,
+                   drawing_paths=(), config=None, input_hash=None):
+    drawings = tuple(DrawingRef(Path(p).stem, "image/" + Path(p).suffix.lstrip(".").replace("jpg", "jpeg"), str(p))
+                     for p in drawing_paths)
+    return RunInput(run_id, team_id, case_id, corpus_snapshot_id, input_hash or "computed",
+                    specification_text, drawings, config)
 
 
 @dataclass
@@ -63,12 +85,28 @@ def open_corpus(corpus_dir):
     return corpus
 
 
-def create_llm():
-    return fixture_mode.FixtureLLM()
+class FakeLLM:
+    def __init__(self, cache_dir):
+        self.cache_dir = cache_dir
+
+    def describe(self):
+        return {"credentials_configured": CREDENTIALS[0], "credential_source": "test", "model": "fake-model",
+                "calls_used": 0, "max_calls": None}
 
 
-def run_extraction(run_input, corpus, llm, emit_event):
+CREDENTIALS = [True]
+SEEN: dict[str, Any] = {}
+
+
+def create_llm(*, cache_dir=None, max_calls=None, model_overrides=None, timeout_s=None, max_retries=None):
+    SEEN["cache_dir"] = cache_dir
+    return FakeLLM(cache_dir)
+
+
+def run_extraction(run_input, corpus, llm, emit_event, artifacts_dir=None):
     assert isinstance(run_input, RunInput), type(run_input)
+    assert run_input.drawings and run_input.drawings[0].media_type == "image/png"
+    SEEN["artifacts_dir"] = artifacts_dir
     assert run_input.specification_text and run_input.corpus_snapshot_id == "fake-snapshot-1"
     CALLS.append("extract")
     emit_event(stage="extraction", message="fake extraction", completed=1, total=1)
