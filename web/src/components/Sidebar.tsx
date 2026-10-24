@@ -1,4 +1,5 @@
 import type { Health, RunSummary } from "../types";
+import { GlassButton } from "./GlassButton";
 
 export function Sidebar({ runs, selected, health, healthError, onNew, onSelect, newActive }: {
   runs: RunSummary[]; selected: string | null; health: Health | null; healthError: string | null;
@@ -13,18 +14,13 @@ export function Sidebar({ runs, selected, health, healthError, onNew, onSelect, 
               <circle cx="7" cy="7" r="4.5" /><path d="M10.5 10.5 14 14" strokeLinecap="round" />
             </svg>
           </span>
-          ReguLens
+          ProofTech
         </div>
         <div className="brand-sub">Engineering workspace</div>
       </div>
 
       <div className="side-section">
-        <div className="glass-wrap">
-          <button className="glass-btn" onClick={onNew} aria-current={newActive ? "page" : undefined}>
-            <span className="glass-label">+ New analysis</span>
-            <span className="glass-arrow" aria-hidden>→</span>
-          </button>
-        </div>
+        <GlassButton label="+ New Analysis" onClick={onNew} size="sm" current={newActive} />
       </div>
 
       <div className="side-label" style={{ paddingLeft: "1.1rem" }}>Analyses</div>

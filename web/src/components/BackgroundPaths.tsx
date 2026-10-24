@@ -1,8 +1,8 @@
 import { useMemo } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 
-// Floating white line field behind the whole app (adapted from a 21st.dev "Background Paths" template).
-// Fixed to the viewport, so it stays continuous while the page scrolls; decorative only.
+// Flowing white line field for the front page only (adapted from a 21st.dev "Background Paths" template).
+// It fills its positioned parent; decorative only.
 
 function FloatingPaths({ position }: { position: number }) {
   const reduceMotion = useReducedMotion();

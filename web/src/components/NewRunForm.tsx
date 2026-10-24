@@ -52,7 +52,7 @@ export function NewRunForm({ health, onCreated }: { health: Health | null; onCre
       <section className="card hero">
         <div>
           <h1>New compliance analysis</h1>
-          <p>Upload a technical specification or an exploded-view drawing. ReguLens finds the UN Regulations that apply,
+          <p>Upload a technical specification or an exploded-view drawing. ProofTech finds the UN Regulations that apply,
             extracts each engineering obligation and links it to the exact base-version page and paragraph.</p>
           <div className="steps">
             <span className="step"><b>1</b>Specification or drawing</span>
