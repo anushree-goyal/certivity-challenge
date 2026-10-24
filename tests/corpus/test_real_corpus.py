@@ -114,16 +114,18 @@ def test_reference_candidates_are_ready_requests(corpus, docs, by_label):
 def test_page_asset_renders_exact_physical_page(corpus, docs):
     doc = docs["UN R48"].document_id
     asset = corpus.get_page_asset(doc, 49)
-    assert (asset.pdf_page_index, asset.printed_page_label, asset.media_type) == (49, "50", "image/png")
+    assert (asset.pdf_page_index, asset.printed_page, asset.media_type) == (49, "50", "image/png")
     pixmap = pymupdf.Pixmap(asset.asset_ref)
     assert pixmap.width > 1000 and pixmap.height > pixmap.width
     with pytest.raises(UnknownId):
         corpus.get_page_asset(doc, 122)
 
 
-def test_unknown_ids_raise(corpus):
-    with pytest.raises(UnknownId):
-        corpus.get_passages(["nope"])
+def test_unknown_ids_raise(corpus, docs):
+    # get_passages omits unknown IDs (contract); the other lookups raise
+    known = corpus.list_sections(docs["UN R48"].document_id)[3].primary_passage_ids[0]
+    assert corpus.get_passages(["nope"]) == []
+    assert [p.passage_id for p in corpus.get_passages(["nope", known, known])] == [known]
     with pytest.raises(UnknownId):
         corpus.read_section("nope")
     with pytest.raises(UnknownId):

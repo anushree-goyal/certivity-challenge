@@ -178,10 +178,8 @@ class SqliteCorpusReader:
             marks = ",".join("?" * len(part))
             for r in self._db.execute(f"SELECT * FROM passages WHERE passage_id IN ({marks})", part):
                 found[r["passage_id"]] = r
-        missing = [p for p in passage_ids if p not in found]
-        if missing:
-            raise UnknownId(f"{len(missing)} passage id(s) not in snapshot {self.snapshot_id}: {missing[:5]}")
-        return [self._passage(found[p]) for p in passage_ids]
+        # contract: unknown IDs are omitted, not invented; callers compare requested and returned IDs
+        return [self._passage(found[p]) for p in dict.fromkeys(passage_ids) if p in found]
 
     def resolve_reference(self, request: ReferenceRequest) -> ReferenceResolution:
         origin = self._db.execute("SELECT * FROM passages WHERE passage_id = ?", (request.originating_passage_id,)).fetchone()
@@ -286,7 +284,7 @@ class SqliteCorpusReader:
             raise UnknownId(f"{document_id} has no pdf_page_index {pdf_page_index} (0..{doc['page_count'] - 1})")
         path = render_page(self.document_path(document_id), doc["checksum"], pdf_page_index, self._paths.renders, dpi)
         label = str(page["printed_page"]) if page["printed_verified"] else None
-        return PageAsset(document_id=document_id, pdf_page_index=pdf_page_index, printed_page_label=label, media_type="image/png", asset_ref=str(path))
+        return PageAsset(document_id=document_id, pdf_page_index=pdf_page_index, printed_page=label, media_type="image/png", asset_ref=str(path))
 
     # --- additions beyond the planned interface (server-side helpers) -------------------------
 

@@ -49,7 +49,7 @@ corpus.list_documents(role="base")       # -> list[Document]; role=None lists ev
 corpus.read_scope(document_id)           # -> list[SourcePassage]: title + Scope clause and its sub-paragraphs
 corpus.list_sections(document_id)        # -> list[Section] in reading order (systematic coverage starts here)
 corpus.read_section(section_id, include_context=True)   # -> SectionBundle
-corpus.get_passages(passage_ids)         # -> list[SourcePassage], same order; raises UnknownId for any unknown id
+corpus.get_passages(passage_ids)         # -> list[SourcePassage] in request order; unknown ids are omitted (contract)
 corpus.resolve_reference(ReferenceRequest)               # -> ReferenceResolution
 corpus.get_page_asset(document_id, pdf_page_index)       # -> PageAsset (PNG rendered on demand, cached)
 ```

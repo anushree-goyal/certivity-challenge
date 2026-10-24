@@ -17,7 +17,7 @@ Section(section_id, document_id, parent_section_id: str | None, heading, namespa
 SectionBundle(section, primary_passages, context_passages, visual_pdf_page_indices: list[int])
 ReferenceRequest(originating_passage_id, raw_reference, target_regulation=None, target_annex=None, target_paragraph=None)
 ReferenceResolution(status: "resolved"|"ambiguous"|"missing"|"outside_corpus", candidate_passage_ids, explanation)
-PageAsset(document_id, pdf_page_index, printed_page_label: str | None, media_type, asset_ref)
+PageAsset(document_id, pdf_page_index, printed_page: str | None, media_type, asset_ref)
 ```
 
 ## Decisions to confirm

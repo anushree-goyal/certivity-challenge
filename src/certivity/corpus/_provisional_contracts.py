@@ -83,7 +83,7 @@ class ReferenceResolution:
 class PageAsset:
     document_id: str
     pdf_page_index: int
-    printed_page_label: str | None
+    printed_page: str | None
     media_type: str
     asset_ref: str
 
