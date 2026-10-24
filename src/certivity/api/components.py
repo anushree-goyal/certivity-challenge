@@ -11,6 +11,7 @@ import importlib
 import inspect
 import json
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
@@ -196,14 +197,35 @@ def _short(exc: BaseException) -> str:
     return f"{type(exc).__name__}: {str(exc)[:300]}"
 
 
+# An absolute POSIX or Windows path that is not part of a URL (no "scheme:" or word character just before it).
+_ABS_PATH = re.compile(r"(?<![\w:/.])(?:[A-Za-z]:\\|/)(?:[^\s'\"`/\\]+[/\\])+[^\s'\"`,;)]*")
+
+
+def mask_paths(value: Any) -> Any:
+    """Replace absolute filesystem paths inside any text (e.g. an error message) with a placeholder."""
+    if isinstance(value, str):
+        return _ABS_PATH.sub("<local path>", value)
+    if isinstance(value, dict):
+        return {k: mask_paths(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [mask_paths(v) for v in value]
+    return value
+
+
+def _without_local_paths(data: dict[str, Any]) -> dict[str, Any]:
+    """Health is shown in the browser: drop fields naming server paths, and mask paths quoted in messages."""
+    return mask_paths({k: v for k, v in data.items() if "path" not in k.lower() and "dir" not in k.lower()})
+
+
 def readiness(settings: Settings) -> dict[str, Any]:
     """What is ready, without making model calls and without exposing secrets."""
     report: dict[str, Any] = {"pipeline_mode": settings.pipeline_mode}
 
+    from certivity.api import package as pkg
+
     package = settings.participant_package
-    cases = sorted(p.name for p in settings.cases_dir.iterdir() if p.is_dir()) if settings.cases_dir.is_dir() else []
+    cases = [c["case_id"] for c in pkg.list_cases(settings) if c["type"] == "main"]
     report["participant_package"] = {
-        "path": str(package),
         "ready": settings.index_path.is_file(),
         "cases": cases,
         "validator_present": (package / "tools" / "validate.py").is_file(),
@@ -219,7 +241,7 @@ def readiness(settings: Settings) -> dict[str, Any]:
                              "required": name in REQUIRED, "error": str(exc)}
     report["modules"] = modules
 
-    corpus_report: dict[str, Any] = {"ready": False, "path": str(settings.corpus_dir)}
+    corpus_report: dict[str, Any] = {"ready": False}
     try:
         corpus_status = resolve(settings.entry_points["corpus_status"])
     except ComponentError:
@@ -235,7 +257,16 @@ def readiness(settings: Settings) -> dict[str, Any]:
             corpus_report.update(ready=True, snapshot_id=snapshot_id_of(corpus), base_documents=len(docs))
         except Exception as exc:
             corpus_report["error"] = _short(exc)
-    report["corpus"] = corpus_report
+    report["corpus"] = _without_local_paths(corpus_report)
+
+    # Freshness: verified downloaded base PDFs (index file list + checksums) against the active snapshot.
+    documents: list[Any] = []
+    if corpus_report["ready"]:
+        try:
+            documents = list(open_corpus_only(settings, "real").list_documents(role="base"))
+        except Exception as exc:
+            corpus_report["error"] = _short(exc)
+    report["corpus_freshness"] = pkg.corpus_freshness(settings, documents, corpus_report["ready"])
 
     llm_report: dict[str, Any] = {"ready": False, "configuration": model_configuration()}
     if modules["create_llm"]["ready"]:
@@ -254,21 +285,14 @@ def readiness(settings: Settings) -> dict[str, Any]:
         and corpus_report["ready"] and llm_report["ready"] and report["participant_package"]["ready"]
     )
     report["fixture_pipeline_ready"] = True
-    return report
+    return mask_paths(report)
 
 
 def package_case(settings: Settings, case_id: str) -> dict[str, Any]:
-    """Input files of a case shipped in the participant package. The golden answer is never looked up here."""
-    case_dir = settings.cases_dir / case_id
-    if not case_id or "/" in case_id or not case_dir.is_dir():
-        raise KeyError(case_id)
-    spec = case_dir / "spec.md"
-    drawings = sorted(p for p in case_dir.iterdir() if p.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp"))
-    return {
-        "case_id": case_id,
-        "spec_path": spec if spec.is_file() else None,
-        "drawing_paths": drawings,
-    }
+    """Input files of a main-goal case, detected by extension (see api/package.py). Never reads expected.json."""
+    from certivity.api import package
+
+    return package.case_inputs(settings, case_id)
 
 
 def load_index(settings: Settings) -> list[dict[str, Any]]:

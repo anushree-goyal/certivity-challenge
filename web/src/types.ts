@@ -17,7 +17,7 @@ export interface RunSummary {
 
 export interface RunStatus extends RunSummary {
   progress?: Progress; warnings: string[]; errors: RunError[]; finished: boolean;
-  revision_rounds?: number; corpus_snapshot_id?: string | null; events: RunEvent[];
+  revision_rounds?: number; corpus_snapshot_id?: string | null; events: RunEvent[]; started_at?: string | null;
   cancel_requested?: boolean; cancelled?: boolean;
 }
 
@@ -40,11 +40,12 @@ export interface Finding {
 
 export interface Requirement {
   draft_id: string; requirement_id: string | null;
-  status: "accepted" | "duplicate" | "rejected" | "pending";
+  status: "accepted" | "duplicate" | "rejected" | "excluded" | "pending";
   text: string; source: Source;
   applicability_condition?: string | null; applicability_reason?: string | null;
   primary_passage_id?: string | null; supporting_passage_ids: string[];
   unresolved_references: unknown[]; duplicate_of?: string | null; rejection_reason?: string | null;
+  exclusion_reason?: string | null;
   findings: Finding[];
   source_link: { document_id: string; pdf_page_index: number; printed_page: number | null } | null;
 }
@@ -99,14 +100,41 @@ export interface RunView {
 export type EngineerReviewStatus = "unreviewed" | "approved" | "flagged";
 export interface EngineerReview { status: EngineerReviewStatus; note: string; updated_at: string }
 
-export interface CaseInfo { case_id: string; has_spec: boolean; drawings: string[] }
+export interface CaseInfo {
+  case_id: string; type: "main" | "subgoal"; held_out: boolean;
+  spec_file: string | null; spec_files: string[]; drawings: string[]; has_spec: boolean;
+}
+
+export interface RegulationRow {
+  regulation: string; title: string | null; base_version: string | null; latest_version: string | null;
+  pdf: "verified" | "missing" | "checksum mismatch"; downloaded: boolean; verified: boolean; in_corpus: boolean;
+  page_count: number | null; document_id: string | null; source_url: string | null;
+  files: { name: string; present: boolean; verified: boolean }[];
+}
+export interface RegulationsReport {
+  summary: { in_index: number; downloaded: number; imported: number; corpus_ready: boolean };
+  regulations: RegulationRow[];
+}
+export interface CorpusFreshness {
+  needs_import: boolean; reasons: string[]; not_imported: string[]; no_longer_listed: string[];
+  missing_pdfs: string[]; checksum_mismatch: string[]; index_entries: number; verified_pdfs: number;
+}
+export interface ReimportStatus { state: "idle" | "running" | "done" | "failed"; started_at?: string; finished_at?: string; snapshot_id?: string | null; error?: string | null }
 
 export interface Health {
   app: { ok: boolean; version: string; active_run: string | null; queued_runs: number };
+  team_id?: { configured: boolean; warning: string | null };
   pipeline_mode: string;
-  participant_package: { ready: boolean; path: string; cases: string[] };
+  participant_package: { ready: boolean; cases: string[] };
   modules: Record<string, { ready: boolean; error?: string; required?: boolean }>;
   corpus: { ready: boolean; snapshot_id?: string | null; base_documents?: number; error?: string };
   llm: { ready: boolean; identity?: string | null; error?: string };
   real_pipeline_ready: boolean;
+  corpus_freshness?: CorpusFreshness;
+  corpus_reimport?: ReimportStatus;
+}
+
+export interface ExportStatus {
+  available: boolean; case_id: string; code: "valid" | "running" | "team_missing" | "no_submission" | "invalid" | "validator_error" | null;
+  reason?: string; errors: { path: string; message: string }[]; team_id_placeholder?: boolean;
 }

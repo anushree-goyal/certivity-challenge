@@ -1,44 +1,46 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api";
-import type { EngineerReview, RunStatus, RunView } from "../types";
+import { usePoller } from "../usePoller";
+import type { EngineerReview, Health, RunStatus, RunView } from "../types";
 import { OriginBadge, StateBadge, needsReview } from "./badges";
 import { RequirementsView } from "./RequirementsView";
 import { ApplicabilityView, CoverageView, FindingsView, ProfileView, ValidationView } from "./panels";
 import { CompareView } from "./CompareView";
 import { prettyCase } from "./Sidebar";
 import { SourceSheet } from "./Drawings";
+import { ExportPanel } from "./ExportPanel";
 
 const TABS = ["Requirements", "Product", "Applicability", "Coverage", "Review findings", "Validation", "Compare", "Log"] as const;
 type Tab = (typeof TABS)[number];
 
-export function RunDetail({ runId, onFinished }: { runId: string; onFinished: () => void }) {
+export function RunDetail({ runId, health, onFinished, onOpenRegulation }: {
+  runId: string; health: Health | null; onFinished: () => void; onOpenRegulation: (regulation: string) => void;
+}) {
   const [status, setStatus] = useState<RunStatus | null>(null);
   const [view, setView] = useState<RunView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("Requirements");
+  const sawRunning = useRef(false);  // report "finished" to the app only for a transition seen on this page
 
-  useEffect(() => {
-    let stop = false;
-    let timer: number | undefined;
-    const poll = async () => {
-      try {
-        const s = await api.status(runId);
-        if (stop) return;
-        setStatus(s);
-        if (s.finished) {
-          api.results(runId).then((v) => !stop && setView(v)).catch(() => undefined);
-          onFinished();
-          return;
-        }
-      } catch (e) {
-        if (!stop) setError(String((e as Error).message));
-        return;
+  const loadStatus = useCallback(async () => {
+    try {
+      const s = await api.status(runId);
+      setStatus(s);
+      setError(null);
+      if (!s.finished) sawRunning.current = true;
+      if (s.finished) {
+        setView(await api.results(runId).catch(() => null));
+        if (sawRunning.current) { sawRunning.current = false; onFinished(); }
       }
-      timer = window.setTimeout(poll, 1500);
-    };
-    poll();
-    return () => { stop = true; window.clearTimeout(timer); };
+    } catch (e) {
+      setError(String((e as Error).message));
+    }
   }, [runId, onFinished]);
+
+  // Load once per run; this component is keyed by run, so a new run starts with fresh state.
+  useEffect(() => { loadStatus(); }, [loadStatus]);
+  // Poll every 2 s only while the run is queued or running; stops on a terminal state.
+  usePoller(loadStatus, 2000, !!status && !status.finished);
 
   if (error && !status) return <div className="banner error">{error}</div>;
   if (!status) return <p className="muted">Loading analysis…</p>;
@@ -66,14 +68,11 @@ export function RunDetail({ runId, onFinished }: { runId: string; onFinished: ()
         <h1>{prettyCase(status.case_id)}</h1>
         <StateBadge state={status.state} />
         <OriginBadge origin={status.origin} />
-        <span className="muted small">team {status.team_id}</span>
         <span className="spacer" />
         {!status.finished && (status.cancel_requested
           ? <span className="muted small">Cancelling after the current stage…</span>
           : <button className="danger" onClick={() => api.cancel(runId).catch((e) => setError(String(e.message)))}>Cancel</button>)}
-        {view?.submission.available
-          ? <a className="button" href={api.submissionUrl(runId)} download>Export requirements JSON</a>
-          : <button disabled title="No validated submission for this run">Export requirements JSON</button>}
+        <ExportPanel runId={runId} status={status} view={view} health={health} />
       </div>
 
       {!status.finished && (
@@ -122,7 +121,7 @@ export function RunDetail({ runId, onFinished }: { runId: string; onFinished: ()
           </nav>
           {tab === "Requirements" && <RequirementsView view={view} runId={runId} onReview={setReview} />}
           {tab === "Product" && <ProfileView view={view} runId={runId} />}
-          {tab === "Applicability" && <ApplicabilityView view={view} />}
+          {tab === "Applicability" && <ApplicabilityView view={view} onOpenRegulation={onOpenRegulation} />}
           {tab === "Coverage" && <CoverageView view={view} />}
           {tab === "Review findings" && <FindingsView view={view} />}
           {tab === "Validation" && <ValidationView view={view} />}

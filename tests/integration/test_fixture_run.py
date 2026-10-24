@@ -44,8 +44,10 @@ def test_fixture_run_end_to_end(settings, package):
         # The download is exactly what passed the official validator.
         sub = client.get(f"/api/runs/{run_id}/submission")
         assert sub.status_code == 200
+        # The exported team ID is the configured CERTIVITY_TEAM_ID, not a form field.
+        assert f'filename="dev-rear-lamp_{settings.default_team_id}_{run_id}.json"' in sub.headers["content-disposition"]
         submission = sub.json()
-        assert submission["team_id"] == "team-07" and submission["case_id"] == "dev-rear-lamp"
+        assert submission["team_id"] == settings.default_team_id and submission["case_id"] == "dev-rear-lamp"
         assert len(submission["requirements"]) == 5
         assert _official_validate(package, submission) == []
 

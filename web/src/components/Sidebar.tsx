@@ -1,8 +1,10 @@
 import type { Health, RunSummary } from "../types";
+import { FlowButton } from "./ui/flow-button";
 
-export function Sidebar({ runs, selected, health, healthError, onNew, onSelect, newActive }: {
+export function Sidebar({ runs, selected, health, healthError, onNew, onSelect, newActive, view, onRegulations }: {
   runs: RunSummary[]; selected: string | null; health: Health | null; healthError: string | null;
   onNew: () => void; onSelect: (id: string) => void; newActive: boolean;
+  view: "analyses" | "regulations"; onRegulations: () => void;
 }) {
   return (
     <aside className="sidebar">
@@ -13,18 +15,13 @@ export function Sidebar({ runs, selected, health, healthError, onNew, onSelect, 
               <circle cx="7" cy="7" r="4.5" /><path d="M10.5 10.5 14 14" strokeLinecap="round" />
             </svg>
           </span>
-          ReguLens
+          ProofTech
         </div>
         <div className="brand-sub">Engineering workspace</div>
       </div>
 
       <div className="side-section">
-        <div className="glass-wrap">
-          <button className="glass-btn" onClick={onNew} aria-current={newActive ? "page" : undefined}>
-            <span className="glass-label">+ New analysis</span>
-            <span className="glass-arrow" aria-hidden>→</span>
-          </button>
-        </div>
+        <FlowButton text="New Analysis" onClick={onNew} block current={newActive} />
       </div>
 
       <div className="side-label" style={{ paddingLeft: "1.1rem" }}>Analyses</div>
@@ -37,13 +34,21 @@ export function Sidebar({ runs, selected, health, healthError, onNew, onSelect, 
                 <span className={`dot ${r.state}`} title={r.state} />
                 <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{prettyCase(r.case_id)}</span>
                 {r.origin === "fixture" && <span className="side-tag fixture">fixture</span>}
-                {r.origin === "cached" && <span className="side-tag">cached</span>}
+                {r.origin === "cached" && <span className="side-tag cached">Cached result</span>}
               </div>
               <div className="run-meta">{shortTime(r.created_at)} · {r.state}{r.interrupted ? " · interrupted" : ""}</div>
             </li>
           ))}
         </ul>
       </div>
+
+      <nav className="side-nav" aria-label="Library">
+        <button type="button" className={`side-nav-item${view === "regulations" ? " active" : ""}`} onClick={onRegulations}
+                aria-current={view === "regulations" ? "page" : undefined}>
+          Regulations
+          {health?.corpus_freshness && <span className="side-nav-count">{health.corpus_freshness.index_entries}</span>}
+        </button>
+      </nav>
 
       <SystemStatus health={health} error={healthError} />
     </aside>
@@ -54,7 +59,7 @@ function SystemStatus({ health, error }: { health: Health | null; error: string 
   if (error) return <div className="side-health"><div><span className="dot bad" /> API unreachable</div></div>;
   if (!health) return <div className="side-health"><div>Checking system…</div></div>;
   const rows: [boolean, string, string | undefined][] = [
-    [health.participant_package.ready, "Regulation package", health.participant_package.path],
+    [health.participant_package.ready, `Regulation package: ${health.participant_package.ready ? "ready" : "missing"}`, undefined],
     [health.corpus.ready, health.corpus.ready ? `Corpus · ${health.corpus.base_documents ?? "?"} documents` : "Corpus not ready", health.corpus.error],
     [health.llm.ready, health.llm.ready ? `Model · ${health.llm.identity ?? "configured"}` : "Model not configured", health.llm.error],
     [health.real_pipeline_ready, health.real_pipeline_ready ? "Pipeline ready" : "Fixture mode only", undefined],

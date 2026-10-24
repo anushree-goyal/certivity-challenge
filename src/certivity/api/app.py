@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import mimetypes
 import threading
 from contextlib import asynccontextmanager
@@ -20,21 +21,49 @@ from fastapi.staticfiles import StaticFiles
 
 from certivity import __version__
 from certivity.api.components import (
-    ComponentError, component_versions, model_configuration, open_corpus_only, package_case, readiness,
+    mask_paths,
+    ComponentError, component_versions, model_configuration, open_corpus_only, package_case, readiness, resolve,
     snapshot_id_of,
 )
+from certivity.api import package
 from certivity.api.pipeline import build_run_view
 from certivity.api.serialization import first, to_jsonable
-from certivity.api.settings import REPO_ROOT, Settings, load_settings
+from certivity.api.settings import REPO_ROOT, Settings, load_settings, team_id_problem
 from certivity.api.worker import RunWorker
 from certivity.run_store import RunState, RunStore
 from certivity.run_store.store import now_iso
 
 ENGINEER_REVIEW_STATES = ("unreviewed", "approved", "flagged")
+CASE_ID_PATTERN = re.compile(r"^[a-z0-9-]+$")
 MAX_SPEC_BYTES = 2 * 1024 * 1024
 MAX_DRAWING_BYTES = 25 * 1024 * 1024
 DRAWING_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
 SPEC_TYPES = (".md", ".markdown", ".txt")
+
+
+CASE_ID_MAX = 40
+
+
+def _slug(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")[:CASE_ID_MAX].strip("-")
+
+
+def derive_case_id(spec_name: str | None, spec_bytes: bytes | None, drawing_names: list[str]) -> str | None:
+    """Case ID for own input: the spec file's name; for pasted text its first heading, else its first words;
+    for drawings only, the first image's name. None when nothing usable (the caller uses custom-<run>)."""
+    if spec_name and (slug := _slug(Path(spec_name).stem)):
+        return slug
+    if spec_bytes:
+        lines = [l.strip() for l in spec_bytes.decode("utf-8", "replace").splitlines() if l.strip()]
+        heading = next((l.lstrip("#").strip() for l in lines if l.startswith("#")), None)
+        text = heading if heading else (" ".join(lines[0].split()[:6]) if lines else "")
+        text = re.sub(r"^(spec(ification)?)\s*:\s*", "", text, flags=re.I)
+        if slug := _slug(text):
+            return slug
+    for name in drawing_names:
+        if slug := _slug(Path(name).stem):
+            return slug
+    return None
 
 
 def _sha256(data: bytes) -> str:
@@ -54,6 +83,9 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
     store = RunStore(settings.runs_dir)
     worker = RunWorker(store, settings)
     local = threading.local()
+    # Corpus re-import (Teammate 2's bootstrap builds a NEW snapshot; runs in progress keep theirs).
+    reimport: dict[str, Any] = {"state": "idle"}
+    corpus_generation = [0]  # bumped after each import so per-thread readers reopen the newest snapshot
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -76,7 +108,7 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
         cache = getattr(local, "corpora", None)
         if cache is None:
             cache = local.corpora = {}
-        key = (mode, snapshot_id)
+        key = (mode, snapshot_id, corpus_generation[0])
         if key not in cache:
             try:
                 cache[key] = open_corpus_only(settings, mode, snapshot_id)
@@ -96,18 +128,59 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
 
     @app.get("/api/health")
     def health() -> dict[str, Any]:
+        problem = team_id_problem(settings.default_team_id)
         return {"app": {"ok": True, "version": __version__, "active_run": worker.active_run,
-                        "queued_runs": worker.queued}, **readiness(settings)}
+                        "queued_runs": worker.queued},
+                "team_id": {"configured": bool(settings.default_team_id.strip()), "warning": problem},
+                "corpus_reimport": {k: v for k, v in reimport.items() if k != "thread"}, **readiness(settings)}
 
     @app.get("/api/cases")
     def cases() -> list[dict[str, Any]]:
-        out = []
-        if settings.cases_dir.is_dir():
-            for case_dir in sorted(p for p in settings.cases_dir.iterdir() if p.is_dir()):
-                case = package_case(settings, case_dir.name)
-                out.append({"case_id": case["case_id"], "has_spec": case["spec_path"] is not None,
-                            "drawings": [p.name for p in case["drawing_paths"]]})
-        return out
+        """Re-read on every request: a pulled or unzipped case folder appears without a restart."""
+        return package.list_cases(settings)
+
+    @app.get("/api/regulations")
+    def regulations() -> dict[str, Any]:
+        """Every index entry with download/verification and corpus-import status. No paths, no PDF download URLs."""
+        documents: list[Any] = []
+        ready = False
+        try:
+            documents = list(open_corpus_only(settings, "real").list_documents(role="base"))
+            ready = True
+        except Exception:
+            pass
+        return package.regulations_report(settings, documents, ready)
+
+    # --- corpus re-import ------------------------------------------------------------------
+
+    def _do_reimport() -> None:
+        try:
+            bootstrap = resolve(settings.entry_points["bootstrap_corpus"])
+            status = to_jsonable(bootstrap(settings.participant_package, settings.corpus_dir))
+            corpus_generation[0] += 1
+            reimport.update(state="done" if status.get("ready") else "failed", finished_at=now_iso(),
+                            snapshot_id=status.get("snapshot_id"),
+                            error=None if status.get("ready") else str(status.get("reason") or "import did not produce a ready snapshot"))
+        except Exception as exc:
+            reimport.update(state="failed", finished_at=now_iso(), error=f"{type(exc).__name__}: {exc}")
+
+    @app.post("/api/corpus/reimport", status_code=202)
+    def start_reimport() -> dict[str, Any]:
+        """Build a new corpus snapshot from the package. Refused while an analysis is running or queued."""
+        if reimport.get("state") == "running":
+            raise HTTPException(409, "A corpus re-import is already running")
+        if worker.active_run or worker.queued:
+            raise HTTPException(409, "An analysis is running or queued; re-import after it finishes")
+        reimport.clear()
+        reimport.update(state="running", started_at=now_iso())
+        thread = threading.Thread(target=_do_reimport, name="certivity-corpus-reimport", daemon=True)
+        reimport["thread"] = thread
+        thread.start()
+        return {k: v for k, v in reimport.items() if k != "thread"}
+
+    @app.get("/api/corpus/reimport")
+    def reimport_status() -> dict[str, Any]:
+        return {k: v for k, v in reimport.items() if k != "thread"}
 
     # --- runs ------------------------------------------------------------------------------
 
@@ -119,15 +192,25 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
         spec_text: str = Form(""),
         mode: str = Form(""),
         reuse_cached: bool = Form(False),
+        dev: bool = Form(False),
         spec_file: UploadFile | None = File(None),
         drawings: list[UploadFile] = File(default=[]),
     ) -> dict[str, Any]:
+        if reimport.get("state") == "running":
+            raise HTTPException(409, "The corpus is being re-imported; start the analysis when it has finished")
         mode = (mode or settings.pipeline_mode).lower()
         if mode not in ("real", "fixture"):
             raise HTTPException(422, "mode must be 'real' or 'fixture'")
+        # Fixture processing and cache reuse are development options (the UI's ?dev=1 sends dev=true).
+        # A server deliberately configured for fixture mode keeps fixture as its default.
+        if mode == "fixture" and not dev and settings.pipeline_mode != "fixture":
+            raise HTTPException(422, "Fixture processing is a development option; open the app with ?dev=1 to use it")
+        reuse_cached = reuse_cached and dev  # normal runs are always fresh
         files: dict[str, bytes] = {}
         spec_bytes: bytes | None = None
+        spec_name: str | None = None  # uploaded file name, used to derive a case ID for own input
         drawing_files: list[str] = []
+        drawing_names: list[str] = []
 
         if package_case_id:
             try:
@@ -140,12 +223,16 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
                 name = f"drawing-{len(drawing_files) + 1}{p.suffix.lower()}"
                 files[name] = p.read_bytes()
                 drawing_files.append(name)
-            case_id = case_id or package_case_id
+            # The platform's case_id is the case folder name; it is filled from the selected case, never edited.
+            if case_id.strip() and case_id.strip() != package_case_id:
+                raise HTTPException(422, f"case_id must be the selected case folder name {package_case_id!r}")
+            case_id = package_case_id
 
         if spec_file is not None and spec_file.filename:
             if Path(spec_file.filename).suffix.lower() not in SPEC_TYPES:
                 raise HTTPException(422, f"Specification must be one of {', '.join(SPEC_TYPES)}")
             spec_bytes = await spec_file.read()
+            spec_name = spec_file.filename
         elif spec_text.strip():
             spec_bytes = spec_text.encode("utf-8")
         if spec_bytes is not None and not spec_bytes.strip():
@@ -166,6 +253,7 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
             if suffix not in DRAWING_TYPES:
                 raise HTTPException(422, f"Drawing {upload.filename!r} must be PNG, JPEG or WebP")
             content = await upload.read()
+            drawing_names.append(upload.filename)
             if len(content) > MAX_DRAWING_BYTES:
                 raise HTTPException(413, f"Drawing {upload.filename!r} is larger than 25 MB")
             name = f"drawing-{len(drawing_files) + 1}{suffix}"
@@ -174,10 +262,14 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
 
         if "spec.md" not in files and not drawing_files:
             raise HTTPException(422, "Provide a specification and/or an exploded-view drawing")
+        # Team ID comes from CERTIVITY_TEAM_ID (the form field remains for the CLI and API clients). A missing
+        # team ID does not stop the analysis; it blocks the export, which needs it.
         team_id = team_id.strip() or settings.default_team_id.strip()
-        case_id = case_id.strip()
-        if not team_id or not case_id:
-            raise HTTPException(422, "team_id and case_id are required for the submission")
+        run_id = store.new_run_id()
+        case_id = case_id.strip() or derive_case_id(spec_name, spec_bytes, drawing_names) or f"custom-{run_id.rsplit('-', 1)[-1]}"
+        is_package_folder = settings.cases_dir.is_dir() and (settings.cases_dir / case_id).is_dir() and "/" not in case_id
+        if not is_package_folder and not CASE_ID_PATTERN.match(case_id):
+            raise HTTPException(422, "case_id may contain only lowercase letters, digits and hyphens")
 
         input_hash = _sha256(json.dumps(sorted((n, _sha256(c)) for n, c in files.items())).encode())
         snapshot_id = None
@@ -197,7 +289,7 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
                 "spec_file": "spec.md" if "spec.md" in files else None, "drawing_files": drawing_files}
 
         if reuse_cached and snapshot_id is not None and (cached := store.find_cached(cache_key)):
-            manifest = store.create({**base, "origin": "cached", "cached_from": cached["run_id"]}, files)
+            manifest = store.create({**base, "origin": "cached", "cached_from": cached["run_id"]}, files, run_id=run_id)
             store.update(manifest["run_id"], state=cached["state"], stage="done", started_at=cached.get("started_at"),
                          finished_at=cached.get("finished_at"), submission_valid=cached.get("submission_valid"),
                          revision_rounds=cached.get("revision_rounds"), llm_identity=cached.get("llm_identity"),
@@ -206,7 +298,7 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
             return {"run_id": manifest["run_id"], "state": cached["state"], "origin": "cached",
                     "cached_from": cached["run_id"]}
 
-        manifest = store.create({**base, "origin": "fixture" if mode == "fixture" else "fresh"}, files)
+        manifest = store.create({**base, "origin": "fixture" if mode == "fixture" else "fresh"}, files, run_id=run_id)
         worker.submit(manifest["run_id"])
         return {"run_id": manifest["run_id"], "state": manifest["state"], "origin": manifest["origin"]}
 
@@ -224,7 +316,8 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
             "warnings", "errors", "interrupted", "created_at", "started_at", "finished_at", "revision_rounds",
             "submission_valid", "corpus_snapshot_id", "cancel_requested", "cancelled")} | {
             "finished": RunState(m["state"]).finished,
-            "events": store.read_events(m.get("cached_from") or run_id, limit=100)}
+            "events": mask_paths(store.read_events(m.get("cached_from") or run_id, limit=100))} | {
+            "warnings": mask_paths(m.get("warnings")), "errors": mask_paths(m.get("errors"))}
 
     @app.get("/api/runs/{run_id}/results")
     def run_results(run_id: str) -> dict[str, Any]:
@@ -232,22 +325,52 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
         view = build_run_view(store, run_id)
         if view is None:
             raise HTTPException(409, "No results yet: extraction has not produced a draft for this run")
-        return view
+        return mask_paths(view)  # e.g. a validator report naming the index file it checked
+
+    def _validator_for(mode: str):
+        if mode == "fixture":
+            from certivity.api import fixture_mode
+            return fixture_mode.validate_submission
+        return resolve(settings.entry_points["validate_submission"])
+
+    def build_export(run_id: str) -> tuple[dict[str, Any], dict[str, Any] | None]:
+        """The submission as it would download now: the stored run's export with the team ID currently set in
+        CERTIVITY_TEAM_ID, validated again by the official validator. Returns (status, submission or None)."""
+        m = get_manifest(run_id)
+        status: dict[str, Any] = {"available": False, "case_id": m.get("case_id"), "errors": [], "code": None}
+        if not RunState(m["state"]).finished:
+            return status | {"code": "running", "reason": f"the run is still {m['state']}"}, None
+        team = settings.default_team_id.strip()
+        if not team:
+            return status | {"code": "team_missing", "reason": "Export disabled: team ID not configured (set CERTIVITY_TEAM_ID in .env and restart)"}, None
+        source = m.get("cached_from") or run_id
+        stored = store.read_artifact(source, "submission.json") or store.read_artifact(source, "submission.invalid.json")
+        if not stored or not isinstance(stored.get("requirements"), list):
+            failed = "; ".join(e.get("message", "") for e in m.get("errors", []))
+            return status | {"code": "no_submission", "reason": f"the run failed: {failed}" if failed else "no submission was built for this run"}, None
+        submission = {**stored, "team_id": team}
+        try:
+            report = to_jsonable(_validator_for(m.get("mode", "real"))(submission, settings.participant_package))
+        except Exception as exc:
+            return status | {"code": "validator_error", "reason": f"the validator could not run: {type(exc).__name__}: {exc}"}, None
+        if not first(report, "valid", "is_valid", default=False):
+            return status | {"code": "invalid", "reason": "the submission did not pass the official validator",
+                             "errors": report.get("errors") or []}, None
+        return status | {"available": True, "code": "valid", "team_id_placeholder": team_id_problem(team) is not None}, submission
+
+    @app.get("/api/runs/{run_id}/export")
+    def run_export_status(run_id: str) -> dict[str, Any]:
+        return mask_paths(build_export(run_id)[0])
 
     @app.get("/api/runs/{run_id}/submission")
     def run_submission(run_id: str):
-        m = get_manifest(run_id)
-        path = store.artifact_path(m.get("cached_from") or run_id, "submission.json")
-        if not path.is_file():
-            if not RunState(m["state"]).finished:
-                reason = f"The run is still {m['state']} (stage: {m.get('stage')})."
-            elif m["state"] == RunState.FAILED.value:
-                reason = "The run failed: " + ("; ".join(e.get("message", "") for e in m.get("errors", [])) or "see run errors.")
-            else:
-                reason = "The submission did not pass the official validator; see validation errors in the results."
-            return JSONResponse({"available": False, "reason": reason}, status_code=409)
-        return FileResponse(path, media_type="application/json",
-                            filename=f"{m['team_id']}_{m['case_id']}_{run_id}.json")
+        status, submission = build_export(run_id)
+        if submission is None:
+            return JSONResponse(mask_paths({k: status[k] for k in ("available", "reason", "errors", "code")}), status_code=409)
+        safe = lambda v: re.sub(r"[^A-Za-z0-9._-]+", "-", str(v or "")).strip("-") or "unknown"
+        name = f"{safe(submission['case_id'])}_{safe(submission['team_id'])}_{run_id}.json"
+        return Response(json.dumps(submission, indent=2, ensure_ascii=False), media_type="application/json",
+                        headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
     @app.get("/api/runs/{run_id}/input/{name}")
     def run_input_file(run_id: str, name: str):
