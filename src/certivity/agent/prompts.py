@@ -39,6 +39,13 @@ PROMPT_VERSIONS: dict[str, str] = {
     # from the section that owns it and once from a section that merely received
     # it as context or as a followed reference. A primary citation must now be a
     # primary passage of the section being read.
+    # v7 (extract_obligations): from the scoring platform's requirement-level
+    # judgement of a real 6-requirement submission - precision 33.3% while page
+    # precision was 100%, so the citations were right and the content was not.
+    # The answer key is ~1 requirement per paragraph (87 of its 121 paragraphs
+    # yield exactly one), merging a rule with its own allowance; we were still
+    # splitting those, and were also emitting exclusions and bare
+    # cross-references, which the key does not count as requirements at all.
     # v6 (extract_obligations): from offline scoring of a real R148 run. Front-lamp
     # obligations were emitted for a rear lamp (now product_applicability), one
     # paragraph became 12 drafts where the answer file has one (now a granularity
@@ -54,7 +61,7 @@ PROMPT_VERSIONS: dict[str, str] = {
     "product_profile": "v2",
     "candidate_scope": "v2",
     "document_scope": "v2",
-    "extract_obligations": "v6",
+    "extract_obligations": "v7",
     "revise_obligations": "v2",
 }
 
@@ -421,15 +428,37 @@ Does this obligation reach THIS product?
 - Never use "does_not_apply" because a fact is unknown. Unknown is
   "depends_on_unknown", and such obligations are kept.
 
-Granularity: match the source's own unit of obligation
-- One paragraph normally yields **one** obligation. Split only where the source
-  states genuinely separable requirements - distinct subjects, or separately
-  numbered sub-provisions.
+Granularity: one requirement per paragraph, unless the subjects differ
+- **Default to exactly one obligation per numbered paragraph.** Merge that
+  paragraph's sub-provisions - its main rule, its tolerances, its permitted
+  alternative, its exception - into a single coherent statement.
+- Split only when one paragraph genuinely covers **different subjects**, for
+  example a photometric limit and a separate marking duty. A main rule plus its
+  own carve-out is one subject, not two.
+- Worked example of the right output. A paragraph reading "the light shall meet
+  the requirements of Table 4; however, 60 cd is permitted for lamps
+  reciprocally incorporated with stop lamps" is **one** obligation:
+  "The light emitted shall meet the requirements for luminous intensity and
+  standard light distribution in Table 4; however, a luminous intensity of 60 cd
+  is permitted for rear position lamps reciprocally incorporated with stop
+  lamps." Returning the rule and the allowance separately is wrong.
 - A table enumerating values per device category is **one** obligation together
-  with its table. Do not emit one draft per row, per column or per category:
-  that multiplies a single requirement into many and misrepresents the source.
-- Splitting is for a passage that truly holds several requirements, not for
-  every value inside one.
+  with its table. Never one draft per row, column or category.
+- A neighbouring paragraph that only qualifies the same rule - stating the
+  conditions under which the same values are measured - belongs in that same
+  obligation rather than becoming its own.
+
+What is not a requirement at all
+- **An exclusion is not a requirement.** "No requirements apply to the minimum
+  or maximum area of the apparent surface" imposes nothing. Return it with
+  `obligation_kind` "exclusion" so it is recorded, and expect it to be left out
+  of the submission.
+- **A bare cross-reference is not a requirement.** "The device shall comply with
+  the provisions of paragraph 4.6" adds no substance of its own. Either state
+  the substance the reference brings in, when that text has been supplied to
+  you, or omit it. Do not emit the pointer by itself.
+- A heading, a title or a sentence that only announces what follows is not a
+  requirement.
 
 Numbers in `text`: write them so a reader can check them
 - The source may carry an explicit power of ten, such as `4∙10^0`, `1.40∙10^2`
