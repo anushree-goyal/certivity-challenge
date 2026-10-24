@@ -48,6 +48,15 @@ class RecoveryResult:
     drafts_recovered: int = 0
     requirements: int = 0
     excluded: dict[str, str] = field(default_factory=dict)
+    """draft_id -> why export could not emit it."""
+    rejected: dict[str, str] = field(default_factory=dict)
+    """draft_id -> why the deterministic checks refused it.
+
+    Separate from ``excluded`` because they are different decisions: review
+    rejects a draft whose citation does not hold up, export declines one it
+    cannot turn into a well-formed source object. A caller asking "why is this
+    submission short" needs both, so neither is folded into the other.
+    """
     blocking_issues: list[str] = field(default_factory=list)
     corrupt_checkpoint_lines: int = 0
     checkpoint_dir: Optional[str] = None
@@ -56,6 +65,18 @@ class RecoveryResult:
     @property
     def valid(self) -> bool:
         return bool(self.validation and self.validation.get("valid"))
+
+    def dropped_reasons(self) -> dict[str, int]:
+        """How many drafts were dropped for each reason, most common first.
+
+        This is what turns "50 drafts became 30 requirements" from a surprise
+        into something actionable.
+        """
+        counts: dict[str, int] = {}
+        for reason in (*self.rejected.values(), *self.excluded.values()):
+            key = str(reason).split(";")[0].strip()[:80]
+            counts[key] = counts.get(key, 0) + 1
+        return dict(sorted(counts.items(), key=lambda kv: -kv[1]))
 
     def summary(self) -> dict[str, Any]:
         return {
@@ -66,6 +87,8 @@ class RecoveryResult:
             "requirements": self.requirements,
             "valid": self.valid,
             "excluded": len(self.excluded),
+            "rejected_by_review": len(self.rejected),
+            "dropped": self.dropped_reasons(),
             "blocking_issues": self.blocking_issues,
             "corrupt_checkpoint_lines": self.corrupt_checkpoint_lines,
             "notes": self.notes,
@@ -160,12 +183,25 @@ def deterministic_report(run_input, draft, corpus) -> QualityReport:
     accepted_ids = list(det.accepted_ids)
     exact = exact_duplicates(drafts, accepted_ids)
     accepted = [i for i in accepted_ids if i not in exact.mapping]
+
+    # A draft the checks sent for revision is neither accepted nor rejected. In
+    # a full run a revision round would act on it; this path has no model, so no
+    # revision will happen and the draft simply will not be exported. Recording
+    # it as a rejection with its own reason is what keeps "why is this
+    # submission short" answerable instead of leaving drafts unaccounted for.
+    rejected = dict(det.rejected)
+    for draft_id, reason in det.needs_revision.items():
+        if draft_id not in rejected and draft_id not in accepted:
+            rejected[draft_id] = (
+                f"needs revision and no revision round runs in a recovered "
+                f"export: {reason}"
+            )
     return QualityReport(
         run_id=getattr(run_input, "run_id", "recovered"),
         accepted_draft_ids=tuple(accepted),
         findings=tuple([*det.findings, *exact.findings]),
         duplicate_mapping=dict(exact.mapping),
-        rejected=dict(det.rejected),
+        rejected=rejected,
         # True without exception: the semantic half of review did not run, and
         # a consumer of this report must be able to tell that from the record
         # rather than from a comment.
@@ -200,6 +236,7 @@ def export_from_checkpoints(
     built = build_submission_detailed(run_input, draft, report, corpus)
     result.submission = built.submission
     result.excluded = dict(built.excluded)
+    result.rejected = dict(report.rejected)
     result.blocking_issues = list(built.blocking_issues)
     result.requirements = len(built.submission.get("requirements") or ())
 

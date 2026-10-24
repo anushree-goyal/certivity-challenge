@@ -458,3 +458,24 @@ def test_emit_event_is_never_called_while_holding_the_context_lock():
         "emit_event was called while RunContext.lock was held; that is the "
         "lock-order inversion that deadlocked the first full run"
     )
+
+
+def test_the_global_section_cap_keeps_the_highest_priority_sections(run_input, corpus, llm):
+    """Trimming in reading order would discard the annexes, where the limits live."""
+    import dataclasses
+
+    from certivity.agent import run_extraction
+    from certivity.contracts import CoverageStatus, TargetKind
+
+    capped = dataclasses.replace(run_input, config=dataclasses.replace(
+        run_input.config, max_sections_total=1, max_parallel_sections=1))
+    draft = run_extraction(capped, corpus, llm)
+
+    sections = [c for c in draft.coverage if c.target_kind is TargetKind.SECTION]
+    processed = [c for c in sections if c.status is CoverageStatus.PROCESSED]
+    pending = [c for c in sections if c.status is CoverageStatus.PENDING]
+
+    assert len(processed) == 1, "the cap was not applied"
+    assert pending, "dropped sections must stay visible, not vanish"
+    assert all("max_sections_total" in (c.explanation or "") for c in pending)
+    assert draft.partial is True

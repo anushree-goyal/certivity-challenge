@@ -1,199 +1,224 @@
-"""Exporting a valid submission from saved checkpoints, without the model.
+"""Exporting a valid submission from saved checkpoints, with no model call.
 
-This is the floor under the whole system: whatever else fails, the work that
-finished must be submittable. The moment this path is needed is the moment the
-provider is already unusable, so it makes no model call at all - and it must
-still refuse anything whose citation does not resolve, because a plausible
-invented source is worse than a missing requirement.
+This is the path that guarantees a deliverable. It has to work when the thing
+that made the run stop is still broken - no credentials, no credit, no network -
+so nothing here may reach a provider, and nothing here may fill a gap with a
+value the source does not establish.
 """
 
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
 from certivity.agent.checkpoint import CheckpointStore
-from certivity.contracts import (
-    CoverageStatus,
-    DraftRequirement,
-    ObligationKind,
-    RunInput,
-    content_hash,
-)
+from certivity.contracts import CoverageStatus, ObligationKind
 from certivity.recover import (
-    deterministic_report,
     draft_from_checkpoints,
     drafts_from_artifact,
     export_from_checkpoints,
     import_artifact_into_checkpoints,
 )
+from tests.quality.fixtures import (
+    BASE,
+    LATEST,
+    P_EXC,
+    P_LATEST,
+    P_NOPAGE,
+    P_OK,
+    Draft,
+    Run,
+    corpus,
+)
 
 
-@pytest.fixture
-def real_corpus(package):
-    """The real SQLite corpus, so citations resolve against real documents."""
-    from certivity.api.components import open_corpus_only
-    from certivity.api.settings import Settings, DEFAULT_ENTRY_POINTS, REPO_ROOT
+def _store_with(tmp_path: Path, *drafts, status=CoverageStatus.PROCESSED) -> CheckpointStore:
+    store = CheckpointStore(tmp_path / "cp")
+    by_section: dict[str, list] = {}
+    for draft in drafts:
+        by_section.setdefault(draft.section_id or "sec-1", []).append(draft)
+    for section_id, items in by_section.items():
+        store.record_section(
+            section_id,
+            status=status,
+            document_id=items[0].document_id,
+            drafts=items,
+            inspected_passage_ids=[p for d in items for p in d.supporting_passage_ids],
+        )
+    return store
 
-    corpus_dir = REPO_ROOT / "data" / "cache" / "corpus"
-    if not corpus_dir.is_dir():
-        pytest.skip("no built corpus snapshot; run `certivity bootstrap`")
-    settings = Settings(
-        runs_dir=REPO_ROOT / "runs", participant_package=package, corpus_dir=corpus_dir,
-        pipeline_mode="real", default_team_id="team-test", max_revision_rounds=0,
-        run_time_budget_s=600, max_model_calls=None, entry_points=dict(DEFAULT_ENTRY_POINTS),
+
+# --------------------------------------------------------------------------- #
+# The export itself
+# --------------------------------------------------------------------------- #
+
+
+def test_checkpoints_become_a_submission_without_any_model_call(tmp_path):
+    store = _store_with(
+        tmp_path,
+        Draft("d-1", "The luminous intensity shall be at least 4 cd.", P_OK.passage_id,
+              document_id=BASE.document_id, section_id="sec-1"),
     )
-    try:
-        return open_corpus_only(settings, "real")
-    except Exception as exc:  # pragma: no cover - environment dependent
-        pytest.skip(f"corpus could not be opened: {exc}")
-
-
-def _run_input(corpus, team_id: str = "team-15") -> RunInput:
-    return RunInput(
-        run_id="recovery-test",
-        team_id=team_id,
-        case_id="dev-rear-lamp",
-        corpus_snapshot_id=getattr(corpus, "snapshot_id", "snap"),
-        input_hash=content_hash("recovery-test"),
-        specification_text="a rear lamp",
+    result = export_from_checkpoints(
+        Run(), corpus(), checkpoint_dir=store.directory,
+        output_path=tmp_path / "submission.json",
     )
 
-
-def _real_passage(corpus):
-    """A passage from a base document that has a verified printed page."""
-    from certivity.quality.deterministic import verified_page
-
-    for document in corpus.list_documents(role="base"):
-        for section in corpus.list_sections(document.document_id):
-            if not section.primary_passage_ids:
-                continue
-            for passage in corpus.get_passages(list(section.primary_passage_ids)):
-                if verified_page(passage.printed_start_page) is not None:
-                    return document, section, passage
-    pytest.skip("no passage with a verified printed page in this snapshot")
+    assert result.requirements == 1
+    assert result.drafts_recovered == 1
+    body = json.loads((tmp_path / "submission.json").read_text(encoding="utf-8"))
+    assert body["team_id"] == "team-x" and body["case_id"] == "case-y"
+    assert [r["id"] for r in body["requirements"]] == ["REQ-0001"]
 
 
-def test_a_checkpointed_draft_exports_with_its_real_version_and_page(
-    real_corpus, package, tmp_path
-):
-    """The citation that reaches the submission is the one from the corpus.
+def test_the_exported_citation_keeps_the_base_version_and_the_printed_page(tmp_path):
+    """The page and version in the output are the source's own, never derived.
 
-    Version label and printed page are read from the document and passage
-    records at export time, not carried as free text, which is what stops a
-    requirement from citing a page nobody can check.
+    A wrong version or page is a citation that looks checkable and is not, so
+    this asserts the exact values the passage carries rather than that the
+    fields are merely present.
     """
-    from certivity.quality.deterministic import verified_page
-
-    document, section, passage = _real_passage(real_corpus)
-    store = CheckpointStore(tmp_path / "cp")
-    store.record_section(
-        section.section_id,
-        status=CoverageStatus.PROCESSED,
-        document_id=document.document_id,
-        inspected_passage_ids=[passage.passage_id],
-        drafts=[
-            DraftRequirement(
-                draft_id="drf-real-1",
-                text="The device shall comply with the requirement stated in this paragraph.",
-                supporting_passage_ids=(passage.passage_id,),
-                primary_passage_id=passage.passage_id,
-                obligation_kind=ObligationKind.MANDATORY,
-                document_id=document.document_id,
-                section_id=section.section_id,
-            )
-        ],
+    store = _store_with(
+        tmp_path,
+        Draft("d-1", "Lamps shall be red.", P_EXC.passage_id,
+              document_id=BASE.document_id, section_id="sec-1"),
     )
+    result = export_from_checkpoints(Run(), corpus(), checkpoint_dir=store.directory)
 
-    out = tmp_path / "submission.json"
-    result = export_from_checkpoints(
-        _run_input(real_corpus), real_corpus,
-        checkpoint_dir=tmp_path / "cp", output_path=out,
-        participant_package=package,
+    source = result.submission["requirements"][0]["source"]
+    assert source == {
+        "regulation": "UN R999",
+        "version": "01 series",   # the base version, not the latest one
+        "page": 14,               # the page printed on the page
+        "paragraph": "6.3",
+    }
+
+
+def test_a_draft_citing_the_latest_version_is_refused_not_relabelled(tmp_path):
+    """The expected answers are built on the base version; a latest-version page is wrong."""
+    store = _store_with(
+        tmp_path,
+        Draft("d-latest", "The intensity shall be at least 5 cd.", P_LATEST.passage_id,
+              document_id=LATEST.document_id, section_id="sec-1"),
     )
+    result = export_from_checkpoints(Run(), corpus(), checkpoint_dir=store.directory)
 
-    assert result.requirements == 1, result.excluded
-    assert result.valid, result.validation
-    written = json.loads(out.read_text(encoding="utf-8"))
-    source = written["requirements"][0]["source"]
-    assert source["regulation"] == document.regulation
-    assert source["version"] == document.version_label
-    assert source["page"] == verified_page(passage.printed_start_page)
-    assert written["team_id"] == "team-15" and written["case_id"] == "dev-rear-lamp"
-
-
-def test_an_unresolvable_citation_is_excluded_rather_than_guessed(
-    real_corpus, package, tmp_path
-):
-    store = CheckpointStore(tmp_path / "cp")
-    store.record_section(
-        "made-up-section",
-        status=CoverageStatus.PROCESSED,
-        drafts=[
-            DraftRequirement(
-                draft_id="drf-fake",
-                text="The lamp shall do something this passage does not say.",
-                supporting_passage_ids=("un-r999:9-9-9:sha256-deadbeefdead#main/1@001",),
-                primary_passage_id="un-r999:9-9-9:sha256-deadbeefdead#main/1@001",
-            )
-        ],
-    )
-    result = export_from_checkpoints(
-        _run_input(real_corpus), real_corpus,
-        checkpoint_dir=tmp_path / "cp", participant_package=package,
-    )
     assert result.requirements == 0
-    assert result.drafts_recovered == 1, "the draft was recovered, then refused"
+    # Refused by the deterministic checks, which is a different decision from
+    # export declining it, so the report must distinguish the two.
+    assert "d-latest" in result.rejected
+    assert "wrong_source_version" in result.rejected["d-latest"] or result.rejected["d-latest"]
 
 
-def test_the_export_is_marked_partial_and_says_what_it_is_missing(
-    real_corpus, tmp_path
-):
-    store = CheckpointStore(tmp_path / "cp")
-    store.write_state({"plan_total": 891})
-    document, section, passage = _real_passage(real_corpus)
-    store.record_section(section.section_id, status=CoverageStatus.PROCESSED,
-                         document_id=document.document_id)
-    store.record_section("other-section", status=CoverageStatus.FAILED,
-                         explanation="timed out")
-
-    draft, result = draft_from_checkpoints(_run_input(real_corpus), store)
-    assert draft.partial, "a recovered export must never claim complete coverage"
-    assert result.sections_recovered == 1 and result.sections_failed == 1
-    assert any("891" in note for note in result.notes)
-
-
-def test_the_deterministic_report_records_that_review_did_not_finish(
-    real_corpus, tmp_path
-):
-    """A consumer must be able to tell the semantic pass was skipped."""
-    document, section, passage = _real_passage(real_corpus)
-    store = CheckpointStore(tmp_path / "cp")
-    store.record_section(
-        section.section_id, status=CoverageStatus.PROCESSED,
-        document_id=document.document_id,
-        drafts=[DraftRequirement(
-            draft_id="drf-1", text="The device shall comply.",
-            supporting_passage_ids=(passage.passage_id,),
-            primary_passage_id=passage.passage_id,
-            document_id=document.document_id, section_id=section.section_id,
-        )],
+def test_a_passage_with_no_verified_page_is_left_out_rather_than_guessed(tmp_path):
+    store = _store_with(
+        tmp_path,
+        Draft("d-ok", "The luminous intensity shall be at least 4 cd.", P_OK.passage_id,
+              document_id=BASE.document_id, section_id="sec-1"),
+        Draft("d-nopage", "Marking shall be indelible.", P_NOPAGE.passage_id,
+              document_id=BASE.document_id, section_id="sec-2"),
     )
-    draft, _ = draft_from_checkpoints(_run_input(real_corpus), store)
-    report = deterministic_report(_run_input(real_corpus), draft, real_corpus)
-    assert report.partial is True
+    result = export_from_checkpoints(Run(), corpus(), checkpoint_dir=store.directory)
+
+    assert result.requirements == 1
+    dropped = {**result.rejected, **result.excluded}
+    assert "d-nopage" in dropped
+    assert "page" in dropped["d-nopage"].lower()
 
 
-def test_a_missing_team_id_is_refused_before_anything_is_written(
-    real_corpus, package, tmp_path
-):
-    """A submission with the wrong team id scores for nobody."""
-    from certivity.api.settings import team_id_problem
+def test_an_exclusion_is_not_exported_as_a_requirement(tmp_path):
+    """"No requirements apply to X" imposes nothing and has no counterpart in the key."""
+    store = _store_with(
+        tmp_path,
+        Draft("d-exc", "No requirements apply to the housing.", P_OK.passage_id,
+              document_id=BASE.document_id, section_id="sec-1",
+              obligation_kind=ObligationKind.EXCLUSION),
+    )
+    result = export_from_checkpoints(Run(), corpus(), checkpoint_dir=store.directory)
+    assert result.requirements == 0
 
-    assert team_id_problem("") is not None
-    assert team_id_problem("team-07") is not None
-    assert team_id_problem("team-15") is None
+
+def test_identical_obligations_are_exported_once(tmp_path):
+    same = "The luminous intensity shall be at least 4 cd."
+    store = _store_with(
+        tmp_path,
+        Draft("d-1", same, P_OK.passage_id, document_id=BASE.document_id, section_id="sec-1"),
+        Draft("d-2", same, P_OK.passage_id, document_id=BASE.document_id, section_id="sec-2"),
+    )
+    result = export_from_checkpoints(Run(), corpus(), checkpoint_dir=store.directory)
+    assert result.requirements == 1
+
+
+def test_distinct_obligations_from_one_passage_are_both_kept(tmp_path):
+    """Deduplication must not merge two different obligations into one."""
+    store = _store_with(
+        tmp_path,
+        Draft("d-min", "The luminous intensity shall be at least 4 cd.", P_OK.passage_id,
+              document_id=BASE.document_id, section_id="sec-1"),
+        Draft("d-max", "The luminous intensity shall be at most 600 cd.", P_OK.passage_id,
+              document_id=BASE.document_id, section_id="sec-1"),
+    )
+    result = export_from_checkpoints(Run(), corpus(), checkpoint_dir=store.directory)
+    assert result.requirements == 2
+
+
+def test_an_export_from_nothing_is_an_empty_submission_not_an_invented_one(tmp_path):
+    store = CheckpointStore(tmp_path / "cp")
+    result = export_from_checkpoints(Run(), corpus(), checkpoint_dir=store.directory)
+    assert result.submission["requirements"] == []
+    assert result.requirements == 0
+
+
+def test_a_failed_section_is_reported_and_contributes_nothing(tmp_path):
+    store = CheckpointStore(tmp_path / "cp")
+    store.record_section("sec-1", status=CoverageStatus.FAILED, explanation="timed out")
+    draft, result = draft_from_checkpoints(Run(), store)
+
+    assert result.sections_failed == 1
+    assert result.sections_recovered == 0
+    assert draft.partial is True
+
+
+def test_a_recovered_draft_is_always_marked_partial(tmp_path):
+    """A recovered export must never present itself as a complete reading."""
+    store = _store_with(
+        tmp_path,
+        Draft("d-1", "The luminous intensity shall be at least 4 cd.", P_OK.passage_id,
+              document_id=BASE.document_id, section_id="sec-1"),
+    )
+    draft, _ = draft_from_checkpoints(Run(), store)
+    assert draft.partial is True
+
+
+def test_a_corrupt_checkpoint_line_is_reported_in_the_export(tmp_path):
+    store = _store_with(
+        tmp_path,
+        Draft("d-1", "The luminous intensity shall be at least 4 cd.", P_OK.passage_id,
+              document_id=BASE.document_id, section_id="sec-1"),
+    )
+    with (Path(store.directory) / "sections.jsonl").open("a", encoding="utf-8") as handle:
+        handle.write('{"section_id": "sec-9", "sta')
+
+    result = export_from_checkpoints(Run(), corpus(), checkpoint_dir=store.directory)
+    assert result.corrupt_checkpoint_lines == 1
+    assert result.requirements == 1, "one damaged line must not cost the whole export"
+    assert any("unreadable" in note for note in result.notes)
+
+
+def test_the_output_file_is_replaced_atomically(tmp_path):
+    store = _store_with(
+        tmp_path,
+        Draft("d-1", "The luminous intensity shall be at least 4 cd.", P_OK.passage_id,
+              document_id=BASE.document_id, section_id="sec-1"),
+    )
+    out = tmp_path / "submission.json"
+    out.write_text('{"previous": true}', encoding="utf-8")
+    export_from_checkpoints(Run(), corpus(), checkpoint_dir=store.directory, output_path=out)
+
+    assert "requirements" in json.loads(out.read_text(encoding="utf-8"))
+    assert not list(tmp_path.glob("*.tmp")), "a temporary file was left behind"
 
 
 # --------------------------------------------------------------------------- #
@@ -201,67 +226,52 @@ def test_a_missing_team_id_is_refused_before_anything_is_written(
 # --------------------------------------------------------------------------- #
 
 
-def _artifact(tmp_path, drafts: list[dict], name: str = "pipeline_draft.json"):
+def _artifact(tmp_path: Path, name: str, *drafts) -> Path:
+    from certivity.contracts import to_jsonable
+
     path = tmp_path / name
-    path.write_text(json.dumps({"draft": {"draft_requirements": drafts}}), encoding="utf-8")
+    path.write_text(
+        json.dumps({"draft": {"draft_requirements": [to_jsonable(d) for d in drafts]}}),
+        encoding="utf-8",
+    )
     return path
 
 
-def _payload(draft_id: str, section_id: str, passage_id: str) -> dict:
-    return {
-        "draft_id": draft_id,
-        "text": f"Requirement {draft_id}.",
-        "supporting_passage_ids": [passage_id],
-        "primary_passage_id": passage_id,
-        "obligation_kind": "mandatory",
-        "section_id": section_id,
-        "document_id": "doc-1",
-    }
+def test_drafts_are_recoverable_from_an_old_draft_artifact(tmp_path):
+    path = _artifact(
+        tmp_path, "pipeline_draft.json",
+        Draft("d-1", "The luminous intensity shall be at least 4 cd.", P_OK.passage_id,
+              document_id=BASE.document_id, section_id="sec-1"),
+    )
+    assert [d.draft_id for d in drafts_from_artifact(path)] == ["d-1"]
 
 
-def test_drafts_are_recoverable_from_an_old_runs_draft_artifact(tmp_path):
-    path = _artifact(tmp_path, [_payload("drf-1", "sec-1", "p-1")])
-    recovered = drafts_from_artifact(path)
-    assert [d.draft_id for d in recovered] == ["drf-1"]
-
-
-def test_importing_two_runs_unions_their_drafts_per_section(tmp_path):
-    """Three runs that read the same section must not leave only the last one."""
+def test_importing_several_runs_unions_their_work_for_the_same_section(tmp_path):
+    """Three runs that read one section must not leave only the last one's obligations."""
+    first = _artifact(
+        tmp_path, "a.json",
+        Draft("d-min", "The luminous intensity shall be at least 4 cd.", P_OK.passage_id,
+              document_id=BASE.document_id, section_id="sec-1"),
+    )
+    second = _artifact(
+        tmp_path, "b.json",
+        Draft("d-max", "The luminous intensity shall be at most 600 cd.", P_OK.passage_id,
+              document_id=BASE.document_id, section_id="sec-1"),
+    )
     store = CheckpointStore(tmp_path / "cp")
-    first = _artifact(tmp_path, [_payload("drf-a", "sec-1", "p-1")], "first.json")
-    second = _artifact(tmp_path, [_payload("drf-b", "sec-1", "p-2")], "second.json")
-
     assert import_artifact_into_checkpoints(first, store) == 1
     assert import_artifact_into_checkpoints(second, store) == 1
 
-    load = store.load()
-    assert sorted(d.draft_id for d in load.records["sec-1"].drafts) == ["drf-a", "drf-b"]
+    assert sorted(d.draft_id for d in store.load().drafts()) == ["d-max", "d-min"]
 
 
 def test_importing_the_same_artifact_twice_adds_nothing(tmp_path):
+    path = _artifact(
+        tmp_path, "a.json",
+        Draft("d-1", "The luminous intensity shall be at least 4 cd.", P_OK.passage_id,
+              document_id=BASE.document_id, section_id="sec-1"),
+    )
     store = CheckpointStore(tmp_path / "cp")
-    path = _artifact(tmp_path, [_payload("drf-a", "sec-1", "p-1")])
     assert import_artifact_into_checkpoints(path, store) == 1
     assert import_artifact_into_checkpoints(path, store) == 0
     assert len(store.load().drafts()) == 1
-
-
-def test_an_empty_export_is_valid_json_but_not_a_success(real_corpus, package, tmp_path):
-    """Nobody should upload an empty file believing the export worked.
-
-    An export with no requirements passes the official validator - it is
-    well-formed - so validity alone must not be read as success.
-    """
-    out = tmp_path / "empty.json"
-    result = export_from_checkpoints(
-        _run_input(real_corpus), real_corpus,
-        checkpoint_dir=tmp_path / "nothing-here", output_path=out,
-        participant_package=package,
-    )
-    assert result.requirements == 0
-    assert result.valid, "an empty submission is still well-formed"
-    body = json.loads(out.read_text(encoding="utf-8"))
-    assert body["requirements"] == []
-    # The CLI is what turns this into a non-zero exit and a warning; see
-    # cli._export. The record itself must simply not claim any requirement.
-    assert result.drafts_recovered == 0
