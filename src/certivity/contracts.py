@@ -36,7 +36,7 @@ import typing
 from dataclasses import dataclass, field
 from typing import Any, Optional, Protocol, Union, runtime_checkable
 
-CONTRACTS_VERSION = "1.6.0"
+CONTRACTS_VERSION = "1.7.0"
 
 # --------------------------------------------------------------------------- #
 # Enumerations
@@ -257,10 +257,29 @@ class RunConfig:
     """None means "no cap": inspect every applicable document."""
     max_sections_per_document: Optional[int] = None
     max_model_calls: Optional[int] = 400
-    max_reference_depth: int = 2
+    max_reference_depth: int = 1
+    """How many times a section is re-read with newly resolved references.
+
+    Lowered from 2 after measuring a real run: each extra depth multiplies the
+    sequential calls inside one section, and a single large annex took 33
+    minutes on one worker because its batches and passes run in series."""
     max_review_rounds: int = 1
-    passages_per_batch: int = 6
-    max_parallel_sections: int = 4
+    passages_per_batch: int = 16
+    """Passages per extraction call.
+
+    Raised from 6 after measuring a real run. Batches within a section run
+    sequentially, so a 50-passage annex was 9 batches deep on a single worker
+    while other workers idled. Larger batches shorten that chain; the limit is
+    how much text can be read carefully in one call."""
+    max_batches_per_section: int = 4
+    """Hard ceiling on extraction calls for one section.
+
+    Batches inside a section run sequentially, so without a bound one large
+    annex occupies a worker for as long as it likes. A measured run had a
+    single section take 33 minutes while seven other workers idled. Exceeding
+    this stops that section and records the truncation in its coverage note,
+    which is a visible partial result rather than a silent stall."""
+    max_parallel_sections: int = 8
     """How many sections may be extracted concurrently.
 
     1 is serial. Measured on the real corpus: ~1,201 extraction calls at ~20 s

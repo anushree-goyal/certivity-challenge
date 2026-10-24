@@ -123,7 +123,24 @@ def extract_section(
     resolutions: list[ReferenceResolution] = []
     notes: list[str] = []
 
-    for batch in _batches(bundle.primary_passages, ctx.config.passages_per_batch):
+    all_batches = _batches(bundle.primary_passages, ctx.config.passages_per_batch)
+    cap = max(1, int(getattr(ctx.config, "max_batches_per_section", 4) or 4))
+    if len(all_batches) > cap:
+        # Bound the tail: one section must not hold a worker indefinitely while
+        # the rest of the plan waits. The truncation is recorded, not hidden.
+        notes.append(
+            f"section truncated after {cap} of {len(all_batches)} batches "
+            f"({len(bundle.primary_passages)} passages); raise "
+            "RunConfig.max_batches_per_section to read all of it"
+        )
+        ctx.warn(
+            f"section {item.section_id} has {len(all_batches)} batches; only the "
+            f"first {cap} were read",
+            stage="extract",
+        )
+        all_batches = all_batches[:cap]
+
+    for batch in all_batches:
         batch_drafts, batch_resolutions, batch_notes = _extract_batch(
             ctx,
             item,
