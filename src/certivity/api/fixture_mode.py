@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import html
 import importlib.util
+import sys
 import time
 from functools import lru_cache
 from pathlib import Path
@@ -217,7 +218,18 @@ def _official_validator(package: str):
         return None
     spec = importlib.util.spec_from_file_location("participant_validate", path)
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    # Register before executing. tools/validate.py defines @dataclass classes,
+    # and dataclasses resolves a field's type through
+    # sys.modules[cls.__module__].__dict__. If the module is not in sys.modules
+    # that lookup returns None and the import dies with
+    # "AttributeError: 'NoneType' object has no attribute '__dict__'",
+    # which surfaced as every run failing at the export stage.
+    sys.modules[spec.name] = module
+    try:
+        spec.loader.exec_module(module)
+    except Exception:
+        sys.modules.pop(spec.name, None)
+        raise
     return module
 
 

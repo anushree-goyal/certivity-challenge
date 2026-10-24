@@ -348,6 +348,7 @@ def _build_drafts(
     """Convert model output into records, dropping anything uncitable."""
     drafts: list[DraftRequirement] = []
     seen_ids: set[str] = set()
+    dropped_out_of_scope: list[str] = []
 
     for entry in entries:
         text = str(entry.get("text") or "").strip()
@@ -379,7 +380,25 @@ def _build_drafts(
         if primary not in supporting:
             supporting.insert(0, primary)
 
+        reach = str(entry.get("product_applicability") or "applies")
+        if reach == "does_not_apply":
+            # The source's own scope puts this product outside the provision -
+            # typically a section written for a different device category. A real
+            # obligation, but not this product's. Offline scoring of a real R148
+            # run found 12 front-lamp obligations emitted for a rear lamp, one of
+            # which said in its own reason that it did not reach the product.
+            #
+            # "depends_on_unknown" is deliberately NOT dropped: uncertainty about
+            # a product fact is not proof that a rule is irrelevant.
+            dropped_out_of_scope.append(
+                str(entry.get("applicability_reason") or "no reason given")
+            )
+            continue
+
         notes = entry.get("notes")
+        if reach == "depends_on_unknown":
+            marker = "Applicability depends on an unestablished product fact."
+            notes = f"{notes} {marker}".strip() if notes else marker
         if primary not in primary_candidate_ids:
             # The obligation belongs to the section that owns this passage, and
             # that section is read in its own right. Keeping it here as well
@@ -430,5 +449,13 @@ def _build_drafts(
                 prompt_version=PROMPT_VERSIONS["extract_obligations"],
                 notes=notes,
             )
+        )
+
+    if dropped_out_of_scope:
+        ctx.warn(
+            f"{len(dropped_out_of_scope)} obligation(s) in {section_id} were excluded "
+            "because the source's own scope does not reach this product: "
+            + "; ".join(dropped_out_of_scope[:3]),
+            stage="extract",
         )
     return drafts

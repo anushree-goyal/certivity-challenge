@@ -1,6 +1,7 @@
 """End-to-end through the HTTP API with the labelled fixture components and the official validator."""
 
 import importlib.util
+import sys
 
 from fastapi.testclient import TestClient
 
@@ -11,6 +12,9 @@ from tests.conftest import wait_finished
 def _official_validate(package, data):
     spec = importlib.util.spec_from_file_location("official_validate", package / "tools" / "validate.py")
     module = importlib.util.module_from_spec(spec)
+    # Same reason as api/fixture_mode._official_validator: tools/validate.py
+    # uses @dataclass, and dataclasses looks the module up in sys.modules.
+    sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module.validate(data, index=module.load_index(package / "regulations" / "index.json"))
 

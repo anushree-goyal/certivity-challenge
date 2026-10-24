@@ -39,6 +39,12 @@ PROMPT_VERSIONS: dict[str, str] = {
     # from the section that owns it and once from a section that merely received
     # it as context or as a followed reference. A primary citation must now be a
     # primary passage of the section being read.
+    # v6 (extract_obligations): from offline scoring of a real R148 run. Front-lamp
+    # obligations were emitted for a rear lamp (now product_applicability), one
+    # paragraph became 12 drafts where the answer file has one (now a granularity
+    # rule), a parent heading passage was cited instead of the operative
+    # paragraph, and the corpus's "4∙10^0 cd" notation reached the submission
+    # text where a plain "4 cd" is readable.
     # v5 (extract_obligations): from the quality component's review of the real
     # corpus - split long passages, because 5 base "shall" passages exceed the
     # 2,000-character export limit; cite the narrowest passage, because 89
@@ -48,7 +54,7 @@ PROMPT_VERSIONS: dict[str, str] = {
     "product_profile": "v2",
     "candidate_scope": "v2",
     "document_scope": "v2",
-    "extract_obligations": "v5",
+    "extract_obligations": "v6",
     "revise_obligations": "v2",
 }
 
@@ -332,8 +338,11 @@ Citation
 - Where several supplied passages state the obligation, cite the **narrowest**
   one. A passage may span several printed pages, and the citation carries that
   passage's starting page, so citing a broad passage for an obligation that
-  appears on its later page cites the wrong page. Prefer the passage whose text
-  is the obligation.
+  appears on its later page cites the wrong page.
+- The primary passage must be the one whose **own text contains the operative
+  wording** you used. If the obligation's words come from the passage labelled
+  5.2.7, cite 5.2.7 - never its parent heading passage, even when the parent
+  supplied the device categories. Put the parent in `supporting_passage_ids`.
 - `primary_passage_id` must be the one passage that states the obligation
   itself. It must appear in `supporting_passage_ids`. The official output
   carries a single source, and this is it.
@@ -397,6 +406,40 @@ What is not an obligation
 - Marking, labelling, installation, test and documentation provisions **are**
   obligations. Do not exclude them as administrative.
 
+Does this obligation reach THIS product?
+- Set `product_applicability` for every obligation.
+  * "applies"            - the source's scope covers this product.
+  * "does_not_apply"     - the source's own scope puts this product outside it,
+                           for example a provision written for a different
+                           device category, position or vehicle class.
+  * "depends_on_unknown" - it would apply but for a product fact the input does
+                           not establish. Name the fact in
+                           `applicability_reason`.
+- A regulation covering several device categories contains whole sections for
+  categories the product is not. Those state real obligations, but not for this
+  product: mark them "does_not_apply" and say which category they are for.
+- Never use "does_not_apply" because a fact is unknown. Unknown is
+  "depends_on_unknown", and such obligations are kept.
+
+Granularity: match the source's own unit of obligation
+- One paragraph normally yields **one** obligation. Split only where the source
+  states genuinely separable requirements - distinct subjects, or separately
+  numbered sub-provisions.
+- A table enumerating values per device category is **one** obligation together
+  with its table. Do not emit one draft per row, per column or per category:
+  that multiplies a single requirement into many and misrepresents the source.
+- Splitting is for a passage that truly holds several requirements, not for
+  every value inside one.
+
+Numbers in `text`: write them so a reader can check them
+- The source may carry an explicit power of ten, such as `4∙10^0`, `1.40∙10^2`
+  or `5∙10^-2`. In `text`, write the plain decimal value: `4 cd`, `140 cd`,
+  `0.05 cd`.
+- In `values`, keep the source's own notation exactly as written. So `text` is
+  readable and `values` stays faithful, and the two can be compared.
+- This is not a unit conversion, which remains forbidden. Never change `cd` to
+  anything else, and never rescale a number.
+
 Conditions: only what distinguishes this obligation
 - The regulation's own scope is already recorded once, for the regulation as a
   whole. Do not restate it in `applicability_condition` on every obligation.
@@ -444,6 +487,7 @@ _OBLIGATION_SCHEMA: dict[str, Any] = {
         "primary_passage_id",
         "obligation_kind",
         "applicability_condition",
+        "product_applicability",
         "exceptions",
         "values",
     ],
@@ -461,6 +505,16 @@ _OBLIGATION_SCHEMA: dict[str, Any] = {
             ],
         },
         "applicability_condition": _nullable("string"),
+        "product_applicability": {
+            "type": "string",
+            "enum": ["applies", "does_not_apply", "depends_on_unknown"],
+            "description": (
+                "Whether this obligation reaches the product described in the input. "
+                "'does_not_apply' only when the source's own scope excludes it, e.g. "
+                "a provision for a different device category. "
+                "'depends_on_unknown' when an unestablished product fact decides it."
+            ),
+        },
         "applicability_reason": _optional(
             "string", "Why this obligation reaches the product in front of you"
         ),

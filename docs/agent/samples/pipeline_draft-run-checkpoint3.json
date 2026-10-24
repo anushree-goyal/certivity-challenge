@@ -1,0 +1,4434 @@
+{
+ "run_id": "run-checkpoint3",
+ "case_id": "dev-rear-lamp",
+ "team_id": "team-anushree",
+ "input_hash": "f158ca85875bee875bcb59f01f960f3c3f03efc87711dfd3049ebf5cf434f41c",
+ "corpus_snapshot_id": "snap-101212227810",
+ "model_configuration": {
+  "provider": "anthropic",
+  "model": "claude-opus-5",
+  "effort": "high",
+  "credentials_configured": true,
+  "credential_source": "ANTHROPIC_API_KEY",
+  "refusal_fallbacks": true,
+  "cache": "NullCache",
+  "calls_used": 9,
+  "max_calls": 14,
+  "model_overrides": {}
+ },
+ "prompt_versions": {},
+ "draft": {
+  "run_id": "run-checkpoint3",
+  "corpus_snapshot_id": "snap-101212227810",
+  "product_profile": {
+   "product_type": "Rear lamp — exterior lighting & signalling module combining multiple light functions, lens, and retro-reflector in a single housing",
+   "vehicle_categories": [
+    "M1"
+   ],
+   "facts": [
+    {
+     "key": "product_type",
+     "value": "Rear lamp — exterior lighting & signalling module combining multiple light functions, lens, and retro-reflector in a single housing",
+     "basis": "stated",
+     "evidence": [
+      {
+       "source": "specification",
+       "quote": "Rear lamp  — exterior lighting & signalling module combining multiple light functions, lens, and retro-reflector in a single housing.",
+       "location": "## Product Type"
+      }
+     ],
+     "confidence": null,
+     "notes": null
+    },
+    {
+     "key": "vehicle_category",
+     "value": "M1 — passenger car",
+     "basis": "stated",
+     "evidence": [
+      {
+       "source": "specification",
+       "quote": "M1 — passenger car.",
+       "location": "## Vehicle Category"
+      }
+     ],
+     "confidence": null,
+     "notes": null
+    },
+    {
+     "key": "referenced_regulation_applicability",
+     "value": "UNECE lighting regulations referenced apply across M and N categories",
+     "basis": "stated",
+     "evidence": [
+      {
+       "source": "specification",
+       "quote": "UNECE lighting regulations referenced apply across M and N categories.",
+       "location": "## Vehicle Category"
+      }
+     ],
+     "confidence": null,
+     "notes": "Recorded as a statement in the spec about the referenced regulations' applicability; the specific regulations are not named."
+    },
+    {
+     "key": "integrated_single_housing",
+     "value": "Multiple light functions, lens and retro-reflector combined in a single housing",
+     "basis": "stated",
+     "evidence": [
+      {
+       "source": "specification",
+       "quote": "combining multiple light functions, lens, and retro-reflector in a single housing",
+       "location": "## Product Type"
+      }
+     ],
+     "confidence": null,
+     "notes": null
+    },
+    {
+     "key": "material_values_status",
+     "value": "Representative values — to be confirmed against actual bill of materials",
+     "basis": "stated",
+     "evidence": [
+      {
+       "source": "specification",
+       "quote": "Representative values — confirm against actual bill of materials.",
+       "location": "## Materials"
+      }
+     ],
+     "confidence": null,
+     "notes": null
+    }
+   ],
+   "components": [
+    {
+     "key": "rear_position_lamp",
+     "value": "Rear position lamp",
+     "basis": "stated",
+     "evidence": [
+      {
+       "source": "specification",
+       "quote": "- Rear position lamp",
+       "location": "## Main Parts"
+      }
+     ],
+     "confidence": null,
+     "notes": null
+    },
+    {
+     "key": "stop_lamp",
+     "value": "Stop lamp",
+     "basis": "stated",
+     "evidence": [
+      {
+       "source": "specification",
+       "quote": "- Stop lamp",
+       "location": "## Main Parts"
+      }
+     ],
+     "confidence": null,
+     "notes": null
+    },
+    {
+     "key": "reversing_lamp",
+     "value": "Reversing lamp",
+     "basis": "stated",
+     "evidence": [
+      {
+       "source": "specification",
+       "quote": "- Reversing lamp",
+       "location": "## Main Parts"
+      }
+     ],
+     "confidence": null,
+     "notes": null
+    },
+    {
+     "key": "outer_lens",
+     "value": "Outer lens",
+     "basis": "stated",
+     "evidence": [
+      {
+       "source": "specification",
+       "quote": "- Outer lens",
+       "location": "## Main Parts"
+      }
+     ],
+     "confidence": null,
+     "notes": null
+    },
+    {
+     "key": "retro_reflector",
+     "value": "Retro-reflector",
+     "basis": "stated",
+     "evidence": [
+      {
+       "source": "specification",
+       "quote": "- Retro-reflector",
+       "location": "## Main Parts"
+      }
+     ],
+     "confidence": null,
+     "notes": null
+    },
+    {
+     "key": "housing",
+     "value": "Housing",
+     "basis": "stated",
+     "evidence": [
+      {
+       "source": "specification",
+       "quote": "| Housing           | PP or ASA/PC                                |",
+       "location": "## Materials table"
+      }
+     ],
+     "confidence": null,
+     "notes": "Not listed under Main Parts but appears as a component row in the materials table and in the product type description."
+    },
+    {
+     "key": "reflector_surface",
+     "value": "Reflector surface",
+     "basis": "stated",
+     "evidence": [
+      {
+       "source": "specification",
+       "quote": "| Reflector surface | PC with aluminium vacuum-metallised coating |",
+       "location": "## Materials table"
+      }
+     ],
+     "confidence": null,
+     "notes": null
+    },
+    {
+     "key": "light_source",
+     "value": "LED modules on PCB",
+     "basis": "stated",
+     "evidence": [
+      {
+       "source": "specification",
+       "quote": "| Light source      | LED modules on PCB                          |",
+       "location": "## Materials table"
+      }
+     ],
+     "confidence": null,
+     "notes": null
+    },
+    {
+     "key": "seal_gasket",
+     "value": "Seal / gasket",
+     "basis": "stated",
+     "evidence": [
+      {
+       "source": "specification",
+       "quote": "| Seal / gasket     | TPE or silicone                             |",
+       "location": "## Materials table"
+      }
+     ],
+     "confidence": null,
+     "notes": null
+    },
+    {
+     "key": "fasteners_clips",
+     "value": "Fasteners / clips",
+     "basis": "stated",
+     "evidence": [
+      {
+       "source": "specification",
+       "quote": "| Fasteners / clips | PA, POM, or steel                           |",
+       "location": "## Materials table"
+      }
+     ],
+     "confidence": null,
+     "notes": null
+    }
+   ],
+   "functions": [
+    {
+     "key": "rear_position_signalling",
+     "value": "Rear position signalling (presence/visibility)",
+     "basis": "stated",
+     "evidence": [
+      {
+       "source": "specification",
+       "quote": "- Rear position signalling (presence/visibility)",
+       "location": "## Function"
+      }
+     ],
+     "confidence": null,
+     "notes": null
+    },
+    {
+     "key": "braking_indication",
+     "value": "Braking indication (stop lamp)",
+     "basis": "stated",
+     "evidence": [
+      {
+       "source": "specification",
+       "quote": "- Braking indication (stop lamp)",
+       "location": "## Function"
+      }
+     ],
+     "confidence": null,
+     "notes": null
+    },
+    {
+     "key": "reversing_illumination",
+     "value": "Reversing illumination",
+     "basis": "stated",
+     "evidence": [
+      {
+       "source": "specification",
+       "quote": "- Reversing illumination",
+       "location": "## Function"
+      }
+     ],
+     "confidence": null,
+     "notes": null
+    },
+    {
+     "key": "passive_conspicuity",
+     "value": "Passive conspicuity (retro-reflector)",
+     "basis": "stated",
+     "evidence": [
+      {
+       "source": "specification",
+       "quote": "- Passive conspicuity (retro-reflector)",
+       "location": "## Function"
+      }
+     ],
+     "confidence": null,
+     "notes": null
+    },
+    {
+     "key": "light_transmission_and_colour_definition",
+     "value": "Light transmission & color definition (outer lens)",
+     "basis": "stated",
+     "evidence": [
+      {
+       "source": "specification",
+       "quote": "- Light transmission & color definition (outer lens)",
+       "location": "## Function"
+      }
+     ],
+     "confidence": null,
+     "notes": null
+    }
+   ],
+   "materials": [
+    {
+     "key": "outer_lens_material",
+     "value": "PMMA (red-tinted, UV-stabilised)",
+     "basis": "stated",
+     "evidence": [
+      {
+       "source": "specification",
+       "quote": "| Outer lens        | PMMA (red-tinted, UV-stabilised)            |",
+       "location": "## Materials table"
+      }
+     ],
+     "confidence": null,
+     "notes": "Spec labels the table as representative values to be confirmed against the actual bill of materials."
+    },
+    {
+     "key": "housing_material",
+     "value": "PP or ASA/PC",
+     "basis": "stated",
+     "evidence": [
+      {
+       "source": "specification",
+       "quote": "| Housing           | PP or ASA/PC                                |",
+       "location": "## Materials table"
+      }
+     ],
+     "confidence": null,
+     "notes": "Representative value per the spec's caveat."
+    },
+    {
+     "key": "reflector_surface_material",
+     "value": "PC with aluminium vacuum-metallised coating",
+     "basis": "stated",
+     "evidence": [
+      {
+       "source": "specification",
+       "quote": "| Reflector surface | PC with aluminium vacuum-metallised coating |",
+       "location": "## Materials table"
+      }
+     ],
+     "confidence": null,
+     "notes": "Representative value per the spec's caveat."
+    },
+    {
+     "key": "retro_reflector_material",
+     "value": "PMMA (molded prism optics)",
+     "basis": "stated",
+     "evidence": [
+      {
+       "source": "specification",
+       "quote": "| Retro-reflector   | PMMA (molded prism optics)                  |",
+       "location": "## Materials table"
+      }
+     ],
+     "confidence": null,
+     "notes": "Representative value per the spec's caveat."
+    },
+    {
+     "key": "light_source_material",
+     "value": "LED modules on PCB",
+     "basis": "stated",
+     "evidence": [
+      {
+       "source": "specification",
+       "quote": "| Light source      | LED modules on PCB                          |",
+       "location": "## Materials table"
+      }
+     ],
+     "confidence": null,
+     "notes": "Representative value per the spec's caveat."
+    },
+    {
+     "key": "seal_gasket_material",
+     "value": "TPE or silicone",
+     "basis": "stated",
+     "evidence": [
+      {
+       "source": "specification",
+       "quote": "| Seal / gasket     | TPE or silicone                             |",
+       "location": "## Materials table"
+      }
+     ],
+     "confidence": null,
+     "notes": "Representative value per the spec's caveat."
+    },
+    {
+     "key": "fasteners_clips_material",
+     "value": "PA, POM, or steel",
+     "basis": "stated",
+     "evidence": [
+      {
+       "source": "specification",
+       "quote": "| Fasteners / clips | PA, POM, or steel                           |",
+       "location": "## Materials table"
+      }
+     ],
+     "confidence": null,
+     "notes": "Representative value per the spec's caveat."
+    }
+   ],
+   "unknowns": [
+    "Whether the lamp includes a rear fog lamp function",
+    "Whether the lamp includes direction indicator / hazard warning function",
+    "Whether the lamp includes a rear registration plate lamp",
+    "Emitted light colour(s) for each function (lens is described as red-tinted, but no colour specification per function is given)",
+    "Photometric values (luminous intensity, light distribution angles, geometric visibility)",
+    "Retro-reflector class / coefficient of retro-reflection",
+    "Rated voltage and electrical supply characteristics (e.g. 12 V / 24 V) and power consumption",
+    "Whether the light source is replaceable or non-replaceable",
+    "Whether light source modules are LED modules subject to module-identification requirements",
+    "Mounting position on the vehicle (height above ground, lateral position, distance from vehicle edge)",
+    "Left-hand / right-hand or paired/symmetrical installation arrangement",
+    "Whether functions are grouped, combined or reciprocally incorporated in the regulatory sense",
+    "Whether the lamp is a single-function or multifunction device for approval purposes",
+    "Overall dimensions, apparent surface and illuminating surface areas",
+    "Ingress protection / environmental sealing rating",
+    "Type-approval status, approval marks or applicable regulation numbers",
+    "Whether the device is intended for original equipment or replacement/aftermarket supply",
+    "Applicability beyond M1 (specific N, O or other categories the product is intended for)",
+    "Variable-intensity or adaptive operation, and failure/tell-tale behaviour",
+    "Whether an electronic light source control gear / ballast is included",
+    "EMC, functional safety or software content of the LED driver electronics",
+    "Chemical/substance compliance data (e.g. restricted substances in the listed polymers and metals)"
+   ],
+   "summary": "The specification establishes a rear lamp module for an M1 passenger car that integrates rear position, stop and reversing lamp functions plus a retro-reflector and outer lens in one housing, and lists representative (to-be-confirmed) materials for the lens, housing, reflector surface, retro-reflector, light source, seals and fasteners. No drawings were supplied. Nothing is established about photometric or electrical values, colours per function, mounting geometry, light-source replaceability, approval status, or any additional functions such as a rear fog lamp or direction indicator."
+  },
+  "applicability_decisions": [],
+  "draft_requirements": [
+   {
+    "draft_id": "drf-3c1756bb1630",
+    "text": "For front position lamps and front end-outline marker lamps of categories A, MA or AM, the light emitted by each of the two samples supplied shall meet the requirements in Table 3.",
+    "supporting_passage_ids": [
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@001",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1@001",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002"
+    ],
+    "primary_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@001",
+    "obligation_kind": "mandatory",
+    "applicability_condition": "Front position lamps (A, MA) and front end-outline marker lamps (AM); two samples supplied",
+    "applicability_reason": "This section applies only to front position lamps (A, MA) and front end-outline marker lamps (AM). The product in front of me is a rear lamp module (rear position, stop, reversing, retro-reflector) with no stated front position or front end-outline marker function, so this obligation does not reach it on the established facts.",
+    "exceptions": [],
+    "values": [
+     {
+      "quantity": "number of samples",
+      "value": "two",
+      "unit": null,
+      "comparator": "="
+     }
+    ],
+    "unresolved_references": [
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (a)': no paragraph 4.8.3.1 (a) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+       "raw_reference": "Par. 4.8.3.1. (a)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (a)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the minimum luminous intensity column of Table 3 is to be applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (b)': no paragraph 4.8.3.1 (b) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+       "raw_reference": "Par. 4.8.3.1. (b)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (b)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the maximum luminous intensity columns of Table 3 are to be applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (c)': no paragraph 4.8.3.1 (c) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+       "raw_reference": "Par. 4.8.3.1. (c)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (c)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the standard light distribution column of Table 3 is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (d)': no paragraph 4.8.3.1 (d) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+       "raw_reference": "Par. 4.8.3.1. (d)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (d)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the angles of geometric visibility column of Table 3 is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Table 3': no paragraph Table 3 (in paragraph 5.1.1) in main of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@001",
+       "raw_reference": "Table 3",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "Table 3 (in paragraph 5.1.1)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The luminous intensity values the lamp must meet are given only in Table 3."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Figure A3-I': no paragraph  in Annex A3 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+       "raw_reference": "Figure A3-I",
+       "target_regulation": null,
+       "target_namespace": "annex:A3",
+       "target_paragraph": null,
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The standard light distribution requirement cannot be applied without the figure."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Table A2-1': no paragraph  in Annex A2 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+       "raw_reference": "Table A2-1",
+       "target_regulation": null,
+       "target_namespace": "annex:A2",
+       "target_paragraph": null,
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The angles of geometric visibility are defined only in this table."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     }
+    ],
+    "document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+    "section_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1",
+    "prompt_version": "v5",
+    "revision_of": null,
+    "notes": "Table 3 cell values are stated separately."
+   },
+   {
+    "draft_id": "drf-e889569a230e",
+    "text": "A front position lamp or front end-outline marker lamp of category A, MA or AM shall have a minimum luminous intensity of 4∙10^0 cd.",
+    "supporting_passage_ids": [
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@001"
+    ],
+    "primary_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+    "obligation_kind": "mandatory",
+    "applicability_condition": "Lamps of categories A, MA or AM",
+    "applicability_reason": "Applies only to front position / front end-outline marker lamps of categories A, MA or AM; the product is a rear lamp module with no such declared category, so it is not reached on the established facts.",
+    "exceptions": [],
+    "values": [
+     {
+      "quantity": "minimum luminous intensity",
+      "value": "4∙10^0",
+      "unit": "cd",
+      "comparator": "min"
+     }
+    ],
+    "unresolved_references": [
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (a)': no paragraph 4.8.3.1 (a) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+       "raw_reference": "Par. 4.8.3.1. (a)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (a)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the minimum luminous intensity column of Table 3 is to be applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (b)': no paragraph 4.8.3.1 (b) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+       "raw_reference": "Par. 4.8.3.1. (b)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (b)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the maximum luminous intensity columns of Table 3 are to be applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (c)': no paragraph 4.8.3.1 (c) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+       "raw_reference": "Par. 4.8.3.1. (c)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (c)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the standard light distribution column of Table 3 is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (d)': no paragraph 4.8.3.1 (d) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+       "raw_reference": "Par. 4.8.3.1. (d)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (d)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the angles of geometric visibility column of Table 3 is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Table 3': no paragraph Table 3 (in paragraph 5.1.1) in main of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@001",
+       "raw_reference": "Table 3",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "Table 3 (in paragraph 5.1.1)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The luminous intensity values the lamp must meet are given only in Table 3."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Figure A3-I': no paragraph  in Annex A3 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+       "raw_reference": "Figure A3-I",
+       "target_regulation": null,
+       "target_namespace": "annex:A3",
+       "target_paragraph": null,
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The standard light distribution requirement cannot be applied without the figure."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Table A2-1': no paragraph  in Annex A2 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+       "raw_reference": "Table A2-1",
+       "target_regulation": null,
+       "target_namespace": "annex:A2",
+       "target_paragraph": null,
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The angles of geometric visibility are defined only in this table."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     }
+    ],
+    "document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+    "section_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1",
+    "prompt_version": "v5",
+    "revision_of": null,
+    "notes": "Table 3, row 'A, MA or AM', column 'Minimum luminous intensity in cd (Par. 4.8.3.1. (a))'."
+   },
+   {
+    "draft_id": "drf-94fa3293ac73",
+    "text": "A front position lamp or front end-outline marker lamp of category A, MA or AM used as a single lamp shall not exceed a maximum luminous intensity of 1.40∙10^2 cd.",
+    "supporting_passage_ids": [
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@001"
+    ],
+    "primary_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+    "obligation_kind": "mandatory",
+    "applicability_condition": "Lamps of categories A, MA or AM used as a single lamp",
+    "applicability_reason": "Applies only to front position / front end-outline marker lamps of categories A, MA or AM used as a single lamp; the product is a rear lamp module, so it is not reached on the established facts.",
+    "exceptions": [],
+    "values": [
+     {
+      "quantity": "maximum luminous intensity (single lamp)",
+      "value": "1.40∙10^2",
+      "unit": "cd",
+      "comparator": "max"
+     }
+    ],
+    "unresolved_references": [
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (a)': no paragraph 4.8.3.1 (a) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+       "raw_reference": "Par. 4.8.3.1. (a)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (a)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the minimum luminous intensity column of Table 3 is to be applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (b)': no paragraph 4.8.3.1 (b) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+       "raw_reference": "Par. 4.8.3.1. (b)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (b)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the maximum luminous intensity columns of Table 3 are to be applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (c)': no paragraph 4.8.3.1 (c) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+       "raw_reference": "Par. 4.8.3.1. (c)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (c)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the standard light distribution column of Table 3 is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (d)': no paragraph 4.8.3.1 (d) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+       "raw_reference": "Par. 4.8.3.1. (d)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (d)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the angles of geometric visibility column of Table 3 is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Table 3': no paragraph Table 3 (in paragraph 5.1.1) in main of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@001",
+       "raw_reference": "Table 3",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "Table 3 (in paragraph 5.1.1)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The luminous intensity values the lamp must meet are given only in Table 3."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Figure A3-I': no paragraph  in Annex A3 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+       "raw_reference": "Figure A3-I",
+       "target_regulation": null,
+       "target_namespace": "annex:A3",
+       "target_paragraph": null,
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The standard light distribution requirement cannot be applied without the figure."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Table A2-1': no paragraph  in Annex A2 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+       "raw_reference": "Table A2-1",
+       "target_regulation": null,
+       "target_namespace": "annex:A2",
+       "target_paragraph": null,
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The angles of geometric visibility are defined only in this table."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     }
+    ],
+    "document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+    "section_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1",
+    "prompt_version": "v5",
+    "revision_of": null,
+    "notes": "Table 3, row 'A, MA or AM', column 'Maximum luminous intensity in cd when used as (Par. 4.8.3.1. (b))' / sub-column 'A single lamp'."
+   },
+   {
+    "draft_id": "drf-5546136776dd",
+    "text": "A front position lamp or front end-outline marker lamp of category A, MA or AM marked \"D\" (lamp which may be used as part of an assembly of two independent lamps) shall not exceed a maximum luminous intensity of 7.0∙10^1 cd.",
+    "supporting_passage_ids": [
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@001",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/3.3.2.5.2@001"
+    ],
+    "primary_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+    "obligation_kind": "mandatory",
+    "applicability_condition": "Lamps of categories A, MA or AM bearing the additional marking \"D\" per paragraph 3.3.2.5.2.",
+    "applicability_reason": "Applies only to A/MA/AM lamps marked \"D\"; the product is a rear lamp module and no \"D\" marking is established, so it is not reached.",
+    "exceptions": [],
+    "values": [
+     {
+      "quantity": "maximum luminous intensity (lamp marked \"D\")",
+      "value": "7.0∙10^1",
+      "unit": "cd",
+      "comparator": "max"
+     }
+    ],
+    "unresolved_references": [
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (a)': no paragraph 4.8.3.1 (a) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+       "raw_reference": "Par. 4.8.3.1. (a)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (a)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the minimum luminous intensity column of Table 3 is to be applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (b)': no paragraph 4.8.3.1 (b) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+       "raw_reference": "Par. 4.8.3.1. (b)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (b)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the maximum luminous intensity columns of Table 3 are to be applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (c)': no paragraph 4.8.3.1 (c) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+       "raw_reference": "Par. 4.8.3.1. (c)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (c)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the standard light distribution column of Table 3 is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (d)': no paragraph 4.8.3.1 (d) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+       "raw_reference": "Par. 4.8.3.1. (d)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (d)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the angles of geometric visibility column of Table 3 is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Table 3': no paragraph Table 3 (in paragraph 5.1.1) in main of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@001",
+       "raw_reference": "Table 3",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "Table 3 (in paragraph 5.1.1)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The luminous intensity values the lamp must meet are given only in Table 3."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Figure A3-I': no paragraph  in Annex A3 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+       "raw_reference": "Figure A3-I",
+       "target_regulation": null,
+       "target_namespace": "annex:A3",
+       "target_paragraph": null,
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The standard light distribution requirement cannot be applied without the figure."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Table A2-1': no paragraph  in Annex A2 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+       "raw_reference": "Table A2-1",
+       "target_regulation": null,
+       "target_namespace": "annex:A2",
+       "target_paragraph": null,
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The angles of geometric visibility are defined only in this table."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     }
+    ],
+    "document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+    "section_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1",
+    "prompt_version": "v5",
+    "revision_of": null,
+    "notes": "Table 3, row 'A, MA or AM', sub-column 'A lamp marked \"D\" (Par. 3.3.2.5.2.)'."
+   },
+   {
+    "draft_id": "drf-a99659f9f4b1",
+    "text": "A front position lamp or front end-outline marker lamp of category A, MA or AM shall comply with the standard light distribution defined in Figure A3-I.",
+    "supporting_passage_ids": [
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@001"
+    ],
+    "primary_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+    "obligation_kind": "mandatory",
+    "applicability_condition": "Lamps of categories A, MA or AM",
+    "applicability_reason": "Applies only to front position / front end-outline marker lamps of categories A, MA or AM; the product is a rear lamp module, so it is not reached on the established facts.",
+    "exceptions": [],
+    "values": [],
+    "unresolved_references": [
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (a)': no paragraph 4.8.3.1 (a) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+       "raw_reference": "Par. 4.8.3.1. (a)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (a)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the minimum luminous intensity column of Table 3 is to be applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (b)': no paragraph 4.8.3.1 (b) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+       "raw_reference": "Par. 4.8.3.1. (b)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (b)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the maximum luminous intensity columns of Table 3 are to be applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (c)': no paragraph 4.8.3.1 (c) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+       "raw_reference": "Par. 4.8.3.1. (c)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (c)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the standard light distribution column of Table 3 is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (d)': no paragraph 4.8.3.1 (d) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+       "raw_reference": "Par. 4.8.3.1. (d)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (d)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the angles of geometric visibility column of Table 3 is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Table 3': no paragraph Table 3 (in paragraph 5.1.1) in main of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@001",
+       "raw_reference": "Table 3",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "Table 3 (in paragraph 5.1.1)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The luminous intensity values the lamp must meet are given only in Table 3."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Figure A3-I': no paragraph  in Annex A3 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+       "raw_reference": "Figure A3-I",
+       "target_regulation": null,
+       "target_namespace": "annex:A3",
+       "target_paragraph": null,
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The standard light distribution requirement cannot be applied without the figure."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Table A2-1': no paragraph  in Annex A2 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+       "raw_reference": "Table A2-1",
+       "target_regulation": null,
+       "target_namespace": "annex:A2",
+       "target_paragraph": null,
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The angles of geometric visibility are defined only in this table."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     }
+    ],
+    "document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+    "section_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1",
+    "prompt_version": "v5",
+    "revision_of": null,
+    "notes": "Table 3, row 'A, MA or AM', column 'Standard light distribution (Par. 4.8.3.1. (c))' gives 'Figure A3-I'. The content of Figure A3-I was not supplied."
+   },
+   {
+    "draft_id": "drf-530f5dcc6270",
+    "text": "Within the angles of geometric visibility defined in Table A2-1, a front position lamp or front end-outline marker lamp of category A, MA or AM shall provide a minimum luminous intensity of 5∙10^-2 cd.",
+    "supporting_passage_ids": [
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.2@001",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@001"
+    ],
+    "primary_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+    "obligation_kind": "mandatory",
+    "applicability_condition": "Lamps of categories A, MA or AM, within the angles of geometric visibility",
+    "applicability_reason": "Applies only to front position / front end-outline marker lamps of categories A, MA or AM; the product is a rear lamp module, so it is not reached on the established facts.",
+    "exceptions": [],
+    "values": [
+     {
+      "quantity": "minimum luminous intensity within the angles of geometric visibility",
+      "value": "5∙10^-2",
+      "unit": "cd",
+      "comparator": "min"
+     }
+    ],
+    "unresolved_references": [
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (a)': no paragraph 4.8.3.1 (a) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+       "raw_reference": "Par. 4.8.3.1. (a)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (a)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the minimum luminous intensity column of Table 3 is to be applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (b)': no paragraph 4.8.3.1 (b) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+       "raw_reference": "Par. 4.8.3.1. (b)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (b)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the maximum luminous intensity columns of Table 3 are to be applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (c)': no paragraph 4.8.3.1 (c) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+       "raw_reference": "Par. 4.8.3.1. (c)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (c)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the standard light distribution column of Table 3 is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (d)': no paragraph 4.8.3.1 (d) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+       "raw_reference": "Par. 4.8.3.1. (d)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (d)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the angles of geometric visibility column of Table 3 is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Table 3': no paragraph Table 3 (in paragraph 5.1.1) in main of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@001",
+       "raw_reference": "Table 3",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "Table 3 (in paragraph 5.1.1)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The luminous intensity values the lamp must meet are given only in Table 3."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Figure A3-I': no paragraph  in Annex A3 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+       "raw_reference": "Figure A3-I",
+       "target_regulation": null,
+       "target_namespace": "annex:A3",
+       "target_paragraph": null,
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The standard light distribution requirement cannot be applied without the figure."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Table A2-1': no paragraph  in Annex A2 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+       "raw_reference": "Table A2-1",
+       "target_regulation": null,
+       "target_namespace": "annex:A2",
+       "target_paragraph": null,
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The angles of geometric visibility are defined only in this table."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'See Table 3.': no paragraph Table 3 (in paragraph 5.1.1) in main of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.2@001",
+       "raw_reference": "See Table 3.",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "Table 3 (in paragraph 5.1.1)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The minimum luminous intensity within the angles of geometric visibility is given only in Table 3."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     }
+    ],
+    "document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+    "section_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1",
+    "prompt_version": "v5",
+    "revision_of": null,
+    "notes": "Table 3, row 'A, MA or AM', column 'Angles of geometric visibility (Par. 4.8.3.1. (d))', sub-columns 'Definition' = Table A2-1 and 'Minimum luminous intensity in cd' = 5∙10^-2. Paragraph 5.1.2 refers to Table 3 for this value."
+   },
+   {
+    "draft_id": "drf-295094da71f3",
+    "text": "No requirements apply to the minimum or maximum area of apparent surface of front position lamps (A, MA) and front end-outline marker lamps (AM).",
+    "supporting_passage_ids": [
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.3@001",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1@001"
+    ],
+    "primary_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.3@001",
+    "obligation_kind": "exclusion",
+    "applicability_condition": "Front position lamps (A, MA) and front end-outline marker lamps (AM)",
+    "applicability_reason": "The exclusion concerns only front position and front end-outline marker lamps; the product is a rear lamp module, so it is not reached on the established facts.",
+    "exceptions": [],
+    "values": [],
+    "unresolved_references": [],
+    "document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+    "section_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1",
+    "prompt_version": "v5",
+    "revision_of": null,
+    "notes": null
+   },
+   {
+    "draft_id": "drf-4f82cf8e0992",
+    "text": "For end-outline marker lamps (AM), the standard light distribution may, at the request of the applicant, be considered from the VV line to the outboard only.",
+    "supporting_passage_ids": [
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.4@001",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1@001"
+    ],
+    "primary_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.4@001",
+    "obligation_kind": "permitted_alternative",
+    "applicability_condition": "End-outline marker lamps (AM), where the applicant so requests",
+    "applicability_reason": "The permission concerns only end-outline marker lamps (AM); the product is a rear lamp module with no AM function established, so it is not reached.",
+    "exceptions": [],
+    "values": [],
+    "unresolved_references": [],
+    "document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+    "section_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1",
+    "prompt_version": "v5",
+    "revision_of": null,
+    "notes": null
+   },
+   {
+    "draft_id": "drf-f57c6bd69fc7",
+    "text": "No additional specific requirements apply to front position lamps (A, MA) and front end-outline marker lamps (AM).",
+    "supporting_passage_ids": [
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.5@001",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1@001"
+    ],
+    "primary_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.5@001",
+    "obligation_kind": "exclusion",
+    "applicability_condition": "Front position lamps (A, MA) and front end-outline marker lamps (AM)",
+    "applicability_reason": "The exclusion concerns only front position and front end-outline marker lamps; the product is a rear lamp module, so it is not reached on the established facts.",
+    "exceptions": [],
+    "values": [],
+    "unresolved_references": [],
+    "document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+    "section_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1",
+    "prompt_version": "v5",
+    "revision_of": null,
+    "notes": null
+   },
+   {
+    "draft_id": "drf-4c14d9c47c3b",
+    "text": "Front position lamps (A, MA) and front end-outline marker lamps (AM) shall comply with the failure provisions of paragraph 4.6.",
+    "supporting_passage_ids": [
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.6@001",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1@001",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/4.6@001"
+    ],
+    "primary_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.6@001",
+    "obligation_kind": "mandatory",
+    "applicability_condition": "Front position lamps (A, MA) and front end-outline marker lamps (AM)",
+    "applicability_reason": "The pointer applies only to front position and front end-outline marker lamps; the product is a rear lamp module, so it is not reached on the established facts.",
+    "exceptions": [],
+    "values": [],
+    "unresolved_references": [],
+    "document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+    "section_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1",
+    "prompt_version": "v5",
+    "revision_of": null,
+    "notes": "Paragraph 5.1.6 states only 'See paragraph 4.6.'; the supplied passage for 4.6 contains only the heading 'Failure provisions', so the substantive content could not be read."
+   },
+   {
+    "draft_id": "drf-4bb1a8ad1fd0",
+    "text": "For front position lamps (A, MA) and front end-outline marker lamps (AM), the colour of the light emitted shall be white.",
+    "supporting_passage_ids": [
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.7@001",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5@001"
+    ],
+    "primary_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.7@001",
+    "obligation_kind": "mandatory",
+    "applicability_condition": "Devices that are front position lamps (symbols A, MA) or front end-outline marker lamps (symbol AM)",
+    "applicability_reason": "The product is described as a rear lamp module combining rear position, stop and reversing functions; nothing in the supplied product facts establishes a front position lamp (A, MA) or front end-outline marker lamp (AM) function, so this obligation does not appear to reach the product.",
+    "exceptions": [
+     "the lamp identified by symbol MA may be amber"
+    ],
+    "values": [],
+    "unresolved_references": [],
+    "document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+    "section_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1",
+    "prompt_version": "v5",
+    "revision_of": null,
+    "notes": null
+   },
+   {
+    "draft_id": "drf-4edda4476654",
+    "text": "A lamp identified by symbol MA (front position lamp) may emit amber light instead of white.",
+    "supporting_passage_ids": [
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.7@001",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5@001"
+    ],
+    "primary_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.7@001",
+    "obligation_kind": "permitted_alternative",
+    "applicability_condition": "Lamp identified by symbol MA",
+    "applicability_reason": "The product is a rear lamp module; no front position lamp bearing symbol MA is established for it, so this permission does not appear to reach the product.",
+    "exceptions": [],
+    "values": [],
+    "unresolved_references": [],
+    "document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+    "section_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1",
+    "prompt_version": "v5",
+    "revision_of": null,
+    "notes": null
+   },
+   {
+    "draft_id": "drf-fc7832c3c083",
+    "text": "The light emitted by each of the two samples supplied of a rear position lamp (R1, R2, MR) or rear end-outline marker lamp (RM1, RM2) shall meet the requirements in Table 4.",
+    "supporting_passage_ids": [
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@001",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2@001",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002"
+    ],
+    "primary_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@001",
+    "obligation_kind": "mandatory",
+    "applicability_condition": "Rear position lamps (R1, R2, MR) and rear end-outline marker lamps (RM1, RM2); applies to each of the two samples supplied",
+    "applicability_reason": "The product integrates a rear position lamp function, so the photometric requirements of paragraph 5.2.1 and Table 4 reach it; the exact category (R1, R2, MR, RM1, RM2) is not established in the product facts.",
+    "exceptions": [
+     "A luminous intensity of 6.0∙10^1 cd is permitted for rear position lamps reciprocally incorporated with stop lamps below a plane forming an angle of 5° with and downward from the horizontal plane"
+    ],
+    "values": [
+     {
+      "quantity": "number of samples supplied",
+      "value": "two",
+      "unit": null,
+      "comparator": "="
+     }
+    ],
+    "unresolved_references": [
+     {
+      "status": "missing",
+      "explanation": "'Table 4': no paragraph Table 4 (in paragraph 5.2.1.) in main of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@001",
+       "raw_reference": "Table 4",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "Table 4 (in paragraph 5.2.1.)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The luminous intensity requirements the samples must meet are the values listed in Table 4; the table was supplied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (a)': no paragraph 4.8.3.1. (a) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (a)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (a)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the minimum luminous intensity column of Table 4 is to be applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (b)': no paragraph 4.8.3.1. (b) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (b)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (b)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the maximum luminous intensity column of Table 4 is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (c)': no paragraph 4.8.3.1. (c) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (c)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (c)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the standard light distribution column is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (d)': no paragraph 4.8.3.1. (d) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (d)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (d)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the angles of geometric visibility column is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Table A2-1': no paragraph Table A2-1 in Annex 2 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Table A2-1",
+       "target_regulation": null,
+       "target_namespace": "annex:2",
+       "target_paragraph": "Table A2-1",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines the angles of geometric visibility over which the 5∙10^-2 cd minimum applies."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Table 4': no paragraph 5.2.1 (Table 4) in main of UN R148 1.6.0; nearest existing ancestor is 5.2",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@001",
+       "raw_reference": "Table 4",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "5.2.1 (Table 4)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The luminous intensity requirements the samples must meet are the values in Table 4."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (a)': no paragraph 4.8.3.1 (a) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (a)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (a)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the minimum luminous intensity column of Table 4 is applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (b)': no paragraph 4.8.3.1 (b) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (b)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (b)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the maximum luminous intensity column of Table 4 is applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (c)': no paragraph 4.8.3.1 (c) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (c)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (c)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the standard light distribution column of Table 4 is applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (d)': no paragraph 4.8.3.1 (d) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (d)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (d)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the angles of geometric visibility column of Table 4 is applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Figure A3-I': no paragraph Figure A3-I in Annex 3 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Figure A3-I",
+       "target_regulation": "UN R148",
+       "target_namespace": "annex:3",
+       "target_paragraph": "Figure A3-I",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The standard light distribution values required by Table 4 are given only in this figure."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Table A2-1': no paragraph Table A2-1 in Annex 2 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Table A2-1",
+       "target_regulation": "UN R148",
+       "target_namespace": "annex:2",
+       "target_paragraph": "Table A2-1",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The angles of geometric visibility over which the 5∙10^-2 cd minimum applies are defined only in this table."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     }
+    ],
+    "document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+    "section_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2",
+    "prompt_version": "v5",
+    "revision_of": null,
+    "notes": "The requirement is expressed by reference to Table 4; the individual Table 4 values are stated as separate obligations."
+   },
+   {
+    "draft_id": "drf-bb6dbe3e5d11",
+    "text": "A luminous intensity of 6.0∙10^1 cd shall be permitted for rear position lamps reciprocally incorporated with stop lamps below a plane forming an angle of 5° with and downward from the horizontal plane.",
+    "supporting_passage_ids": [
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@001"
+    ],
+    "primary_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@001",
+    "obligation_kind": "permitted_alternative",
+    "applicability_condition": "Rear position lamps reciprocally incorporated with stop lamps, in the zone below a plane forming an angle of 5° with and downward from the horizontal plane",
+    "applicability_reason": "The product combines a rear position lamp and a stop lamp in one housing, but whether the two functions are reciprocally incorporated in the regulatory sense is not established.",
+    "exceptions": [],
+    "values": [
+     {
+      "quantity": "permitted luminous intensity",
+      "value": "6.0∙10^1",
+      "unit": "cd",
+      "comparator": "="
+     },
+     {
+      "quantity": "angle of plane downward from the horizontal plane",
+      "value": "5",
+      "unit": "°",
+      "comparator": "="
+     }
+    ],
+    "unresolved_references": [
+     {
+      "status": "missing",
+      "explanation": "'Table 4': no paragraph Table 4 (in paragraph 5.2.1.) in main of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@001",
+       "raw_reference": "Table 4",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "Table 4 (in paragraph 5.2.1.)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The luminous intensity requirements the samples must meet are the values listed in Table 4; the table was supplied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Table 4': no paragraph 5.2.1 (Table 4) in main of UN R148 1.6.0; nearest existing ancestor is 5.2",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@001",
+       "raw_reference": "Table 4",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "5.2.1 (Table 4)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The luminous intensity requirements the samples must meet are the values in Table 4."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     }
+    ],
+    "document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+    "section_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2",
+    "prompt_version": "v5",
+    "revision_of": null,
+    "notes": null
+   },
+   {
+    "draft_id": "drf-0e332e55aa37",
+    "text": "Rear position lamps or rear end-outline marker lamps of categories R1, MR or RM1 (steady) shall have a minimum luminous intensity of 4∙10^0 cd.",
+    "supporting_passage_ids": [
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@001"
+    ],
+    "primary_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+    "obligation_kind": "mandatory",
+    "applicability_condition": "Lamps of categories R1, MR or RM1 (steady)",
+    "applicability_reason": "The product has a rear position lamp function; whether it is of category R1/MR/RM1 (steady) is not established.",
+    "exceptions": [],
+    "values": [
+     {
+      "quantity": "minimum luminous intensity",
+      "value": "4∙10^0",
+      "unit": "cd",
+      "comparator": ">="
+     }
+    ],
+    "unresolved_references": [
+     {
+      "status": "missing",
+      "explanation": "'Table 4': no paragraph Table 4 (in paragraph 5.2.1.) in main of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@001",
+       "raw_reference": "Table 4",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "Table 4 (in paragraph 5.2.1.)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The luminous intensity requirements the samples must meet are the values listed in Table 4; the table was supplied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (a)': no paragraph 4.8.3.1. (a) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (a)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (a)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the minimum luminous intensity column of Table 4 is to be applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (b)': no paragraph 4.8.3.1. (b) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (b)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (b)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the maximum luminous intensity column of Table 4 is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (c)': no paragraph 4.8.3.1. (c) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (c)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (c)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the standard light distribution column is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (d)': no paragraph 4.8.3.1. (d) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (d)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (d)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the angles of geometric visibility column is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Table A2-1': no paragraph Table A2-1 in Annex 2 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Table A2-1",
+       "target_regulation": null,
+       "target_namespace": "annex:2",
+       "target_paragraph": "Table A2-1",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines the angles of geometric visibility over which the 5∙10^-2 cd minimum applies."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Table 4': no paragraph 5.2.1 (Table 4) in main of UN R148 1.6.0; nearest existing ancestor is 5.2",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@001",
+       "raw_reference": "Table 4",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "5.2.1 (Table 4)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The luminous intensity requirements the samples must meet are the values in Table 4."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (a)': no paragraph 4.8.3.1 (a) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (a)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (a)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the minimum luminous intensity column of Table 4 is applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (b)': no paragraph 4.8.3.1 (b) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (b)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (b)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the maximum luminous intensity column of Table 4 is applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (c)': no paragraph 4.8.3.1 (c) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (c)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (c)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the standard light distribution column of Table 4 is applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (d)': no paragraph 4.8.3.1 (d) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (d)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (d)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the angles of geometric visibility column of Table 4 is applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Figure A3-I': no paragraph Figure A3-I in Annex 3 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Figure A3-I",
+       "target_regulation": "UN R148",
+       "target_namespace": "annex:3",
+       "target_paragraph": "Figure A3-I",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The standard light distribution values required by Table 4 are given only in this figure."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Table A2-1': no paragraph Table A2-1 in Annex 2 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Table A2-1",
+       "target_regulation": "UN R148",
+       "target_namespace": "annex:2",
+       "target_paragraph": "Table A2-1",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The angles of geometric visibility over which the 5∙10^-2 cd minimum applies are defined only in this table."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     }
+    ],
+    "document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+    "section_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2",
+    "prompt_version": "v5",
+    "revision_of": null,
+    "notes": "Table 4 column 'Minimum luminous intensity in cd (Par. 4.8.3.1. (a))'."
+   },
+   {
+    "draft_id": "drf-4d6f8debb5a3",
+    "text": "A rear position lamp or rear end-outline marker lamp of category R1, MR or RM1 (steady) used as a single lamp shall have a maximum luminous intensity of 1.7∙10^1 cd.",
+    "supporting_passage_ids": [
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002"
+    ],
+    "primary_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+    "obligation_kind": "mandatory",
+    "applicability_condition": "Lamps of categories R1, MR or RM1 (steady) used as a single lamp",
+    "applicability_reason": "The product has a rear position lamp function; neither its category nor whether it is used as a single lamp is established.",
+    "exceptions": [],
+    "values": [
+     {
+      "quantity": "maximum luminous intensity (single lamp)",
+      "value": "1.7∙10^1",
+      "unit": "cd",
+      "comparator": "<="
+     }
+    ],
+    "unresolved_references": [
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (a)': no paragraph 4.8.3.1. (a) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (a)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (a)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the minimum luminous intensity column of Table 4 is to be applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (b)': no paragraph 4.8.3.1. (b) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (b)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (b)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the maximum luminous intensity column of Table 4 is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (c)': no paragraph 4.8.3.1. (c) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (c)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (c)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the standard light distribution column is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (d)': no paragraph 4.8.3.1. (d) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (d)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (d)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the angles of geometric visibility column is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Table A2-1': no paragraph Table A2-1 in Annex 2 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Table A2-1",
+       "target_regulation": null,
+       "target_namespace": "annex:2",
+       "target_paragraph": "Table A2-1",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines the angles of geometric visibility over which the 5∙10^-2 cd minimum applies."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (a)': no paragraph 4.8.3.1 (a) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (a)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (a)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the minimum luminous intensity column of Table 4 is applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (b)': no paragraph 4.8.3.1 (b) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (b)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (b)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the maximum luminous intensity column of Table 4 is applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (c)': no paragraph 4.8.3.1 (c) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (c)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (c)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the standard light distribution column of Table 4 is applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (d)': no paragraph 4.8.3.1 (d) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (d)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (d)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the angles of geometric visibility column of Table 4 is applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Figure A3-I': no paragraph Figure A3-I in Annex 3 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Figure A3-I",
+       "target_regulation": "UN R148",
+       "target_namespace": "annex:3",
+       "target_paragraph": "Figure A3-I",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The standard light distribution values required by Table 4 are given only in this figure."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Table A2-1': no paragraph Table A2-1 in Annex 2 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Table A2-1",
+       "target_regulation": "UN R148",
+       "target_namespace": "annex:2",
+       "target_paragraph": "Table A2-1",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The angles of geometric visibility over which the 5∙10^-2 cd minimum applies are defined only in this table."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     }
+    ],
+    "document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+    "section_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2",
+    "prompt_version": "v5",
+    "revision_of": null,
+    "notes": "Table 4 column 'Maximum luminous intensity in cd when used as (Par. 4.8.3.1. (b))' / sub-column 'A single lamp'."
+   },
+   {
+    "draft_id": "drf-911df3d2355e",
+    "text": "A rear position lamp or rear end-outline marker lamp of category R1, MR or RM1 (steady) marked \"D\" (lamp which may be used as part of an assembly of two independent lamps, paragraph 3.3.2.5.2.) shall have a maximum luminous intensity of 8.5∙10^0 cd.",
+    "supporting_passage_ids": [
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/3.3.2.5.2@001"
+    ],
+    "primary_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+    "obligation_kind": "mandatory",
+    "applicability_condition": "Lamps of categories R1, MR or RM1 (steady) marked \"D\" in accordance with paragraph 3.3.2.5.2.",
+    "applicability_reason": "The product has a rear position lamp function; neither its category nor any \"D\" marking is established.",
+    "exceptions": [],
+    "values": [
+     {
+      "quantity": "maximum luminous intensity (lamp marked \"D\")",
+      "value": "8.5∙10^0",
+      "unit": "cd",
+      "comparator": "<="
+     }
+    ],
+    "unresolved_references": [
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (a)': no paragraph 4.8.3.1. (a) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (a)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (a)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the minimum luminous intensity column of Table 4 is to be applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (b)': no paragraph 4.8.3.1. (b) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (b)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (b)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the maximum luminous intensity column of Table 4 is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (c)': no paragraph 4.8.3.1. (c) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (c)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (c)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the standard light distribution column is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (d)': no paragraph 4.8.3.1. (d) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (d)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (d)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the angles of geometric visibility column is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Table A2-1': no paragraph Table A2-1 in Annex 2 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Table A2-1",
+       "target_regulation": null,
+       "target_namespace": "annex:2",
+       "target_paragraph": "Table A2-1",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines the angles of geometric visibility over which the 5∙10^-2 cd minimum applies."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (a)': no paragraph 4.8.3.1 (a) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (a)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (a)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the minimum luminous intensity column of Table 4 is applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (b)': no paragraph 4.8.3.1 (b) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (b)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (b)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the maximum luminous intensity column of Table 4 is applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (c)': no paragraph 4.8.3.1 (c) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (c)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (c)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the standard light distribution column of Table 4 is applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (d)': no paragraph 4.8.3.1 (d) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (d)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (d)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the angles of geometric visibility column of Table 4 is applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Figure A3-I': no paragraph Figure A3-I in Annex 3 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Figure A3-I",
+       "target_regulation": "UN R148",
+       "target_namespace": "annex:3",
+       "target_paragraph": "Figure A3-I",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The standard light distribution values required by Table 4 are given only in this figure."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Table A2-1': no paragraph Table A2-1 in Annex 2 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Table A2-1",
+       "target_regulation": "UN R148",
+       "target_namespace": "annex:2",
+       "target_paragraph": "Table A2-1",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The angles of geometric visibility over which the 5∙10^-2 cd minimum applies are defined only in this table."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     }
+    ],
+    "document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+    "section_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2",
+    "prompt_version": "v5",
+    "revision_of": null,
+    "notes": "Table 4 column 'Maximum luminous intensity in cd when used as (Par. 4.8.3.1. (b))' / sub-column 'A lamp marked \"D\" (Par. 3.3.2.5.2.)'."
+   },
+   {
+    "draft_id": "drf-93ba7116194a",
+    "text": "A rear position lamp or rear end-outline marker lamp of category R1, MR or RM1 (steady) shall comply with the standard light distribution of Figure A3-I.",
+    "supporting_passage_ids": [
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#annex:3/_@001"
+    ],
+    "primary_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+    "obligation_kind": "mandatory",
+    "applicability_condition": "Lamps of categories R1, MR or RM1 (steady)",
+    "applicability_reason": "The product has a rear position lamp function; whether it is of category R1/MR/RM1 is not established.",
+    "exceptions": [
+     "For end-outline marker lamps (RM1, RM2) the standard light distribution may be considered at the request of the applicant from VV line to the outboard only (paragraph 5.2.4.)"
+    ],
+    "values": [],
+    "unresolved_references": [
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (a)': no paragraph 4.8.3.1. (a) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (a)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (a)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the minimum luminous intensity column of Table 4 is to be applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (b)': no paragraph 4.8.3.1. (b) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (b)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (b)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the maximum luminous intensity column of Table 4 is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (c)': no paragraph 4.8.3.1. (c) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (c)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (c)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the standard light distribution column is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (d)': no paragraph 4.8.3.1. (d) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (d)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (d)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the angles of geometric visibility column is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Table A2-1': no paragraph Table A2-1 in Annex 2 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Table A2-1",
+       "target_regulation": null,
+       "target_namespace": "annex:2",
+       "target_paragraph": "Table A2-1",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines the angles of geometric visibility over which the 5∙10^-2 cd minimum applies."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (a)': no paragraph 4.8.3.1 (a) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (a)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (a)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the minimum luminous intensity column of Table 4 is applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (b)': no paragraph 4.8.3.1 (b) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (b)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (b)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the maximum luminous intensity column of Table 4 is applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (c)': no paragraph 4.8.3.1 (c) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (c)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (c)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the standard light distribution column of Table 4 is applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (d)': no paragraph 4.8.3.1 (d) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (d)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (d)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the angles of geometric visibility column of Table 4 is applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Figure A3-I': no paragraph Figure A3-I in Annex 3 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Figure A3-I",
+       "target_regulation": "UN R148",
+       "target_namespace": "annex:3",
+       "target_paragraph": "Figure A3-I",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The standard light distribution values required by Table 4 are given only in this figure."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Table A2-1': no paragraph Table A2-1 in Annex 2 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Table A2-1",
+       "target_regulation": "UN R148",
+       "target_namespace": "annex:2",
+       "target_paragraph": "Table A2-1",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The angles of geometric visibility over which the 5∙10^-2 cd minimum applies are defined only in this table."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     }
+    ],
+    "document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+    "section_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2",
+    "prompt_version": "v5",
+    "revision_of": null,
+    "notes": "Table 4 column 'Standard light distribution (Par. 4.8.3.1. (c))'; the content of Figure A3-I was not supplied."
+   },
+   {
+    "draft_id": "drf-a6ee64a5fe9f",
+    "text": "Within the angles of geometric visibility defined in Table A2-1, a rear position lamp or rear end-outline marker lamp of category R1, MR or RM1 (steady) shall have a minimum luminous intensity of 5∙10^-2 cd.",
+    "supporting_passage_ids": [
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.2@001"
+    ],
+    "primary_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+    "obligation_kind": "mandatory",
+    "applicability_condition": "Lamps of categories R1, MR or RM1 (steady), within the angles of geometric visibility defined in Table A2-1",
+    "applicability_reason": "The product has a rear position lamp function; whether it is of category R1/MR/RM1 is not established.",
+    "exceptions": [],
+    "values": [
+     {
+      "quantity": "minimum luminous intensity within the angles of geometric visibility",
+      "value": "5∙10^-2",
+      "unit": "cd",
+      "comparator": ">="
+     }
+    ],
+    "unresolved_references": [
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (a)': no paragraph 4.8.3.1. (a) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (a)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (a)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the minimum luminous intensity column of Table 4 is to be applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (b)': no paragraph 4.8.3.1. (b) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (b)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (b)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the maximum luminous intensity column of Table 4 is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (c)': no paragraph 4.8.3.1. (c) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (c)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (c)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the standard light distribution column is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (d)': no paragraph 4.8.3.1. (d) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (d)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (d)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the angles of geometric visibility column is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Table A2-1': no paragraph Table A2-1 in Annex 2 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Table A2-1",
+       "target_regulation": null,
+       "target_namespace": "annex:2",
+       "target_paragraph": "Table A2-1",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines the angles of geometric visibility over which the 5∙10^-2 cd minimum applies."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'See Table 4': no paragraph Table 4 (in paragraph 5.2.1.) in main of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.2@001",
+       "raw_reference": "See Table 4",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "Table 4 (in paragraph 5.2.1.)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The minimum luminous intensity within the angles of geometric visibility is only given in Table 4."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (a)': no paragraph 4.8.3.1 (a) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (a)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (a)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the minimum luminous intensity column of Table 4 is applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (b)': no paragraph 4.8.3.1 (b) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (b)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (b)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the maximum luminous intensity column of Table 4 is applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (c)': no paragraph 4.8.3.1 (c) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (c)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (c)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the standard light distribution column of Table 4 is applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (d)': no paragraph 4.8.3.1 (d) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (d)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (d)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the angles of geometric visibility column of Table 4 is applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Figure A3-I': no paragraph Figure A3-I in Annex 3 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Figure A3-I",
+       "target_regulation": "UN R148",
+       "target_namespace": "annex:3",
+       "target_paragraph": "Figure A3-I",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The standard light distribution values required by Table 4 are given only in this figure."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Table A2-1': no paragraph Table A2-1 in Annex 2 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Table A2-1",
+       "target_regulation": "UN R148",
+       "target_namespace": "annex:2",
+       "target_paragraph": "Table A2-1",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The angles of geometric visibility over which the 5∙10^-2 cd minimum applies are defined only in this table."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'See Table 4': no paragraph 5.2.1 (Table 4) in main of UN R148 1.6.0; nearest existing ancestor is 5.2",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.2@001",
+       "raw_reference": "See Table 4",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "5.2.1 (Table 4)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Paragraph 5.2.2 states no value of its own; the required minimum within the angles of geometric visibility is only in Table 4."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     }
+    ],
+    "document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+    "section_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2",
+    "prompt_version": "v5",
+    "revision_of": null,
+    "notes": "Table 4 column 'Angles of geometric visibility (Par. 4.8.3.1. (d))' with sub-columns 'Definition' = Table A2-1 and 'Minimum luminous intensity in cd'; the content of Table A2-1 was not supplied."
+   },
+   {
+    "draft_id": "drf-47ac0d0fe9c8",
+    "text": "Rear position lamps or rear end-outline marker lamps of categories R2 or RM2 (variable) shall have a minimum luminous intensity of 4∙10^0 cd.",
+    "supporting_passage_ids": [
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@001"
+    ],
+    "primary_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+    "obligation_kind": "mandatory",
+    "applicability_condition": "Lamps of categories R2 or RM2 (variable)",
+    "applicability_reason": "The product has a rear position lamp function; whether it is of category R2/RM2 (variable intensity) is not established.",
+    "exceptions": [],
+    "values": [
+     {
+      "quantity": "minimum luminous intensity",
+      "value": "4∙10^0",
+      "unit": "cd",
+      "comparator": ">="
+     }
+    ],
+    "unresolved_references": [
+     {
+      "status": "missing",
+      "explanation": "'Table 4': no paragraph Table 4 (in paragraph 5.2.1.) in main of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@001",
+       "raw_reference": "Table 4",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "Table 4 (in paragraph 5.2.1.)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The luminous intensity requirements the samples must meet are the values listed in Table 4; the table was supplied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (a)': no paragraph 4.8.3.1. (a) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (a)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (a)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the minimum luminous intensity column of Table 4 is to be applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (b)': no paragraph 4.8.3.1. (b) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (b)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (b)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the maximum luminous intensity column of Table 4 is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (c)': no paragraph 4.8.3.1. (c) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (c)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (c)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the standard light distribution column is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (d)': no paragraph 4.8.3.1. (d) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (d)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (d)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the angles of geometric visibility column is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Table A2-1': no paragraph Table A2-1 in Annex 2 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Table A2-1",
+       "target_regulation": null,
+       "target_namespace": "annex:2",
+       "target_paragraph": "Table A2-1",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines the angles of geometric visibility over which the 5∙10^-2 cd minimum applies."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Table 4': no paragraph 5.2.1 (Table 4) in main of UN R148 1.6.0; nearest existing ancestor is 5.2",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@001",
+       "raw_reference": "Table 4",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "5.2.1 (Table 4)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The luminous intensity requirements the samples must meet are the values in Table 4."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (a)': no paragraph 4.8.3.1 (a) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (a)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (a)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the minimum luminous intensity column of Table 4 is applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (b)': no paragraph 4.8.3.1 (b) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (b)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (b)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the maximum luminous intensity column of Table 4 is applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (c)': no paragraph 4.8.3.1 (c) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (c)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (c)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the standard light distribution column of Table 4 is applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (d)': no paragraph 4.8.3.1 (d) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (d)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (d)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the angles of geometric visibility column of Table 4 is applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Figure A3-I': no paragraph Figure A3-I in Annex 3 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Figure A3-I",
+       "target_regulation": "UN R148",
+       "target_namespace": "annex:3",
+       "target_paragraph": "Figure A3-I",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The standard light distribution values required by Table 4 are given only in this figure."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Table A2-1': no paragraph Table A2-1 in Annex 2 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Table A2-1",
+       "target_regulation": "UN R148",
+       "target_namespace": "annex:2",
+       "target_paragraph": "Table A2-1",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The angles of geometric visibility over which the 5∙10^-2 cd minimum applies are defined only in this table."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     }
+    ],
+    "document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+    "section_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2",
+    "prompt_version": "v5",
+    "revision_of": null,
+    "notes": "Table 4 column 'Minimum luminous intensity in cd (Par. 4.8.3.1. (a))'."
+   },
+   {
+    "draft_id": "drf-5d412457cc84",
+    "text": "A rear position lamp or rear end-outline marker lamp of category R2 or RM2 (variable) used as a single lamp shall have a maximum luminous intensity of 4.2∙10^1 cd.",
+    "supporting_passage_ids": [
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002"
+    ],
+    "primary_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+    "obligation_kind": "mandatory",
+    "applicability_condition": "Lamps of categories R2 or RM2 (variable) used as a single lamp",
+    "applicability_reason": "The product has a rear position lamp function; neither its category nor whether it is used as a single lamp is established.",
+    "exceptions": [],
+    "values": [
+     {
+      "quantity": "maximum luminous intensity (single lamp)",
+      "value": "4.2∙10^1",
+      "unit": "cd",
+      "comparator": "<="
+     }
+    ],
+    "unresolved_references": [
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (a)': no paragraph 4.8.3.1. (a) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (a)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (a)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the minimum luminous intensity column of Table 4 is to be applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (b)': no paragraph 4.8.3.1. (b) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (b)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (b)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the maximum luminous intensity column of Table 4 is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (c)': no paragraph 4.8.3.1. (c) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (c)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (c)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the standard light distribution column is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (d)': no paragraph 4.8.3.1. (d) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (d)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (d)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the angles of geometric visibility column is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Table A2-1': no paragraph Table A2-1 in Annex 2 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Table A2-1",
+       "target_regulation": null,
+       "target_namespace": "annex:2",
+       "target_paragraph": "Table A2-1",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines the angles of geometric visibility over which the 5∙10^-2 cd minimum applies."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (a)': no paragraph 4.8.3.1 (a) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (a)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (a)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the minimum luminous intensity column of Table 4 is applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (b)': no paragraph 4.8.3.1 (b) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (b)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (b)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the maximum luminous intensity column of Table 4 is applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (c)': no paragraph 4.8.3.1 (c) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (c)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (c)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the standard light distribution column of Table 4 is applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (d)': no paragraph 4.8.3.1 (d) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (d)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (d)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the angles of geometric visibility column of Table 4 is applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Figure A3-I': no paragraph Figure A3-I in Annex 3 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Figure A3-I",
+       "target_regulation": "UN R148",
+       "target_namespace": "annex:3",
+       "target_paragraph": "Figure A3-I",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The standard light distribution values required by Table 4 are given only in this figure."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Table A2-1': no paragraph Table A2-1 in Annex 2 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Table A2-1",
+       "target_regulation": "UN R148",
+       "target_namespace": "annex:2",
+       "target_paragraph": "Table A2-1",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The angles of geometric visibility over which the 5∙10^-2 cd minimum applies are defined only in this table."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     }
+    ],
+    "document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+    "section_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2",
+    "prompt_version": "v5",
+    "revision_of": null,
+    "notes": "Table 4 column 'Maximum luminous intensity in cd when used as (Par. 4.8.3.1. (b))' / sub-column 'A single lamp'."
+   },
+   {
+    "draft_id": "drf-a4df39b677ff",
+    "text": "A rear position lamp or rear end-outline marker lamp of category R2 or RM2 (variable) marked \"D\" (lamp which may be used as part of an assembly of two independent lamps, paragraph 3.3.2.5.2.) shall have a maximum luminous intensity of 2.1∙10^1 cd.",
+    "supporting_passage_ids": [
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/3.3.2.5.2@001"
+    ],
+    "primary_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+    "obligation_kind": "mandatory",
+    "applicability_condition": "Lamps of categories R2 or RM2 (variable) marked \"D\" in accordance with paragraph 3.3.2.5.2.",
+    "applicability_reason": "The product has a rear position lamp function; neither its category nor any \"D\" marking is established.",
+    "exceptions": [],
+    "values": [
+     {
+      "quantity": "maximum luminous intensity (lamp marked \"D\")",
+      "value": "2.1∙10^1",
+      "unit": "cd",
+      "comparator": "<="
+     }
+    ],
+    "unresolved_references": [
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (a)': no paragraph 4.8.3.1. (a) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (a)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (a)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the minimum luminous intensity column of Table 4 is to be applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (b)': no paragraph 4.8.3.1. (b) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (b)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (b)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the maximum luminous intensity column of Table 4 is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (c)': no paragraph 4.8.3.1. (c) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (c)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (c)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the standard light distribution column is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (d)': no paragraph 4.8.3.1. (d) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (d)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (d)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the angles of geometric visibility column is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Table A2-1': no paragraph Table A2-1 in Annex 2 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Table A2-1",
+       "target_regulation": null,
+       "target_namespace": "annex:2",
+       "target_paragraph": "Table A2-1",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines the angles of geometric visibility over which the 5∙10^-2 cd minimum applies."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (a)': no paragraph 4.8.3.1 (a) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (a)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (a)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the minimum luminous intensity column of Table 4 is applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (b)': no paragraph 4.8.3.1 (b) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (b)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (b)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the maximum luminous intensity column of Table 4 is applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (c)': no paragraph 4.8.3.1 (c) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (c)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (c)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the standard light distribution column of Table 4 is applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (d)': no paragraph 4.8.3.1 (d) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (d)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (d)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the angles of geometric visibility column of Table 4 is applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Figure A3-I': no paragraph Figure A3-I in Annex 3 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Figure A3-I",
+       "target_regulation": "UN R148",
+       "target_namespace": "annex:3",
+       "target_paragraph": "Figure A3-I",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The standard light distribution values required by Table 4 are given only in this figure."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Table A2-1': no paragraph Table A2-1 in Annex 2 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Table A2-1",
+       "target_regulation": "UN R148",
+       "target_namespace": "annex:2",
+       "target_paragraph": "Table A2-1",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The angles of geometric visibility over which the 5∙10^-2 cd minimum applies are defined only in this table."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     }
+    ],
+    "document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+    "section_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2",
+    "prompt_version": "v5",
+    "revision_of": null,
+    "notes": "Table 4 column 'Maximum luminous intensity in cd when used as (Par. 4.8.3.1. (b))' / sub-column 'A lamp marked \"D\" (Par. 3.3.2.5.2.)'."
+   },
+   {
+    "draft_id": "drf-5f5ad70e023c",
+    "text": "A rear position lamp or rear end-outline marker lamp of category R2 or RM2 (variable) shall comply with the standard light distribution of Figure A3-I.",
+    "supporting_passage_ids": [
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#annex:3/_@001"
+    ],
+    "primary_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+    "obligation_kind": "mandatory",
+    "applicability_condition": "Lamps of categories R2 or RM2 (variable)",
+    "applicability_reason": "The product has a rear position lamp function; whether it is of category R2/RM2 is not established.",
+    "exceptions": [
+     "For end-outline marker lamps (RM1, RM2) the standard light distribution may be considered at the request of the applicant from VV line to the outboard only (paragraph 5.2.4.)"
+    ],
+    "values": [],
+    "unresolved_references": [
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (a)': no paragraph 4.8.3.1. (a) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (a)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (a)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the minimum luminous intensity column of Table 4 is to be applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (b)': no paragraph 4.8.3.1. (b) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (b)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (b)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the maximum luminous intensity column of Table 4 is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (c)': no paragraph 4.8.3.1. (c) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (c)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (c)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the standard light distribution column is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (d)': no paragraph 4.8.3.1. (d) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (d)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (d)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the angles of geometric visibility column is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Table A2-1': no paragraph Table A2-1 in Annex 2 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Table A2-1",
+       "target_regulation": null,
+       "target_namespace": "annex:2",
+       "target_paragraph": "Table A2-1",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines the angles of geometric visibility over which the 5∙10^-2 cd minimum applies."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (a)': no paragraph 4.8.3.1 (a) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (a)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (a)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the minimum luminous intensity column of Table 4 is applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (b)': no paragraph 4.8.3.1 (b) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (b)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (b)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the maximum luminous intensity column of Table 4 is applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (c)': no paragraph 4.8.3.1 (c) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (c)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (c)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the standard light distribution column of Table 4 is applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (d)': no paragraph 4.8.3.1 (d) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (d)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (d)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the angles of geometric visibility column of Table 4 is applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Figure A3-I': no paragraph Figure A3-I in Annex 3 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Figure A3-I",
+       "target_regulation": "UN R148",
+       "target_namespace": "annex:3",
+       "target_paragraph": "Figure A3-I",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The standard light distribution values required by Table 4 are given only in this figure."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Table A2-1': no paragraph Table A2-1 in Annex 2 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Table A2-1",
+       "target_regulation": "UN R148",
+       "target_namespace": "annex:2",
+       "target_paragraph": "Table A2-1",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The angles of geometric visibility over which the 5∙10^-2 cd minimum applies are defined only in this table."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     }
+    ],
+    "document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+    "section_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2",
+    "prompt_version": "v5",
+    "revision_of": null,
+    "notes": "Table 4 column 'Standard light distribution (Par. 4.8.3.1. (c))'; the content of Figure A3-I was not supplied."
+   },
+   {
+    "draft_id": "drf-60862e3213ac",
+    "text": "Within the angles of geometric visibility defined in Table A2-1, a rear position lamp or rear end-outline marker lamp of category R2 or RM2 (variable) shall have a minimum luminous intensity of 5∙10^-2 cd.",
+    "supporting_passage_ids": [
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.2@001"
+    ],
+    "primary_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+    "obligation_kind": "mandatory",
+    "applicability_condition": "Lamps of categories R2 or RM2 (variable), within the angles of geometric visibility defined in Table A2-1",
+    "applicability_reason": "The product has a rear position lamp function; whether it is of category R2/RM2 is not established.",
+    "exceptions": [],
+    "values": [
+     {
+      "quantity": "minimum luminous intensity within the angles of geometric visibility",
+      "value": "5∙10^-2",
+      "unit": "cd",
+      "comparator": ">="
+     }
+    ],
+    "unresolved_references": [
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (a)': no paragraph 4.8.3.1. (a) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (a)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (a)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the minimum luminous intensity column of Table 4 is to be applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (b)': no paragraph 4.8.3.1. (b) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (b)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (b)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the maximum luminous intensity column of Table 4 is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (c)': no paragraph 4.8.3.1. (c) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (c)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (c)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the standard light distribution column is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (d)': no paragraph 4.8.3.1. (d) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (d)",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1. (d)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the angles of geometric visibility column is to be applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Table A2-1': no paragraph Table A2-1 in Annex 2 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Table A2-1",
+       "target_regulation": null,
+       "target_namespace": "annex:2",
+       "target_paragraph": "Table A2-1",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines the angles of geometric visibility over which the 5∙10^-2 cd minimum applies."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'See Table 4': no paragraph Table 4 (in paragraph 5.2.1.) in main of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.2@001",
+       "raw_reference": "See Table 4",
+       "target_regulation": null,
+       "target_namespace": "main",
+       "target_paragraph": "Table 4 (in paragraph 5.2.1.)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The minimum luminous intensity within the angles of geometric visibility is only given in Table 4."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (a)': no paragraph 4.8.3.1 (a) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (a)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (a)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the minimum luminous intensity column of Table 4 is applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (b)': no paragraph 4.8.3.1 (b) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (b)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (b)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the maximum luminous intensity column of Table 4 is applied/measured."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (c)': no paragraph 4.8.3.1 (c) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (c)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (c)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the standard light distribution column of Table 4 is applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Par. 4.8.3.1. (d)': no paragraph 4.8.3.1 (d) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Par. 4.8.3.1. (d)",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "4.8.3.1 (d)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Defines how the angles of geometric visibility column of Table 4 is applied."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Figure A3-I': no paragraph Figure A3-I in Annex 3 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Figure A3-I",
+       "target_regulation": "UN R148",
+       "target_namespace": "annex:3",
+       "target_paragraph": "Figure A3-I",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The standard light distribution values required by Table 4 are given only in this figure."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'Table A2-1': no paragraph Table A2-1 in Annex 2 of UN R148 1.6.0",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+       "raw_reference": "Table A2-1",
+       "target_regulation": "UN R148",
+       "target_namespace": "annex:2",
+       "target_paragraph": "Table A2-1",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "The angles of geometric visibility over which the 5∙10^-2 cd minimum applies are defined only in this table."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     },
+     {
+      "status": "missing",
+      "explanation": "'See Table 4': no paragraph 5.2.1 (Table 4) in main of UN R148 1.6.0; nearest existing ancestor is 5.2",
+      "request": {
+       "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.2@001",
+       "raw_reference": "See Table 4",
+       "target_regulation": "UN R148",
+       "target_namespace": "main",
+       "target_paragraph": "5.2.1 (Table 4)",
+       "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+       "reason": "Paragraph 5.2.2 states no value of its own; the required minimum within the angles of geometric visibility is only in Table 4."
+      },
+      "candidate_passage_ids": [],
+      "resolved_document_id": null,
+      "resolved_section_id": null
+     }
+    ],
+    "document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+    "section_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2",
+    "prompt_version": "v5",
+    "revision_of": null,
+    "notes": "Table 4 column 'Angles of geometric visibility (Par. 4.8.3.1. (d))'; the content of Table A2-1 was not supplied."
+   },
+   {
+    "draft_id": "drf-c99f9958d249",
+    "text": "No requirements apply to the minimum or maximum area of apparent surface of rear position lamps (R1, R2, MR) and rear end-outline marker lamps (RM1, RM2).",
+    "supporting_passage_ids": [
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.3@001",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2@001"
+    ],
+    "primary_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.3@001",
+    "obligation_kind": "exclusion",
+    "applicability_condition": "Rear position lamps (R1, R2, MR) and rear end-outline marker lamps (RM1, RM2)",
+    "applicability_reason": "The product has a rear position lamp function, so this exclusion of apparent-surface area requirements reaches it.",
+    "exceptions": [],
+    "values": [],
+    "unresolved_references": [],
+    "document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+    "section_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2",
+    "prompt_version": "v5",
+    "revision_of": null,
+    "notes": null
+   },
+   {
+    "draft_id": "drf-918cd539865d",
+    "text": "For end-outline marker lamps (RM1, RM2) the standard light distribution may be considered, at the request of the applicant, from the VV line to the outboard only.",
+    "supporting_passage_ids": [
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.4@001"
+    ],
+    "primary_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.4@001",
+    "obligation_kind": "permitted_alternative",
+    "applicability_condition": "End-outline marker lamps of categories RM1, RM2, at the request of the applicant",
+    "applicability_reason": "This permission applies only to end-outline marker lamps (RM1, RM2); the product is not established as including an end-outline marker lamp function.",
+    "exceptions": [],
+    "values": [],
+    "unresolved_references": [],
+    "document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+    "section_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2",
+    "prompt_version": "v5",
+    "revision_of": null,
+    "notes": null
+   },
+   {
+    "draft_id": "drf-a571ee42e9df",
+    "text": "No additional specific requirements apply to rear position lamps (R1, R2, MR) and rear end-outline marker lamps (RM1, RM2).",
+    "supporting_passage_ids": [
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.5@001",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2@001"
+    ],
+    "primary_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.5@001",
+    "obligation_kind": "exclusion",
+    "applicability_condition": "Rear position lamps (R1, R2, MR) and rear end-outline marker lamps (RM1, RM2)",
+    "applicability_reason": "The product has a rear position lamp function, so this statement that no additional specific requirements apply reaches it.",
+    "exceptions": [],
+    "values": [],
+    "unresolved_references": [],
+    "document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+    "section_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2",
+    "prompt_version": "v5",
+    "revision_of": null,
+    "notes": null
+   },
+   {
+    "draft_id": "drf-f49bafa93dbe",
+    "text": "Rear position lamps (R1, R2, MR) and rear end-outline marker lamps (RM1, RM2) shall comply with the failure provisions of paragraph 4.6.",
+    "supporting_passage_ids": [
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.6@001",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/4.6@001",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2@001"
+    ],
+    "primary_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.6@001",
+    "obligation_kind": "mandatory",
+    "applicability_condition": "Rear position lamps (R1, R2, MR) and rear end-outline marker lamps (RM1, RM2)",
+    "applicability_reason": "The product has a rear position lamp function, so the failure provisions referenced for this lamp category reach it.",
+    "exceptions": [],
+    "values": [],
+    "unresolved_references": [],
+    "document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+    "section_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2",
+    "prompt_version": "v5",
+    "revision_of": null,
+    "notes": "Paragraph 5.2.6 only cross-references paragraph 4.6; the substantive content of paragraph 4.6 was supplied as a heading only."
+   },
+   {
+    "draft_id": "drf-3a780b18fbd5",
+    "text": "For rear position lamps (R1, R2, MR) and rear end-outline marker lamps (RM1, RM2), the colour of the light emitted shall be red.",
+    "supporting_passage_ids": [
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.7@001",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5@001"
+    ],
+    "primary_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.7@001",
+    "obligation_kind": "mandatory",
+    "applicability_condition": "Device is a rear position lamp (R1, R2, MR) or a rear end-outline marker lamp (RM1, RM2)",
+    "applicability_reason": "The product integrates a rear position lamp function, so the colour requirement for rear position lamps reaches it; the specific class (R1, R2 or MR) and the emitted colour per function are not established in the product facts.",
+    "exceptions": [],
+    "values": [],
+    "unresolved_references": [],
+    "document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+    "section_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2",
+    "prompt_version": "v5",
+    "revision_of": null,
+    "notes": "The source states the requirement under the heading 'Colour:' within paragraph 5.2; no numerical colorimetric values are given in the supplied text."
+   }
+  ],
+  "coverage": [
+   {
+    "target_kind": "section",
+    "target_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1",
+    "status": "processed",
+    "explanation": null,
+    "inspected_passage_ids": [
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1@001",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@001",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.2@001",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.3@001",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.4@001",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.5@001",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.6@001",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.7@001"
+    ],
+    "draft_ids": [
+     "drf-3c1756bb1630",
+     "drf-e889569a230e",
+     "drf-94fa3293ac73",
+     "drf-5546136776dd",
+     "drf-a99659f9f4b1",
+     "drf-530f5dcc6270",
+     "drf-295094da71f3",
+     "drf-4f82cf8e0992",
+     "drf-f57c6bd69fc7",
+     "drf-4c14d9c47c3b",
+     "drf-4bb1a8ad1fd0",
+     "drf-4edda4476654"
+    ],
+    "document_id": "un-r148:1-6-0:sha256-13cf3e805d0e"
+   },
+   {
+    "target_kind": "section",
+    "target_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2",
+    "status": "processed",
+    "explanation": null,
+    "inspected_passage_ids": [
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2@001",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@001",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.2@001",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.3@001",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.4@001",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.5@001",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.6@001",
+     "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.7@001"
+    ],
+    "draft_ids": [
+     "drf-fc7832c3c083",
+     "drf-bb6dbe3e5d11",
+     "drf-0e332e55aa37",
+     "drf-4d6f8debb5a3",
+     "drf-911df3d2355e",
+     "drf-93ba7116194a",
+     "drf-a6ee64a5fe9f",
+     "drf-47ac0d0fe9c8",
+     "drf-5d412457cc84",
+     "drf-a4df39b677ff",
+     "drf-5f5ad70e023c",
+     "drf-60862e3213ac",
+     "drf-c99f9958d249",
+     "drf-918cd539865d",
+     "drf-a571ee42e9df",
+     "drf-f49bafa93dbe",
+     "drf-3a780b18fbd5"
+    ],
+    "document_id": "un-r148:1-6-0:sha256-13cf3e805d0e"
+   }
+  ],
+  "unresolved_references": [
+   {
+    "status": "missing",
+    "explanation": "'Par. 4.8.3.1. (a)': no paragraph 4.8.3.1 (a) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+    "request": {
+     "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+     "raw_reference": "Par. 4.8.3.1. (a)",
+     "target_regulation": null,
+     "target_namespace": "main",
+     "target_paragraph": "4.8.3.1 (a)",
+     "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+     "reason": "Defines how the minimum luminous intensity column of Table 3 is to be applied/measured."
+    },
+    "candidate_passage_ids": [],
+    "resolved_document_id": null,
+    "resolved_section_id": null
+   },
+   {
+    "status": "missing",
+    "explanation": "'Par. 4.8.3.1. (b)': no paragraph 4.8.3.1 (b) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+    "request": {
+     "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+     "raw_reference": "Par. 4.8.3.1. (b)",
+     "target_regulation": null,
+     "target_namespace": "main",
+     "target_paragraph": "4.8.3.1 (b)",
+     "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+     "reason": "Defines how the maximum luminous intensity columns of Table 3 are to be applied/measured."
+    },
+    "candidate_passage_ids": [],
+    "resolved_document_id": null,
+    "resolved_section_id": null
+   },
+   {
+    "status": "missing",
+    "explanation": "'Par. 4.8.3.1. (c)': no paragraph 4.8.3.1 (c) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+    "request": {
+     "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+     "raw_reference": "Par. 4.8.3.1. (c)",
+     "target_regulation": null,
+     "target_namespace": "main",
+     "target_paragraph": "4.8.3.1 (c)",
+     "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+     "reason": "Defines how the standard light distribution column of Table 3 is to be applied."
+    },
+    "candidate_passage_ids": [],
+    "resolved_document_id": null,
+    "resolved_section_id": null
+   },
+   {
+    "status": "missing",
+    "explanation": "'Par. 4.8.3.1. (d)': no paragraph 4.8.3.1 (d) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+    "request": {
+     "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+     "raw_reference": "Par. 4.8.3.1. (d)",
+     "target_regulation": null,
+     "target_namespace": "main",
+     "target_paragraph": "4.8.3.1 (d)",
+     "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+     "reason": "Defines how the angles of geometric visibility column of Table 3 is to be applied."
+    },
+    "candidate_passage_ids": [],
+    "resolved_document_id": null,
+    "resolved_section_id": null
+   },
+   {
+    "status": "missing",
+    "explanation": "'Table 3': no paragraph Table 3 (in paragraph 5.1.1) in main of UN R148 1.6.0",
+    "request": {
+     "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@001",
+     "raw_reference": "Table 3",
+     "target_regulation": null,
+     "target_namespace": "main",
+     "target_paragraph": "Table 3 (in paragraph 5.1.1)",
+     "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+     "reason": "The luminous intensity values the lamp must meet are given only in Table 3."
+    },
+    "candidate_passage_ids": [],
+    "resolved_document_id": null,
+    "resolved_section_id": null
+   },
+   {
+    "status": "missing",
+    "explanation": "'Figure A3-I': no paragraph  in Annex A3 of UN R148 1.6.0",
+    "request": {
+     "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+     "raw_reference": "Figure A3-I",
+     "target_regulation": null,
+     "target_namespace": "annex:A3",
+     "target_paragraph": null,
+     "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+     "reason": "The standard light distribution requirement cannot be applied without the figure."
+    },
+    "candidate_passage_ids": [],
+    "resolved_document_id": null,
+    "resolved_section_id": null
+   },
+   {
+    "status": "missing",
+    "explanation": "'Table A2-1': no paragraph  in Annex A2 of UN R148 1.6.0",
+    "request": {
+     "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.1@002",
+     "raw_reference": "Table A2-1",
+     "target_regulation": null,
+     "target_namespace": "annex:A2",
+     "target_paragraph": null,
+     "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+     "reason": "The angles of geometric visibility are defined only in this table."
+    },
+    "candidate_passage_ids": [],
+    "resolved_document_id": null,
+    "resolved_section_id": null
+   },
+   {
+    "status": "missing",
+    "explanation": "'See Table 3.': no paragraph Table 3 (in paragraph 5.1.1) in main of UN R148 1.6.0",
+    "request": {
+     "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.1.2@001",
+     "raw_reference": "See Table 3.",
+     "target_regulation": null,
+     "target_namespace": "main",
+     "target_paragraph": "Table 3 (in paragraph 5.1.1)",
+     "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+     "reason": "The minimum luminous intensity within the angles of geometric visibility is given only in Table 3."
+    },
+    "candidate_passage_ids": [],
+    "resolved_document_id": null,
+    "resolved_section_id": null
+   },
+   {
+    "status": "missing",
+    "explanation": "'Table 4': no paragraph Table 4 (in paragraph 5.2.1.) in main of UN R148 1.6.0",
+    "request": {
+     "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@001",
+     "raw_reference": "Table 4",
+     "target_regulation": null,
+     "target_namespace": "main",
+     "target_paragraph": "Table 4 (in paragraph 5.2.1.)",
+     "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+     "reason": "The luminous intensity requirements the samples must meet are the values listed in Table 4; the table was supplied."
+    },
+    "candidate_passage_ids": [],
+    "resolved_document_id": null,
+    "resolved_section_id": null
+   },
+   {
+    "status": "missing",
+    "explanation": "'Par. 4.8.3.1. (a)': no paragraph 4.8.3.1. (a) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+    "request": {
+     "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+     "raw_reference": "Par. 4.8.3.1. (a)",
+     "target_regulation": null,
+     "target_namespace": "main",
+     "target_paragraph": "4.8.3.1. (a)",
+     "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+     "reason": "Defines how the minimum luminous intensity column of Table 4 is to be applied/measured."
+    },
+    "candidate_passage_ids": [],
+    "resolved_document_id": null,
+    "resolved_section_id": null
+   },
+   {
+    "status": "missing",
+    "explanation": "'Par. 4.8.3.1. (b)': no paragraph 4.8.3.1. (b) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+    "request": {
+     "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+     "raw_reference": "Par. 4.8.3.1. (b)",
+     "target_regulation": null,
+     "target_namespace": "main",
+     "target_paragraph": "4.8.3.1. (b)",
+     "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+     "reason": "Defines how the maximum luminous intensity column of Table 4 is to be applied."
+    },
+    "candidate_passage_ids": [],
+    "resolved_document_id": null,
+    "resolved_section_id": null
+   },
+   {
+    "status": "missing",
+    "explanation": "'Par. 4.8.3.1. (c)': no paragraph 4.8.3.1. (c) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+    "request": {
+     "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+     "raw_reference": "Par. 4.8.3.1. (c)",
+     "target_regulation": null,
+     "target_namespace": "main",
+     "target_paragraph": "4.8.3.1. (c)",
+     "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+     "reason": "Defines how the standard light distribution column is to be applied."
+    },
+    "candidate_passage_ids": [],
+    "resolved_document_id": null,
+    "resolved_section_id": null
+   },
+   {
+    "status": "missing",
+    "explanation": "'Par. 4.8.3.1. (d)': no paragraph 4.8.3.1. (d) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3.1",
+    "request": {
+     "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+     "raw_reference": "Par. 4.8.3.1. (d)",
+     "target_regulation": null,
+     "target_namespace": "main",
+     "target_paragraph": "4.8.3.1. (d)",
+     "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+     "reason": "Defines how the angles of geometric visibility column is to be applied."
+    },
+    "candidate_passage_ids": [],
+    "resolved_document_id": null,
+    "resolved_section_id": null
+   },
+   {
+    "status": "missing",
+    "explanation": "'Table A2-1': no paragraph Table A2-1 in Annex 2 of UN R148 1.6.0",
+    "request": {
+     "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+     "raw_reference": "Table A2-1",
+     "target_regulation": null,
+     "target_namespace": "annex:2",
+     "target_paragraph": "Table A2-1",
+     "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+     "reason": "Defines the angles of geometric visibility over which the 5∙10^-2 cd minimum applies."
+    },
+    "candidate_passage_ids": [],
+    "resolved_document_id": null,
+    "resolved_section_id": null
+   },
+   {
+    "status": "missing",
+    "explanation": "'See Table 4': no paragraph Table 4 (in paragraph 5.2.1.) in main of UN R148 1.6.0",
+    "request": {
+     "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.2@001",
+     "raw_reference": "See Table 4",
+     "target_regulation": null,
+     "target_namespace": "main",
+     "target_paragraph": "Table 4 (in paragraph 5.2.1.)",
+     "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+     "reason": "The minimum luminous intensity within the angles of geometric visibility is only given in Table 4."
+    },
+    "candidate_passage_ids": [],
+    "resolved_document_id": null,
+    "resolved_section_id": null
+   },
+   {
+    "status": "missing",
+    "explanation": "'Table 4': no paragraph 5.2.1 (Table 4) in main of UN R148 1.6.0; nearest existing ancestor is 5.2",
+    "request": {
+     "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@001",
+     "raw_reference": "Table 4",
+     "target_regulation": "UN R148",
+     "target_namespace": "main",
+     "target_paragraph": "5.2.1 (Table 4)",
+     "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+     "reason": "The luminous intensity requirements the samples must meet are the values in Table 4."
+    },
+    "candidate_passage_ids": [],
+    "resolved_document_id": null,
+    "resolved_section_id": null
+   },
+   {
+    "status": "missing",
+    "explanation": "'Par. 4.8.3.1. (a)': no paragraph 4.8.3.1 (a) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+    "request": {
+     "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+     "raw_reference": "Par. 4.8.3.1. (a)",
+     "target_regulation": "UN R148",
+     "target_namespace": "main",
+     "target_paragraph": "4.8.3.1 (a)",
+     "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+     "reason": "Defines how the minimum luminous intensity column of Table 4 is applied/measured."
+    },
+    "candidate_passage_ids": [],
+    "resolved_document_id": null,
+    "resolved_section_id": null
+   },
+   {
+    "status": "missing",
+    "explanation": "'Par. 4.8.3.1. (b)': no paragraph 4.8.3.1 (b) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+    "request": {
+     "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+     "raw_reference": "Par. 4.8.3.1. (b)",
+     "target_regulation": "UN R148",
+     "target_namespace": "main",
+     "target_paragraph": "4.8.3.1 (b)",
+     "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+     "reason": "Defines how the maximum luminous intensity column of Table 4 is applied/measured."
+    },
+    "candidate_passage_ids": [],
+    "resolved_document_id": null,
+    "resolved_section_id": null
+   },
+   {
+    "status": "missing",
+    "explanation": "'Par. 4.8.3.1. (c)': no paragraph 4.8.3.1 (c) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+    "request": {
+     "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+     "raw_reference": "Par. 4.8.3.1. (c)",
+     "target_regulation": "UN R148",
+     "target_namespace": "main",
+     "target_paragraph": "4.8.3.1 (c)",
+     "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+     "reason": "Defines how the standard light distribution column of Table 4 is applied."
+    },
+    "candidate_passage_ids": [],
+    "resolved_document_id": null,
+    "resolved_section_id": null
+   },
+   {
+    "status": "missing",
+    "explanation": "'Par. 4.8.3.1. (d)': no paragraph 4.8.3.1 (d) in main of UN R148 1.6.0; nearest existing ancestor is 4.8.3",
+    "request": {
+     "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+     "raw_reference": "Par. 4.8.3.1. (d)",
+     "target_regulation": "UN R148",
+     "target_namespace": "main",
+     "target_paragraph": "4.8.3.1 (d)",
+     "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+     "reason": "Defines how the angles of geometric visibility column of Table 4 is applied."
+    },
+    "candidate_passage_ids": [],
+    "resolved_document_id": null,
+    "resolved_section_id": null
+   },
+   {
+    "status": "missing",
+    "explanation": "'Figure A3-I': no paragraph Figure A3-I in Annex 3 of UN R148 1.6.0",
+    "request": {
+     "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+     "raw_reference": "Figure A3-I",
+     "target_regulation": "UN R148",
+     "target_namespace": "annex:3",
+     "target_paragraph": "Figure A3-I",
+     "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+     "reason": "The standard light distribution values required by Table 4 are given only in this figure."
+    },
+    "candidate_passage_ids": [],
+    "resolved_document_id": null,
+    "resolved_section_id": null
+   },
+   {
+    "status": "missing",
+    "explanation": "'Table A2-1': no paragraph Table A2-1 in Annex 2 of UN R148 1.6.0",
+    "request": {
+     "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.1@002",
+     "raw_reference": "Table A2-1",
+     "target_regulation": "UN R148",
+     "target_namespace": "annex:2",
+     "target_paragraph": "Table A2-1",
+     "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+     "reason": "The angles of geometric visibility over which the 5∙10^-2 cd minimum applies are defined only in this table."
+    },
+    "candidate_passage_ids": [],
+    "resolved_document_id": null,
+    "resolved_section_id": null
+   },
+   {
+    "status": "missing",
+    "explanation": "'See Table 4': no paragraph 5.2.1 (Table 4) in main of UN R148 1.6.0; nearest existing ancestor is 5.2",
+    "request": {
+     "originating_passage_id": "un-r148:1-6-0:sha256-13cf3e805d0e#main/5.2.2@001",
+     "raw_reference": "See Table 4",
+     "target_regulation": "UN R148",
+     "target_namespace": "main",
+     "target_paragraph": "5.2.1 (Table 4)",
+     "origin_document_id": "un-r148:1-6-0:sha256-13cf3e805d0e",
+     "reason": "Paragraph 5.2.2 states no value of its own; the required minimum within the angles of geometric visibility is only in Table 4."
+    },
+    "candidate_passage_ids": [],
+    "resolved_document_id": null,
+    "resolved_section_id": null
+   }
+  ],
+  "warnings": [],
+  "usage": {
+   "calls": 9,
+   "cached_calls": 0,
+   "input_tokens": 77121,
+   "output_tokens": 52174,
+   "latency_ms_total": 0.0,
+   "by_model": {
+    "claude-opus-5": 9
+   }
+  },
+  "partial": true,
+  "prompt_versions": {},
+  "is_synthetic_fixture": false
+ }
+}

@@ -27,7 +27,7 @@ PYTHONPATH=src python -m certivity.corpus sections 'un-r48:9-3-0:sha256-d4b1dde8
 PYTHONPATH=src python -m certivity.corpus section 'un-r48:9-3-0:sha256-d4b1dde87bf8#main/6.10'
 PYTHONPATH=src python -m certivity.corpus resolve 'un-r48:9-3-0:sha256-d4b1dde87bf8#main/6.10.5.1@001' 'paragraph 5.8.1. above'
 PYTHONPATH=src python -m certivity.corpus page 'un-r48:9-3-0:sha256-d4b1dde87bf8' 49
-PYTHONPATH=src python -m certivity.corpus search 'rear position lamp height' --document 'un-r48:9-3-0:sha256-d4b1dde87bf8'
+PYTHONPATH=src python -m certivity.corpus search 'rear position lamp' --document 'un-r48:9-3-0:sha256-d4b1dde87bf8'   # every word must occur in one passage
 PYTHONPATH=src python -m certivity.corpus diagnostics --summary
 PYTHONPATH=src python -m certivity.corpus prune --keep 2      # manual; never deletes CURRENT
 
@@ -63,7 +63,7 @@ corpus.get_page_asset(document_id, pdf_page_index)       # -> PageAsset (PNG ren
 | Method | For |
 | --- | --- |
 | `list_reference_candidates(passage_ids) -> list[ReferenceRequest]` | (`CorpusReader`) references detected at import, ready to pass to `resolve_reference` |
-| `search(query, document_id=None, limit=20)` | SQLite FTS5 navigation aid. Not a coverage mechanism |
+| `search(query, document_id=None, limit=20)` | (`CorpusSearch`) SQLite FTS5 navigation aid, best-ranked first. **All** query words must occur in the same passage, so keep queries short (`rear position lamp`: 33 hits in R48; adding `height` gives none). Not a coverage mechanism |
 | `get_document(document_id)`, `diagnostics(document_id=None)`, `status()` | Metadata, parse diagnostics, readiness |
 | `get_document_path(document_id) -> Path` | **Server-only** original PDF path for the backend's `/pdf` route (`UnknownId` / `FileNotFoundError`) |
 | `corpus_status(corpus_dir=None) -> dict` (module function) | Health-route readiness for a corpus folder (default `data/cache/corpus`). Never raises; `ready: False` with a `reason` when unavailable |
@@ -154,6 +154,14 @@ The reader follows these rules:
   - "of this Regulation", or any reference from the main body, means `main`.
   - A plain "paragraph 2." from inside an annex searches both `main` and the annex. If both contain it, the result
     is **`ambiguous`** with both candidates; the reader does not guess.
+  - Exception, based on the text: "paragraph 2.2.1. **above**" (or **below**) written inside an annex resolves to the
+    annex's own paragraph when only that one lies on the stated side in reading order. The explanation says so.
+- **Sub-items:** `Par. 4.8.3.1. (a)` resolves to paragraph 4.8.3.1, and the explanation names sub-item (a), because
+  sub-items are part of their paragraph's text. Where the source splits one label into sub-item passages (R13H
+  Annex 5 `3.1.(A)` / `3.1.(B)`), the named sub-item picks its passage.
+- **Tables and figures** are addressed by caption: `Table 4`, `Table A2-1 of Annex 2`, `Figure A3-I` resolve to the
+  table passage or the figure's caption passage (a figure itself is an image; render its page). Detection covers
+  `paragraph(s)`, `para.` and `Par.`, sub-items, and `Table`/`Figure` references including lists (`Tables 3 and 4`).
 - An absent label returns `missing`, naming the nearest existing ancestor. Labels flagged as duplicates return
   `ambiguous`. A range (`2.2.1.1. to 2.2.1.4.`) resolves to its endpoints.
 
@@ -166,23 +174,33 @@ CURRENT                      id of the snapshot new runs should open
 snapshots/<id>/corpus.sqlite tables: documents, pages, sections, passages, definitions, reference_candidates,
                              import_diagnostics, meta, passages_fts
 snapshots/<id>/manifest.json identity: index sha256, package commit, parser version, code fingerprint, file lists, counts
-parsed/<pdf sha256>.<parser version>.json.gz   per-PDF parse cache
+parsed/<pdf sha256>.<parser version>.<extractor version>.json.gz   per-PDF parse cache
 renders/<pdf sha256>/<page>@<dpi>.png          page images
 ```
 
-- The snapshot id is a hash of the schema version, parser version, corpus code fingerprint, index hash, roles and
-  the imported document ids. An identical build reuses the snapshot.
+- The snapshot id is a hash of the schema version, parser version, corpus code fingerprint (the corpus modules and
+  `contracts.py`), the PyMuPDF/MuPDF version, the index hash, the roles and the imported document ids. Same ID means
+  same content; an identical build reuses the snapshot. Builds are deterministic: two cold builds of one commit give
+  the same ID and counts.
+- **Comparing builds across machines:** compare `status` output (`snapshot_id`, `extractor_version`,
+  `code_fingerprint`, `counts`). A different ID with the same commit usually means a different `contracts.py` (for
+  example a tree merged with a newer `main`) or a different PyMuPDF build.
 - Snapshots are built in a temporary directory and renamed into place when complete, so a running job never sees a
   partial or changed snapshot.
 - New files or code produce a new id. The old snapshot stays readable until it is pruned manually.
 - Bump `PARSER_VERSION` in `parse.py` when parse output changes; the parse cache is keyed by it.
 
-## Verified on the real base corpus (snapshot `snap-29ca187ccf30`)
+## Verified on the real base corpus (snapshot `snap-990672ca4853`, `pymupdf-2.0-mupdf-1.28.5`)
 
 - **Acquisition:** 56 of 56 base PDFs downloaded and checksum-verified, with no failures. The `latest` versions and
   the sub-goal old/new PDFs have **not** been downloaded yet, and the links expire after the event.
-- **Import:** 56 documents, 3,029 pages, 31,878 passages (including 576 figure/table captions), 6,273 sections,
-  1,519 definitions and 13,062 reference candidates. There were no parse failures.
+- **Import:** 56 documents, 3,029 pages, 31,946 passages (including figure/table captions), 6,300 sections,
+  1,520 definitions and 15,049 reference candidates. There were no parse failures. A cold build from a clean checkout
+  takes about 87 s and reproduces the same snapshot ID.
+- **Reference resolution** over all 13,545 distinct detected references: 11,234 resolved, 1,029 ambiguous, 791
+  missing, 491 outside the corpus. Of the 11,552 references detected before sub-items, tables and figures were added,
+  11,349 resolve identically, 198 are now detected in a fuller form (`Annex 3` -> `Figure 4 in Annex 3`), 2 improved,
+  and 1 became honestly ambiguous (it had matched the main body only because the annex's own paragraph was unparsed).
 - **Superscript fix:** R148 Table 3 reads `4∙10^0 | 1.40∙10^2 | 7.0∙10^1`; no flattened power of ten remains in R148.
   Against the pre-fix baseline, all 27,925 labelled paragraphs are unchanged, and 11,543 reference outcomes are
   identical; the rest improved, because footnote markers had been fused into numbers (`No. 45`+`1` read as the
@@ -197,7 +215,7 @@ renders/<pdf sha256>/<page>@<dpi>.png          page images
   migration (same status, same target passages, compared by citation rather than ID). Anushree's model-free agent
   paths run on the real corpus: the inspection plan covers 668 sections of R48/R148/R150/R10, and following
   corpus-detected references from 400 of them resolves 94% (572 of 607).
-- **Tests:** `tests/corpus` has 39 tests; with Anushree's tests the repository runs 117 passed, 3 skipped (billed
+- **Tests:** `tests/corpus` has 45 tests; merged with current `main` the branch runs 131 passed, 3 skipped (billed
   real-model tests). Corpus tests cover structure rules, snapshot behaviour (missing file, checksum mismatch, reuse,
   refresh keeps the old snapshot) and the real corpus:
   - metadata, footer verification and contract-shaped records (IDs, namespaces, enums, index order);
@@ -211,12 +229,28 @@ renders/<pdf sha256>/<page>@<dpi>.png          page images
 
 | Diagnostic | Count | Where / meaning |
 | --- | ---: | --- |
-| `label_out_of_sequence` | 164 | Mostly GTR 9 Part I (the rationale has interleaved numbering), R49, and "Notes: 1. 2." lists under figures. The passage is kept and flagged |
+| `label_out_of_sequence` | 115 | A paragraph number that does not follow the previous one. Kept and flagged (see below) |
 | `label_gap` | 89 | Numbering skips (deleted or reserved paragraphs). Informational |
-| `label_unexpected_start` | 48 | A namespace's first label is not `1.` (e.g. `0.` or `A.2.1.` in R49). Kept |
+| `label_unexpected_start` | 45 | A division's first label is not `1.` (e.g. `0.` or `A.2.1.` in R49). Kept |
 | `empty_page` | 20 | Figure-only pages. Image available through `get_page_asset` |
-| `duplicate_label` | 11 | The same label twice in one namespace. `resolve_reference` returns `ambiguous` for these |
+| `duplicate_label` | 11 | The same label twice in one division, usually in the source itself (R163 defines two different terms as 2.14). `resolve_reference` returns `ambiguous` for these |
 | `namespace_repeated` | 9 | An annex heading repeated (R49 mostly) |
+
+**Why numbers are out of sequence.** The parser accepts a label when it continues the previous one (`6.10.4.2` →
+`6.10.5`); anything else is still kept but flagged, because a line can also start with a number that is not a
+label. The remaining cases are mostly genuine features of the source:
+
+- **GTR 9's rationale (38)** has two interleaved numberings: running discussion paragraphs (`63.`, `64.`) and numbered
+  lists inside them (`1.`, `2.`, `3.`). It is non-normative text, kept in its own `part:i` division.
+- **Lists and notes restarting at 1** inside a clause or annex form: "Notes: 1. 2." under a figure (R48 Annex 6),
+  per-appendix lists in R107 and R116, communication forms in R49 Annex 2A/2B/2C.
+- **Skips and typos in the source:** R67 jumps from `6.4` to `6.17`; R13H prints `5.2.1.24.16` between `5.2.24.15.2` and
+  `5.2.24.16.1`.
+
+Until `corpus-parse-11` there were 49 more, from a parser bug: regulations whose main body is split into
+`PART I/II/III` (R89, R67, R163) collided with the GTR 9 rationale rule, so their clause headings (`3.`, `4.`, …) were
+dropped and the following paragraphs looked out of sequence. Main-body Parts are now headings within `main`, because
+their numbering runs on across Parts (R89: Part I 3–10, Part II 11–18, Part III 19–26), so R89 13.1 cites as `13.1`.
 
 Other gaps:
 

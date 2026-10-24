@@ -251,3 +251,57 @@ def test_footnote_marker_no_longer_corrupts_references(corpus, docs, by_label):
 def test_index_entry_comes_from_the_snapshot(corpus, docs):
     entry = docs["UN R148"].index_entry
     assert entry["regulation"] == "UN R148" and entry["title"] and entry["versions"]
+
+
+def test_main_body_parts_are_headings_not_namespaces(corpus, docs, by_label):
+    """R89's PART I/II/III continue one numbering (3-10, 11-18, 19-26): paragraphs stay in main and cite as "13.1".
+    They used to collide with the GTR 9 rationale rule and lose every clause heading."""
+    doc = docs["UN R89"].document_id
+    p = by_label(doc, "13.1")
+    assert p.namespace == "main" and p.paragraph_label == "13.1"
+    assert {s.namespace for s in corpus.list_sections(doc)} >= {"main"} and not any(s.namespace.startswith("part:") for s in corpus.list_sections(doc))
+    assert by_label(doc, "4").text.startswith("4. APPROVAL")
+    assert not [d for d in corpus.diagnostics(doc) if d["code"] == "label_out_of_sequence"]
+    # GTR 9's rationale is still its own division
+    assert any(s.namespace == "part:i" for s in corpus.list_sections(docs["UN GTR 9"].document_id))
+
+
+def test_above_below_points_within_the_originating_annex(corpus, docs, by_label):
+    from certivity.corpus._contracts import ReferenceRequest
+
+    origin = by_label(docs["UN R123"].document_id, "Annex 4 2.2.2")
+    res = corpus.resolve_reference(ReferenceRequest(origin.passage_id, "paragraph 2.2.1. above"))
+    assert res.status == "resolved" and [p.paragraph_label for p in corpus.get_passages(res.candidate_passage_ids)] == ["Annex 4 2.2.1"]
+    assert "points within Annex 4" in res.explanation
+    # without a direction word the same label stays ambiguous between main and the annex
+    assert corpus.resolve_reference(ReferenceRequest(origin.passage_id, "paragraph 2.2.1.")).status == "ambiguous"
+
+
+def test_sub_item_table_and_figure_references_resolve(corpus, docs):
+    """Anushree's PR review cases on R148, plus a label the source splits into sub-items (R13H Annex 5 3.1.(A)/(B))."""
+    from certivity.corpus._contracts import ReferenceRequest
+
+    doc = docs["UN R148"].document_id
+    passages = [p for s in corpus.list_sections(doc) for p in corpus.read_section(s.section_id, False).primary_passages]
+    origin = next(p for p in passages if p.is_table and "Par. 4.8.3.1. (a)" in p.text)
+
+    def resolve(raw, **hints):
+        res = corpus.resolve_reference(ReferenceRequest(origin.passage_id, raw, **hints))
+        return res.status, [p.paragraph_label for p in corpus.get_passages(res.candidate_passage_ids)], res.explanation
+
+    status, labels, why = resolve("Par. 4.8.3.1. (a)", target_paragraph="4.8.3.1 (a)")
+    assert status == "resolved" and labels == ["4.8.3.1"] and "sub-item (a)" in why
+    assert resolve("Table 4", target_paragraph="Table 4")[:2] == ("resolved", ["5.2.1"])
+    assert resolve("Table A2-1")[:2] == ("resolved", ["Annex 2 Part A"])
+    status, labels, why = resolve("Figure A3-I")
+    assert status == "resolved" and "get_page_asset" in why
+    assert resolve("Table 99")[0] == "missing"
+    detected = {r.target_paragraph for r in corpus.list_reference_candidates([origin.passage_id])}
+    assert {"4.8.3.1 (a)", "4.8.3.1 (d)", "Figure A3-I"} <= detected
+
+    r13h = docs["UN R13H"].document_id
+    annex5 = next(p for s in corpus.list_sections(r13h) for p in corpus.read_section(s.section_id, False).primary_passages if p.paragraph_label == "Annex 5 5.2")
+    for item in ("A", "B"):
+        res = corpus.resolve_reference(ReferenceRequest(annex5.passage_id, f"paragraph 3.1.({item}) of this annex"))
+        assert res.status == "resolved" and corpus.get_passages(res.candidate_passage_ids)[0].text.startswith(f"3.1. ({item})")
+    assert corpus.resolve_reference(ReferenceRequest(annex5.passage_id, "paragraph 3.1. of this annex")).status == "ambiguous"
