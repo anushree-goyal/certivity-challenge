@@ -22,6 +22,7 @@ def _real_settings(settings):
 
 def test_real_mode_passes_module_records_between_stages(settings):
     fake_modules.CALLS.clear()
+    fake_modules.SEEN.clear()
     with TestClient(create_app(_real_settings(settings))) as client:
         assert client.get("/api/health").json()["modules"]["run_extraction"]["ready"] is True
         run = client.post("/api/runs", data={"package_case": "dev-rear-lamp", "team_id": "team-07"}).json()
@@ -31,7 +32,12 @@ def test_real_mode_passes_module_records_between_stages(settings):
         assert status["corpus_snapshot_id"] == "fake-snapshot-1"
         assert fake_modules.CALLS == ["extract", "review", "revise:1", "review"]
         agent_dir = client.app.state.store.module_dir(run["run_id"], "agent")
-        assert fake_modules.SEEN == {"cache_dir": agent_dir / "llm-cache", "artifacts_dir": agent_dir, "max_calls": None}
+        quality_dir = client.app.state.store.module_dir(run["run_id"], "quality")
+        assert fake_modules.SEEN["artifacts_dir"] == agent_dir
+        # Extraction and review each get their own adapter (and so their own call budget).
+        run_adapters = [a for a in fake_modules.SEEN["adapters"] if a["cache_dir"]]  # health checks pass no cache dir
+        assert run_adapters == [{"cache_dir": agent_dir / "llm-cache", "max_calls": None},
+                                                 {"cache_dir": quality_dir / "llm-cache", "max_calls": None}]
         assert status_llm(client, run["run_id"]) == "fake-model"
 
         view = client.get(f"/api/runs/{run['run_id']}/results").json()
@@ -128,10 +134,12 @@ def test_source_pages_need_only_the_corpus_module(settings):
 
 def test_model_call_budget_reaches_the_adapter(settings):
     s = _real_settings(settings)
-    s = dataclasses.replace(s, max_model_calls=7, entry_points={
+    fake_modules.SEEN.clear()
+    s = dataclasses.replace(s, max_model_calls=7, max_review_calls=3, entry_points={
         **s.entry_points, "run_config_record": "tests.integration.fake_modules:RunConfig"})
     with TestClient(create_app(s)) as client:
         run = client.post("/api/runs", data={"package_case": "dev-rear-lamp", "team_id": "team-07"}).json()
         wait_finished(client, run["run_id"])
-        assert fake_modules.SEEN["max_calls"] == 7
-        assert client.app.state.store.read(run["run_id"])["model_call_budget"] == 7
+        assert [a["max_calls"] for a in fake_modules.SEEN["adapters"] if a["cache_dir"]] == [7, 3]
+        manifest = client.app.state.store.read(run["run_id"])
+        assert manifest["model_call_budget"] == 7 and manifest["review_call_budget"] == 3

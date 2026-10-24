@@ -67,7 +67,7 @@ export function RequirementsView({ view, runId, onReview }: { view: RunView; run
             </thead>
             <tbody>
               {groups.map(([group, reqs]) => (
-                <GroupRows key={group} group={group} reqs={reqs} reviews={reviews}
+                <GroupRows key={group} group={group} reqs={reqs} reviews={reviews} reviewComplete={view.review_complete}
                            selectedId={selected?.draft_id} onSelect={setSelectedId} />
               ))}
               {filtered.length === 0 && <tr><td colSpan={5} className="muted">No requirements match these filters.</td></tr>}
@@ -83,8 +83,8 @@ export function RequirementsView({ view, runId, onReview }: { view: RunView; run
   );
 }
 
-function GroupRows({ group, reqs, reviews, selectedId, onSelect }: {
-  group: string; reqs: Requirement[]; reviews: Record<string, EngineerReview>;
+function GroupRows({ group, reqs, reviews, reviewComplete, selectedId, onSelect }: {
+  group: string; reqs: Requirement[]; reviews: Record<string, EngineerReview>; reviewComplete: boolean;
   selectedId?: string; onSelect: (id: string) => void;
 }) {
   return (
@@ -100,7 +100,7 @@ function GroupRows({ group, reqs, reviews, selectedId, onSelect }: {
             <td><div className="req-text">{r.text}</div></td>
             <td className="cite">p. {r.source.page ?? "?"}<br />¶ {r.source.paragraph ?? "—"}</td>
             <td>
-              <PipelineChip req={r} />
+              <PipelineChip req={r} reviewComplete={reviewComplete} />
               {r.findings.length > 0 && <div style={{ marginTop: 3 }}><span className="chip attention">{r.findings.length} issue{r.findings.length > 1 ? "s" : ""}</span></div>}
             </td>
             <td><EngineerChip review={review} /></td>
@@ -122,7 +122,7 @@ function SourcePanel({ req, view, runId, onReview }: { req: Requirement; view: R
     <section className="card source">
       <div className="row-flex">
         <h2 className="mono">{req.requirement_id ?? req.draft_id}</h2>
-        <PipelineChip req={req} />
+        <PipelineChip req={req} reviewComplete={view.review_complete} />
         <EngineerChip review={view.engineer_reviews[req.draft_id]} />
       </div>
       <p className="source-text">{req.text}</p>

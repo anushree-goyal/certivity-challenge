@@ -32,7 +32,8 @@ export function StatusBadge({ status }: { status: string }) {
   return <span className={`chip ${cls}`}>{status}</span>;
 }
 
-export function PipelineChip({ req }: { req: Requirement }) {
+export function PipelineChip({ req, reviewComplete = true }: { req: Requirement; reviewComplete?: boolean }) {
+  if (req.status === "accepted" && !reviewComplete) return <span className="chip outline" title="Exported, but the automated evidence review did not run for this analysis">Not reviewed</span>;
   if (req.status === "accepted") return <span className="chip green" title="Accepted by the automated evidence review">Source-checked</span>;
   if (req.status === "duplicate") return <span className="chip neutral">Duplicate{req.duplicate_of ? ` of ${req.duplicate_of}` : ""}</span>;
   if (req.status === "rejected") return <span className="chip outline" title={req.rejection_reason ?? undefined}>Rejected</span>;

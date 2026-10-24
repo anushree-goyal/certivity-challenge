@@ -137,9 +137,15 @@ def execute_run(run_id: str, store: RunStore, settings: Settings) -> None:
         }.items() if v is not None}
         agent_dir = store.module_dir(run_id, "agent")
         llm = comps.create_llm(agent_dir, **limits)
+        # Review gets its own adapter and budget, so extraction cannot spend the calls review needs.
+        review_limits = {**limits}
+        if settings.max_review_calls is not None:
+            review_limits["max_calls"] = settings.max_review_calls
+        llm_review = comps.create_llm(store.module_dir(run_id, "quality"), **review_limits)
         llm_description = describe_llm(llm)
         store.update(run_id, corpus_snapshot_id=snapshot_id, llm_identity=llm_description.get("model") or "",
-                     llm_description=llm_description, model_call_budget=limits.get("max_calls"))
+                     llm_description=llm_description, model_call_budget=limits.get("max_calls"),
+                     review_call_budget=review_limits.get("max_calls"))
         if not llm_configured(llm_description):
             # The adapter refuses calls without credentials; fail now with the reason, before any work.
             raise ComponentError("No model credentials are configured, so no requirements can be extracted. "
@@ -152,7 +158,7 @@ def execute_run(run_id: str, store: RunStore, settings: Settings) -> None:
         store.write_artifact(run_id, "pipeline_draft.json", draft)
 
         emit.set_stage("review", "Reviewing drafts")
-        report_obj = comps.review_requirements(run_input, draft_obj, corpus, llm, emit)
+        report_obj = comps.review_requirements(run_input, draft_obj, corpus, llm_review, emit)
         report = to_jsonable(report_obj)
         store.write_artifact(run_id, "quality_report.json", report)
 
@@ -171,7 +177,7 @@ def execute_run(run_id: str, store: RunStore, settings: Settings) -> None:
             draft = to_jsonable(draft_obj)
             store.write_artifact(run_id, f"pipeline_draft.round{rounds}.json", draft)
             emit.set_stage("review", f"Re-reviewing after round {rounds}")
-            report_obj = comps.review_requirements(run_input, draft_obj, corpus, llm, emit)
+            report_obj = comps.review_requirements(run_input, draft_obj, corpus, llm_review, emit)
             report = to_jsonable(report_obj)
             store.write_artifact(run_id, f"quality_report.round{rounds}.json", report)
         store.write_artifact(run_id, "pipeline_draft.json", draft)

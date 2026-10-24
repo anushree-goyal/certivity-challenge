@@ -121,8 +121,7 @@ SEEN: dict[str, Any] = {}
 
 
 def create_llm(*, cache_dir=None, max_calls=None, model_overrides=None, timeout_s=None, max_retries=None):
-    SEEN["cache_dir"] = cache_dir
-    SEEN["max_calls"] = max_calls
+    SEEN.setdefault("adapters", []).append({"cache_dir": cache_dir, "max_calls": max_calls})
     return FakeLLM(cache_dir)
 
 

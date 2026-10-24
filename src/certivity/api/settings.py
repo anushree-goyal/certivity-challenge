@@ -45,6 +45,7 @@ class Settings:
     max_revision_rounds: int
     run_time_budget_s: int
     max_model_calls: int | None  # None: the contracts' RunConfig default
+    max_review_calls: int | None = None  # review's own budget; None: same as max_model_calls
     entry_points: dict[str, str] = field(default_factory=dict)
 
     @property
@@ -92,5 +93,6 @@ def load_settings() -> Settings:
         max_revision_rounds=_int("CERTIVITY_MAX_REVISION_ROUNDS", 2),
         run_time_budget_s=_int("CERTIVITY_RUN_TIME_BUDGET_S", 3 * 3600),
         max_model_calls=int(os.environ["CERTIVITY_MAX_MODEL_CALLS"]) if os.environ.get("CERTIVITY_MAX_MODEL_CALLS") else None,
+        max_review_calls=int(os.environ["CERTIVITY_MAX_REVIEW_CALLS"]) if os.environ.get("CERTIVITY_MAX_REVIEW_CALLS") else None,
         entry_points=entry_points,
     )
