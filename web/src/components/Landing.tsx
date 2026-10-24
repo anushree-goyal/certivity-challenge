@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import { BackgroundPaths } from "./BackgroundPaths";
-import { GlassButton } from "./GlassButton";
+import { FlowButton } from "./ui/flow-button";
 
 // Front page: one full screen, centred title and call to action over the flowing line field.
 // The workspace with the data starts below it; the lines stay on this screen only.
@@ -29,7 +29,7 @@ export function Landing({ onStart, onScroll }: { onStart: () => void; onScroll: 
           ))}
         </h1>
         <p className="landing-sub">Every engineering requirement your product must meet, traced to the regulation page.</p>
-        <GlassButton label="+ New Analysis" onClick={onStart} />
+        <FlowButton text="New Analysis" onClick={onStart} size="lg" />
       </div>
       <button type="button" className="landing-scroll" onClick={onScroll} aria-label="Scroll to the workspace">
         <span>Workspace</span>

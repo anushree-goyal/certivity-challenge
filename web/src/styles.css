@@ -286,15 +286,14 @@ body { background:
 .bg-paths-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 .landing-inner { position: relative; z-index: 1; max-width: 56rem; margin: 0 auto; display: flex; flex-direction: column; align-items: center;
   animation: landing-fade 2s ease both; }
-.glass-title { margin: 0 0 1.25rem; font-size: clamp(3.2rem, 11vw, 7.5rem); font-weight: 700; letter-spacing: -.05em; line-height: 1;
-  color: transparent; filter: drop-shadow(0 6px 30px rgba(143, 227, 209, .16)) drop-shadow(0 1px 0 rgba(255, 255, 255, .12)); }
+.glass-title { margin: 0 0 1.25rem; font-size: clamp(3.2rem, 11vw, 7.5rem); font-weight: 800; letter-spacing: -.045em; line-height: 1;
+  color: #fff; filter: drop-shadow(0 4px 24px rgba(0, 0, 0, .55)) drop-shadow(0 0 32px rgba(143, 227, 209, .14)); }
 .glass-word { display: inline-block; margin-right: 1rem; }
 .glass-word:last-child { margin-right: 0; }
-/* Glass lettering: translucent white-to-teal fill with a fine bright rim, so the background reads through. */
-.glass-letter { display: inline-block; color: transparent; animation: letter-rise .9s cubic-bezier(.2, 1.25, .35, 1) var(--delay, 0s) both;
-  background: linear-gradient(180deg, rgba(255, 255, 255, .96) 0%, rgba(255, 255, 255, .72) 38%, rgba(190, 240, 228, .38) 62%, rgba(143, 227, 209, .5) 100%);
-  -webkit-background-clip: text; background-clip: text;
-  -webkit-text-stroke: 1px rgba(255, 255, 255, .28); }
+/* Bold, opaque lettering: solid white easing into light teal at the base (no see-through fill). */
+.glass-letter { display: inline-block; color: #fff; animation: letter-rise .9s cubic-bezier(.2, 1.25, .35, 1) var(--delay, 0s) both;
+  background: linear-gradient(180deg, #ffffff 0%, #ffffff 45%, #d9f6ee 75%, #b4ebde 100%);
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
 .landing-sub { margin: 0 0 2.25rem; max-width: 34rem; color: #c3d1cc; font-size: 1.05rem;
   text-shadow: 0 0 14px #000, 0 0 4px #000; }
 .landing-scroll { position: absolute; z-index: 1; bottom: 1.5rem; left: 50%; transform: translateX(-50%); background: none; border: none;
@@ -304,26 +303,6 @@ body { background:
 @keyframes landing-bob { 50% { transform: translateY(5px); } }
 @media (prefers-reduced-motion: reduce) { .landing-chevron { animation: none; } }
 
-/* ---- glass "New analysis" button ---- */
-.glass-wrap { position: relative; display: inline-block; padding: 1px; border-radius: 1rem; overflow: hidden;
-  background: linear-gradient(180deg, rgba(255, 255, 255, .14), rgba(0, 0, 0, .1));
-  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, .45), 0 4px 6px -4px rgba(0, 0, 0, .45); transition: box-shadow .3s; }
-.glass-wrap:hover { box-shadow: 0 20px 25px -5px rgba(0, 0, 0, .55), 0 8px 10px -6px rgba(0, 0, 0, .5); }
-.glass-btn { justify-content: center; border-radius: 1.15rem; padding: 1.5rem 2rem;
-  font-size: 1.125rem; font-weight: 600; color: #fff; background: rgba(0, 0, 0, .95);
-  border: 1px solid rgba(255, 255, 255, .1); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-  transition: transform .3s, background .3s, box-shadow .3s; }
-.glass-btn:hover { background: #000; filter: none; box-shadow: 0 4px 6px -1px rgba(38, 38, 38, .5); }
-.glass-wrap:hover .glass-btn { transform: translateY(-2px); }
-.glass-label { opacity: .9; transition: opacity .3s; }
-.glass-arrow { margin-left: .5rem; opacity: .7; transition: opacity .3s, transform .3s; }
-.glass-wrap:hover .glass-label, .glass-wrap:hover .glass-arrow { opacity: 1; }
-.glass-wrap:hover .glass-arrow { transform: translateX(6px); }
-.glass-btn:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
-@media (prefers-reduced-motion: reduce) { .glass-btn, .glass-arrow { transition: none; } }
-.glass-sm { display: block; }
-.glass-sm .glass-btn { width: 100%; padding: .7rem 1rem; font-size: .95rem; border-radius: calc(1rem - 1px); }
 
 /* ---- workspace boxes: frosted glass over the teal glow (no lines behind them) ---- */
 .card, .stat, .sidebar {
@@ -338,3 +317,28 @@ body { background:
 /* Spring-like rise with a slight overshoot (template: spring, stiffness 150, damping 25). */
 @keyframes letter-rise { from { transform: translateY(100px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .landing-inner, .glass-letter { animation: none; } }
+
+/* ---- flow button (components/ui/flow-button.tsx): values from the 21st.dev original, dark-theme colours ---- */
+.flow-btn { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: .25rem; overflow: hidden;
+  border-radius: 100px; border: 1.5px solid rgba(255, 255, 255, .4); background: transparent; padding: .75rem 2rem;
+  font-size: .875rem; font-weight: 600; color: #fff; cursor: pointer;
+  transition: all 600ms cubic-bezier(.23, 1, .32, 1); }
+.flow-btn:hover { border-color: transparent; color: #04140f; border-radius: 12px; filter: none; }
+.flow-btn:active { transform: scale(.95); }
+.flow-btn:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
+.flow-lg { padding: .95rem 2.6rem; font-size: 1rem; }
+.flow-block { display: flex; width: 100%; }
+.flow-arrow { position: absolute; width: 16px; height: 16px; z-index: 9; fill: none; color: #fff;
+  transition: all 800ms cubic-bezier(.34, 1.56, .64, 1); }
+.flow-arrow-left { left: -25%; }
+.flow-arrow-right { right: 1rem; }
+.flow-btn:hover .flow-arrow { color: #04140f; }
+.flow-btn:hover .flow-arrow-left { left: 1rem; }
+.flow-btn:hover .flow-arrow-right { right: -25%; }
+.flow-text { position: relative; z-index: 1; transform: translateX(-.75rem); transition: all 800ms ease-out; }
+.flow-btn:hover .flow-text { transform: translateX(.75rem); }
+.flow-circle { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 16px; height: 16px;
+  background: var(--teal); border-radius: 50%; opacity: 0; transition: all 800ms cubic-bezier(.19, 1, .22, 1); }
+.flow-btn:hover .flow-circle { width: 220px; height: 220px; opacity: 1; }
+.flow-block:hover .flow-circle, .flow-lg:hover .flow-circle { width: 320px; height: 320px; }  /* wide buttons: cover fully */
+@media (prefers-reduced-motion: reduce) { .flow-btn, .flow-arrow, .flow-text, .flow-circle { transition: none; } }

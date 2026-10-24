@@ -1,5 +1,5 @@
 import type { Health, RunSummary } from "../types";
-import { GlassButton } from "./GlassButton";
+import { FlowButton } from "./ui/flow-button";
 
 export function Sidebar({ runs, selected, health, healthError, onNew, onSelect, newActive }: {
   runs: RunSummary[]; selected: string | null; health: Health | null; healthError: string | null;
@@ -20,7 +20,7 @@ export function Sidebar({ runs, selected, health, healthError, onNew, onSelect, 
       </div>
 
       <div className="side-section">
-        <GlassButton label="+ New Analysis" onClick={onNew} size="sm" current={newActive} />
+        <FlowButton text="New Analysis" onClick={onNew} block current={newActive} />
       </div>
 
       <div className="side-label" style={{ paddingLeft: "1.1rem" }}>Analyses</div>
