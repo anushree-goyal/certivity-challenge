@@ -9,7 +9,7 @@ export function Sidebar({ runs, selected, health, healthError, onNew, onSelect, 
       <div className="brand">
         <div className="brand-name">
           <span className="brand-mark" aria-hidden>
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#fff" strokeWidth="2">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#04140f" strokeWidth="2.2">
               <circle cx="7" cy="7" r="4.5" /><path d="M10.5 10.5 14 14" strokeLinecap="round" />
             </svg>
           </span>

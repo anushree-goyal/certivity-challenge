@@ -1,29 +1,29 @@
-/* ReguLens design tokens (dark). Deep forest green surfaces, white body text, light teal for headings,
-   labels, links and technical drawings. Fresh green = primary actions and completed states; graphite = the
-   single accent for items needing review; red = errors only. Green never means "legally verified". */
+/* ReguLens design tokens (black). Black background, dark grey structure, dark green for raised and
+   selected areas, light teal as the single highlight (headings, links, active states, drawings, primary
+   actions). Green = completed/approved, graphite = needs review, red = errors. Green never means "verified". */
 :root {
   color-scheme: dark;
-  --bg: #0e3528;            /* main background */
-  --sidebar: #0a2a20;       /* sidebar, a shade deeper */
-  --surface: #164d3b;       /* cards and panels: deep forest green */
-  --surface-2: #1c5a46;     /* table header, meta boxes, hover */
-  --surface-3: #236b53;     /* selected rows */
-  --text: #ffffff;          /* body text */
-  --teal: #8fe3d1;          /* light teal: headings, labels, links, drawings */
-  --teal-dim: #5fb8a6;      /* drawing secondary lines */
-  --muted: #a3cbc0;         /* secondary text */
-  --green: #42a878;         /* primary buttons, active states, progress */
-  --green-soft: rgba(66, 168, 120, .2);
+  --bg: #000000;            /* main background */
+  --sidebar: #111413;       /* dark grey */
+  --surface: #16191a;       /* cards and panels: dark grey */
+  --surface-2: #0f2a22;     /* dark green: table headers, meta boxes, hover */
+  --surface-3: #14382d;     /* dark green: selected rows */
+  --text: #ffffff;
+  --teal: #8fe3d1;          /* highlight */
+  --teal-dim: #4fae9a;      /* drawing secondary lines */
+  --muted: #9aa8a3;         /* secondary text, grey with a green cast */
+  --green: #42a878;         /* completed / approved */
+  --green-soft: rgba(66, 168, 120, .18);
   --green-text: #a6ecc8;
-  --graphite: #344054;      /* accent: needs review, warnings */
-  --graphite-soft: rgba(52, 64, 84, .6);
+  --graphite: #344054;      /* needs review, warnings */
+  --graphite-soft: rgba(52, 64, 84, .55);
   --graphite-edge: #8fa3bf;
-  --border: rgba(143, 227, 209, .16);
-  --border-strong: rgba(143, 227, 209, .3);
+  --border: rgba(255, 255, 255, .08);
+  --border-strong: rgba(143, 227, 209, .22);
   --error: #ff9d92;
   --error-soft: rgba(180, 35, 24, .28);
   --radius: 10px;
-  --shadow: 0 1px 2px rgba(0, 0, 0, .18), 0 4px 14px rgba(0, 0, 0, .14);
+  --shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 6px 18px rgba(0, 0, 0, .35);
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
   color: var(--text);
@@ -50,7 +50,7 @@ code, .mono { font-family: var(--mono); font-size: .8em; }
 .sidebar { background: var(--sidebar); border-right: 1px solid var(--border); color: var(--muted); display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; }
 .brand { padding: 1.1rem 1.1rem .9rem; border-bottom: 1px solid var(--border); }
 .brand-name { color: var(--text); font-weight: 700; font-size: 1.15rem; letter-spacing: -.01em; display: flex; align-items: center; gap: .5rem; }
-.brand-mark { width: 22px; height: 22px; border-radius: 6px; background: var(--green); display: grid; place-items: center; }
+.brand-mark { width: 22px; height: 22px; border-radius: 6px; background: var(--teal); display: grid; place-items: center; }
 .brand-sub { font-size: .75rem; color: var(--teal); margin-top: .15rem; }
 .side-section { padding: .8rem .7rem; }
 .side-label { font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; color: var(--teal); padding: 0 .4rem .4rem; }
@@ -79,7 +79,7 @@ code, .mono { font-family: var(--mono); font-size: .8em; }
 
 /* ---- controls ---- */
 button, .button { font: inherit; font-size: .85rem; font-weight: 500; padding: .45rem .9rem; border-radius: 6px; cursor: pointer;
-  border: 1px solid var(--green); background: var(--green); color: #fff; text-decoration: none; display: inline-flex; gap: .4rem; align-items: center; }
+  border: 1px solid var(--teal); background: var(--teal); color: #04140f; font-weight: 600; text-decoration: none; display: inline-flex; gap: .4rem; align-items: center; }
 button:hover, .button:hover { filter: brightness(1.08); }
 button:disabled { opacity: .4; cursor: not-allowed; filter: none; }
 button.ghost, .button.ghost { background: transparent; color: var(--text); border-color: var(--border-strong); }
@@ -87,7 +87,7 @@ button.danger { background: transparent; color: var(--error); border-color: var(
 button:focus-visible, .button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, tr.req:focus-visible { outline: 2px solid var(--teal); outline-offset: 1px; }
 label { display: block; font-size: .78rem; font-weight: 500; color: var(--teal); margin: .55rem 0; }
 input, select, textarea { width: 100%; font: inherit; font-size: .85rem; padding: .45rem .55rem; margin-top: .25rem; color: var(--text);
-  border: 1px solid var(--border-strong); border-radius: 6px; background: var(--bg); }
+  border: 1px solid var(--border-strong); border-radius: 6px; background: #0a0c0c; }
 input::placeholder, textarea::placeholder { color: var(--muted); opacity: .8; }
 input[type="checkbox"] { width: auto; margin: 0; accent-color: var(--green); }
 input[type="file"] { padding: .35rem; background: var(--bg); border-style: dashed; color: var(--muted); }
@@ -178,7 +178,7 @@ dl.kv dd { margin: 0; }
 .review-box { margin-top: .9rem; border: 1px solid var(--border-strong); border-radius: 6px; padding: .65rem .75rem; background: rgba(0, 0, 0, .08); }
 .review-box strong { color: var(--teal); }
 .segmented { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 6px; overflow: hidden; }
-.segmented button { border: none; border-radius: 0; background: transparent; color: var(--text); padding: .35rem .75rem; font-size: .8rem; }
+.segmented button { border: none; border-radius: 0; background: transparent; color: var(--text); font-weight: 500; padding: .35rem .75rem; font-size: .8rem; }
 .segmented button + button { border-left: 1px solid var(--border-strong); }
 .segmented button.on.approved { background: var(--green); color: #fff; }
 .segmented button.on.flagged { background: var(--graphite); color: #fff; }
@@ -227,18 +227,18 @@ ul.plain { margin: 0; padding-left: 1rem; font-size: .83rem; }
 }
 
 /* ---- technical drawings: holographic blueprint ---- */
-.drawing-art { width: 100%; height: auto; display: block; overflow: visible; }
+.drawing-art { width: 100%; height: auto; display: block; overflow: hidden; }  /* keeps the scan sweep inside the frame */
 .fx .fx-ink { stroke: var(--teal); stroke-width: 1.3; }
 .fx .fx-hollow { fill: none; }
 .fx .fx-thin { fill: none; stroke: var(--teal-dim); stroke-width: .8; }
 .fx .fx-back { fill: none; stroke: var(--teal-dim); stroke-width: .8; stroke-dasharray: 2 3; opacity: .7; }
 .fx .fx-fill { fill: var(--teal); }
-.fx .fx-dot { fill: rgba(143, 227, 209, .14); }
+.fx .fx-dot { fill: rgba(143, 227, 209, .12); }
 .fx .fx-lead { fill: none; stroke: var(--teal-dim); stroke-width: .8; }
 .fx .fx-dim { fill: none; stroke: var(--teal-dim); stroke-width: .9; }
 .fx .fx-tick { stroke: var(--teal-dim); stroke-width: .8; opacity: .8; }
 .fx .fx-bracket { fill: none; stroke: var(--teal); stroke-width: 1.6; stroke-linecap: square; }
-.fx .fx-tag { fill: rgba(10, 42, 32, .82); stroke: rgba(143, 227, 209, .35); stroke-width: .7; }
+.fx .fx-tag { fill: rgba(0, 0, 0, .78); stroke: rgba(143, 227, 209, .35); stroke-width: .7; }
 .fx .fx-label { fill: var(--muted); font-family: var(--mono); font-size: 8.5px; letter-spacing: .08em; }
 .fx .fx-strong { fill: var(--teal); font-weight: 700; }
 .fx .fx-axis { fill: none; stroke: var(--teal); stroke-width: 1; stroke-dasharray: 10 4 2 4; opacity: .75;
@@ -260,7 +260,7 @@ ul.plain { margin: 0; padding-left: 1rem; font-size: .83rem; }
   .fx *, .fx { animation: none !important; }
 }
 .hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 1.5rem; align-items: center; margin-bottom: 1rem;
-  background: linear-gradient(160deg, var(--surface), #12443a); }
+  background: linear-gradient(150deg, var(--surface) 35%, #0c241d); }
 .hero h1 { font-size: 1.6rem; }
 .hero p { color: var(--muted); margin: .4rem 0 0; max-width: 34rem; }
 .steps { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 1rem; }
