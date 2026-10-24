@@ -36,7 +36,7 @@ import typing
 from dataclasses import dataclass, field
 from typing import Any, Optional, Protocol, Union, runtime_checkable
 
-CONTRACTS_VERSION = "1.3.0"
+CONTRACTS_VERSION = "1.4.0"
 
 # --------------------------------------------------------------------------- #
 # Enumerations
@@ -356,6 +356,9 @@ class Document:
     index_entry: dict[str, Any] = field(default_factory=dict)
     """Verbatim index.json entry, so scope decisions can cite the index."""
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "role", DocumentRole(self.role))
+
 
 @dataclass(frozen=True)
 class SourcePassage:
@@ -391,6 +394,15 @@ class SourcePassage:
     table_context: Optional[str] = None
     """Table headings and footnotes needed to read a table cell correctly."""
 
+    def __post_init__(self) -> None:
+        for name in (
+            "heading_ancestry",
+            "page_span",
+            "pdf_page_indices",
+            "parsing_flags",
+        ):
+            object.__setattr__(self, name, tuple(getattr(self, name)))
+
 
 @dataclass(frozen=True)
 class Section:
@@ -409,6 +421,10 @@ class Section:
     """Position in the document's reading order; the inspection plan sorts on it."""
     parsing_flags: tuple[str, ...] = ()
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "primary_passage_ids", tuple(self.primary_passage_ids))
+        object.__setattr__(self, "parsing_flags", tuple(self.parsing_flags))
+
 
 @dataclass(frozen=True)
 class SectionBundle:
@@ -426,6 +442,11 @@ class SectionBundle:
     """Zero-based physical pages carrying a table or figure for this section,
     worth rendering as images. Call ``get_page_asset`` for the printed label."""
     notes: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        for name in ("primary_passages", "context_passages",
+                     "visual_pdf_page_indices", "notes"):
+            object.__setattr__(self, name, tuple(getattr(self, name)))
 
 
 @dataclass(frozen=True)
@@ -565,6 +586,12 @@ class ReferenceResolution:
     several plausible targets and refused to pick one silently."""
     resolved_document_id: Optional[str] = None
     resolved_section_id: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "status", ReferenceStatus(self.status))
+        object.__setattr__(
+            self, "candidate_passage_ids", tuple(self.candidate_passage_ids)
+        )
 
     @property
     def is_usable(self) -> bool:

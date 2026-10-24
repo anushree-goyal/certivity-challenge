@@ -1,6 +1,6 @@
 # Answers for the corpus component's contract proposal
 
-**From:** Anushree (contracts owner) · **To:** Julia · **Contracts version:** 1.3.0
+**From:** Anushree (contracts owner) · **To:** Julia · **Contracts version:** 1.4.0
 
 Your `docs/corpus/contract-proposal.md`, answered point by point. I verified
 these by merging `feature/corpus` into `feature/agent` and diffing your records
@@ -264,3 +264,81 @@ and 4 snapshot tests error here. Please send the exact bootstrap command and a
 rough build time for the base role. Extraction against real regulation text is
 the one thing in my component that has never been tested, and the held-out case
 opens tomorrow at 08:00.
+
+
+---
+
+# Round 3: one bug to fix, and what I already handle
+
+I read `reader.py` on `feature/corpus` rather than wait. Contracts are now
+**1.4.0**; fetch `main`, which finally has the shared base.
+
+## Already correct — no action
+
+`page_span`, `paragraph_label`, `primary_passage_ids` all match. `snapshot_id`
+is set as an instance attribute, which is all the pipeline needs, so **ignore my
+earlier "make it a property"** — I was wrong to ask. `get_passages` omitting
+unknown IDs and `PageAsset.printed_page` are done.
+
+**Strings and lists from SQLite are now fine.** `role="base"` and
+`status="missing"` are coerced to their enums, and JSON-column lists are
+normalised to tuples. You do not need to import the enums.
+
+## One real bug — please fix
+
+`reader.py:187` constructs the resolution **positionally**:
+
+```python
+ReferenceResolution("missing", [], f"originating passage ... not in snapshot")
+```
+
+Your provisional order was `(status, candidate_passage_ids, explanation)`. The
+shared record's is `(status, explanation, request, candidate_passage_ids, ...)`.
+So that call assigns `explanation=[]` and `request="originating passage ..."`.
+
+**It raises nothing.** The fields are simply wrong, and because
+`candidate_passage_ids` stays empty, `is_usable` is `False` for every
+resolution — so no reference would ever resolve and nothing would say why.
+
+Fix: **use keyword arguments** for every shared record.
+
+```python
+ReferenceResolution(
+    status="missing",
+    explanation=f"originating passage {request.originating_passage_id!r} is not in snapshot ...",
+    candidate_passage_ids=[],
+)
+```
+
+Please check every construction site the same way — positional calls are the one
+thing coercion cannot save.
+
+## Still needed, in priority order
+
+**1. `SourcePassage.namespace`.** Not passed in `_passage`, so every passage
+defaults to `"main"`. You already select `namespace` for `_section`, so it is a
+column away. Highest priority: the extraction prompt shows the model each
+passage's namespace, and on these documents the annexes carry most of the
+substance — an Annex 6 Part 6 passage presented as main-body text is a
+correctness problem, not cosmetics.
+
+**2. `is_table` and `table_context`.** You set `kind:table` in `parsing_flags`,
+which I see, but the explicit fields are what the prompt reads. Caption plus
+column headers is enough to ship.
+
+**3. `Section.ordinal`.** `build_inspection_plan` sorts on it to walk a document
+in reading order. You already `ORDER BY ord` for passages, so the data exists.
+It falls back to `(depth, paragraph_label)`, so this is not fatal — just wrong
+order. `depth` too if cheap.
+
+**4. `Document.index_entry`.** Verbatim `index.json` entry. Applicability
+screening reads it to shortlist candidates; without it screening sees only
+titles, and a title is never scope proof.
+
+## What I need from you
+
+**The bootstrap command and a rough base-role build time.** That is the only
+thing now blocking extraction against real regulation text — the one part of my
+component never tested, with the held-out case opening at 08:00. If
+`python -m certivity.corpus bootstrap --fetch-missing` is right, say so and I
+will run it tonight.
