@@ -119,6 +119,7 @@ def test_a_correction_replaces_the_draft_and_records_its_ancestry(
                         "supporting_passage_ids": [item["primary_passage_id"]],
                         "primary_passage_id": item["primary_passage_id"],
                         "obligation_kind": "mandatory",
+                        "product_applicability": "applies",
                         "applicability_condition": (
                             "device is a category SX signalling device on an M1 vehicle"
                         ),
@@ -171,6 +172,7 @@ def test_a_correction_citing_an_unsupplied_passage_is_refused(
                     "supporting_passage_ids": ["invented#main/1@001"],
                     "primary_passage_id": "invented#main/1@001",
                     "obligation_kind": "mandatory",
+                    "product_applicability": "applies",
                     "applicability_condition": None,
                     "applicability_reason": None,
                     "exceptions": [],

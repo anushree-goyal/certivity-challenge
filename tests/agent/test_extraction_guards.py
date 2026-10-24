@@ -37,6 +37,7 @@ def test_fabricated_primary_citation_is_dropped(run_input, corpus, script):
                 "supporting_passage_ids": ["made-up-doc#main/9@001"],
                 "primary_passage_id": "made-up-doc#main/9@001",
                 "obligation_kind": "mandatory",
+                "product_applicability": "applies",
                 "applicability_condition": None,
                 "applicability_reason": None,
                 "exceptions": [],
@@ -71,6 +72,7 @@ def test_unsupplied_supporting_ids_are_dropped_but_the_draft_survives(
                     ],
                     "primary_passage_id": primary[0]["passage_id"],
                     "obligation_kind": "mandatory",
+                    "product_applicability": "applies",
                     "applicability_condition": None,
                     "applicability_reason": None,
                     "exceptions": [],
@@ -114,6 +116,7 @@ def test_an_obligation_cited_to_a_context_passage_is_dropped(
                     "supporting_passage_ids": [context[0]["passage_id"]],
                     "primary_passage_id": context[0]["passage_id"],
                     "obligation_kind": "mandatory",
+                    "product_applicability": "applies",
                     "applicability_condition": None,
                     "applicability_reason": None,
                     "exceptions": [],
@@ -145,6 +148,7 @@ def test_identical_obligation_repeated_in_one_batch_is_collapsed(
             "supporting_passage_ids": [primary[0]["passage_id"]],
             "primary_passage_id": primary[0]["passage_id"],
             "obligation_kind": "mandatory",
+            "product_applicability": "applies",
             "applicability_condition": None,
             "applicability_reason": None,
             "exceptions": [],
@@ -399,3 +403,63 @@ def test_changing_the_case_input_changes_the_profile_without_code_edits(
     }
     assert syn.DOC_B in inspected
     assert syn.DOC_A not in inspected
+
+
+# --------------------------------------------------------------------------- #
+# product_applicability: does the obligation reach THIS product?
+#
+# From offline scoring of a real UN R148 run: 12 obligations about *front*
+# position lamps were emitted for a *rear* lamp, and the first one's own
+# applicability_reason already said it did not reach the product.
+# --------------------------------------------------------------------------- #
+
+
+def _one_obligation(payload, reach):
+    primary = payload["primary_passages"]
+    if not primary:
+        return {"obligations": [], "references": [], "needs_context": [], "section_note": None}
+    return {
+        "obligations": [
+            {
+                "text": "The lamp shall be red.",
+                "supporting_passage_ids": [primary[0]["passage_id"]],
+                "primary_passage_id": primary[0]["passage_id"],
+                "obligation_kind": "mandatory",
+                "applicability_condition": None,
+                "product_applicability": reach,
+                "applicability_reason": "front position lamps, not this product",
+                "exceptions": [],
+                "values": [],
+                "notes": None,
+            }
+        ],
+        "references": [],
+        "needs_context": [],
+        "section_note": None,
+    }
+
+
+def test_an_obligation_outside_the_products_scope_is_dropped(run_input, corpus, script):
+    script["extract_obligations"] = lambda p: _one_obligation(p, "does_not_apply")
+    draft, _ = run_with(script, run_input, corpus)
+
+    assert draft.draft_requirements == ()
+    assert any("does not reach this product" in w for w in draft.warnings)
+
+
+def test_an_obligation_depending_on_an_unknown_fact_is_kept(run_input, corpus, script):
+    """Uncertainty about a product fact is not proof that a rule is irrelevant."""
+    script["extract_obligations"] = lambda p: _one_obligation(p, "depends_on_unknown")
+    draft, _ = run_with(script, run_input, corpus)
+
+    assert draft.draft_requirements, "an uncertain obligation must survive"
+    assert all(
+        "unestablished product fact" in (d.notes or "")
+        for d in draft.draft_requirements
+    )
+
+
+def test_an_applicable_obligation_is_unaffected(run_input, corpus, script):
+    script["extract_obligations"] = lambda p: _one_obligation(p, "applies")
+    draft, _ = run_with(script, run_input, corpus)
+    assert draft.draft_requirements
