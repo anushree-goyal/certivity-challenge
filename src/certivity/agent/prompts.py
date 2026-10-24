@@ -39,10 +39,16 @@ PROMPT_VERSIONS: dict[str, str] = {
     # from the section that owns it and once from a section that merely received
     # it as context or as a followed reference. A primary citation must now be a
     # primary passage of the section being read.
+    # v5 (extract_obligations): from the quality component's review of the real
+    # corpus - split long passages, because 5 base "shall" passages exceed the
+    # 2,000-character export limit; cite the narrowest passage, because 89
+    # primary passages span several pages and the citation carries the start
+    # page; and fill `values` whenever the obligation turns on a number, so
+    # numeric checks need not re-parse the text.
     "product_profile": "v2",
     "candidate_scope": "v2",
     "document_scope": "v2",
-    "extract_obligations": "v4",
+    "extract_obligations": "v5",
     "revise_obligations": "v2",
 }
 
@@ -311,9 +317,23 @@ Atomicity
   values, units and its condition. A reader must be able to check it against
   the cited passage without the rest of the document.
 
+Length
+- A long passage almost always states several separate obligations. Split them.
+  Review found base passages over 2,000 characters, and the official output caps
+  a requirement at 2,000 - so a single draft restating a whole passage is both
+  non-atomic and unexportable.
+- Never shorten by dropping a value, a unit, a condition or an exception. If one
+  genuinely indivisible obligation cannot be stated within about 1,800
+  characters, return it anyway and say so in `notes` rather than truncating it.
+
 Citation
 - `supporting_passage_ids` lists every supplied passage you used, including
   context passages that carry an inherited condition.
+- Where several supplied passages state the obligation, cite the **narrowest**
+  one. A passage may span several printed pages, and the citation carries that
+  passage's starting page, so citing a broad passage for an obligation that
+  appears on its later page cites the wrong page. Prefer the passage whose text
+  is the obligation.
 - `primary_passage_id` must be the one passage that states the obligation
   itself. It must appear in `supporting_passage_ids`. The official output
   carries a single source, and this is it.
@@ -345,8 +365,11 @@ Conditions and exceptions
   so rather than asserting that it applies.
 
 Values
-- `values` captures each number the obligation turns on, so a reviewer can
-  check it mechanically. Copy the value as written, as a string.
+- `values` captures **every** number the obligation turns on, so a reviewer can
+  check it mechanically against the cited text. Copy each value exactly as
+  written, as a string, keeping the source's decimal separator. An obligation
+  with a limit, a tolerance or a range and an empty `values` list is an error.
+- Leave `values` empty only when the obligation turns on no number at all.
 
 Tables
 - A table cell is only meaningful with its row and column headers and its

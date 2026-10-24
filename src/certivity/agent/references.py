@@ -63,7 +63,11 @@ def _with_request(
     per-draft unresolved list - keys on it, so it must always be present by the
     time a resolution leaves this module.
     """
-    if resolution.request is not None:
+    # isinstance, not "is not None": a positional construction in a corpus
+    # implementation can put something other than a ReferenceRequest here, and
+    # the visited set would then crash on request.key(). Replacing a wrong value
+    # with the request we actually sent is always correct.
+    if isinstance(resolution.request, ReferenceRequest):
         return resolution
     return dataclasses.replace(resolution, request=request)
 
