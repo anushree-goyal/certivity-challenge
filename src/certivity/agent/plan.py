@@ -8,6 +8,7 @@ unprocessed section is visible rather than absent.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Iterable
 
@@ -141,9 +142,41 @@ def build_inspection_plan(
     return plan, coverage
 
 
-def _order_key(section: Section) -> tuple[int, int, str]:
-    """Reading order: ordinal when the corpus supplies one, else namespace/number."""
-    return (section.ordinal, section.depth, section.paragraph_label or section.heading or "")
+_LABEL_PART = re.compile(r"(\d+)|([^\d]+)")
+
+
+def _natural_label_key(label: str) -> tuple:
+    """Sort key that orders 3.2 before 3.10.
+
+    A plain string sort puts "3.10" before "3.2", which silently reorders a
+    whole document. Splitting into numeric and non-numeric runs and comparing
+    numbers as numbers fixes it. Needed because the corpus does not yet supply
+    ``Section.ordinal``, and a wrong reading order makes coverage misleading
+    even when every section is eventually processed.
+    """
+    parts: list[tuple[int, int | str]] = []
+    for number, text in _LABEL_PART.findall(label or ""):
+        if number:
+            parts.append((0, int(number)))
+        else:
+            parts.append((1, text.strip().lower()))
+    return tuple(parts)
+
+
+def _order_key(section: Section) -> tuple:
+    """Reading order: the corpus's ordinal when it supplies one, else the label.
+
+    ``ordinal`` is authoritative because only the corpus knows the physical
+    order. When every section reports 0 - as happens when a corpus has not
+    populated it - fall back to a natural sort of the paragraph label, grouped
+    by namespace so annexes stay after the main body.
+    """
+    return (
+        section.ordinal,
+        section.depth,
+        section.namespace or "",
+        _natural_label_key(section.paragraph_label or section.heading or ""),
+    )
 
 
 def _apply_section_limit(

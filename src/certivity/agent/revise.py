@@ -121,9 +121,16 @@ def revise_drafts(
     Drafts no finding names are carried through unchanged.
     """
     by_draft: dict[str, list[ReviewFinding]] = defaultdict(list)
+    skipped = 0
     for finding in findings:
-        if finding.target_kind is TargetKind.DRAFT:
-            by_draft[finding.target_id].append(finding)
+        if finding.target_kind is not TargetKind.DRAFT:
+            continue
+        if not finding.is_actionable:
+            # Informational and requesting nothing: a record, not a request.
+            # Revising on it would spend model calls to change nothing.
+            skipped += 1
+            continue
+        by_draft[finding.target_id].append(finding)
 
     unknown = set(by_draft) - {d.draft_id for d in draft.draft_requirements}
     for draft_id in sorted(unknown):
@@ -134,7 +141,10 @@ def revise_drafts(
         by_draft.pop(draft_id, None)
 
     if not by_draft:
-        return list(draft.draft_requirements), ["no draft-level findings to act on"]
+        return list(draft.draft_requirements), [
+            f"no actionable draft-level findings ({skipped} informational finding(s) "
+            "recorded without a request)"
+        ]
 
     # Group by section so one call can see a section's drafts together, which is
     # what a "missing condition" finding usually needs.

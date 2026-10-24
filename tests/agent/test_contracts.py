@@ -429,3 +429,56 @@ def test_make_event_produces_a_run_event_with_a_timestamp():
     assert isinstance(event, c.RunEvent)
     assert event.timestamp and event.stage == "quality"
     assert event.completed == 3 and event.total == 10
+
+
+# --------------------------------------------------------------------------- #
+# Tolerating a plain-Python implementation
+#
+# The corpus component builds records from SQLite rows: enum fields arrive as
+# strings and JSON columns as lists. Coercing here rather than demanding the
+# caller import the enums avoids a silent failure mode - a string status never
+# matches an enum member, so `is_usable` would be False for every reference and
+# nothing would ever resolve, with no error raised anywhere.
+# --------------------------------------------------------------------------- #
+
+
+def test_a_plain_string_status_still_matches_the_enum():
+    resolution = c.ReferenceResolution(
+        status="resolved",
+        explanation="found it",
+        candidate_passage_ids=["doc#main/2.1@001"],
+    )
+    assert resolution.status is c.ReferenceStatus.RESOLVED
+    assert resolution.is_usable is True
+    assert isinstance(resolution.candidate_passage_ids, tuple)
+
+
+def test_a_plain_string_document_role_still_matches_the_enum():
+    document = c.Document(
+        document_id="d", regulation="UN R148", title="t", role="base",
+        version_label="base", filename="f.pdf", checksum="abc",
+        snapshot_id="snap", page_count=10,
+    )
+    assert document.role is c.DocumentRole.BASE
+
+
+def test_lists_from_json_columns_are_normalised_to_tuples():
+    passage = c.SourcePassage(
+        passage_id="p", document_id="d", section_id="s", text="t",
+        paragraph_label="2.1",
+        heading_ancestry=["ANNEX 1", "2. TESTS"],   # json.loads gives lists
+        printed_start_page="9",
+        page_span=["9", "10"],
+        pdf_page_indices=[8, 9],
+        parsing_flags=["spans_pages"],
+    )
+    for value in (passage.heading_ancestry, passage.page_span,
+                  passage.pdf_page_indices, passage.parsing_flags):
+        assert isinstance(value, tuple)
+
+    section = c.Section(
+        section_id="s", document_id="d", parent_section_id=None,
+        heading="h", namespace="annex:1", primary_passage_ids=["p1", "p2"],
+        parsing_flags=["x"],
+    )
+    assert isinstance(section.primary_passage_ids, tuple)

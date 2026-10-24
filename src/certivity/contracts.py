@@ -36,7 +36,7 @@ import typing
 from dataclasses import dataclass, field
 from typing import Any, Optional, Protocol, Union, runtime_checkable
 
-CONTRACTS_VERSION = "1.3.0"
+CONTRACTS_VERSION = "1.5.0"
 
 # --------------------------------------------------------------------------- #
 # Enumerations
@@ -95,6 +95,10 @@ class FindingCategory(str, enum.Enum):
     OUT_OF_SCOPE = "out_of_scope"
     CONTEXT_REQUESTED = "context_requested"
     TOO_LONG = "too_long"
+    REVIEW_INCOMPLETE = "review_incomplete"
+    """Review did not finish - a budget, a timeout, or an unusable model."""
+    SEMANTIC_UNREVIEWED = "semantic_unreviewed"
+    """A draft the semantic pass never reached. Not a judgement about it."""
     OTHER = "other"
 
 
@@ -356,6 +360,9 @@ class Document:
     index_entry: dict[str, Any] = field(default_factory=dict)
     """Verbatim index.json entry, so scope decisions can cite the index."""
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "role", DocumentRole(self.role))
+
 
 @dataclass(frozen=True)
 class SourcePassage:
@@ -377,7 +384,11 @@ class SourcePassage:
     printed_start_page: Optional[str]
     """Printed label of the first page the passage appears on; None if unverified."""
     page_span: tuple[str, ...] = ()
-    """Every **printed** label the passage spans, in order, as strings.
+    """The **printed** labels the passage spans, in order, as strings.
+
+    Every label where the corpus knows them; first and last alone is acceptable
+    where it stores only the extent. Callers must therefore treat this as the
+    span's endpoints, not as a complete page-by-page enumeration.
 
     Printed, not physical: ``pdf_page_indices`` is the physical one. Strings
     because a printed label is not always an integer (front matter uses roman
@@ -390,6 +401,15 @@ class SourcePassage:
     is_table: bool = False
     table_context: Optional[str] = None
     """Table headings and footnotes needed to read a table cell correctly."""
+
+    def __post_init__(self) -> None:
+        for name in (
+            "heading_ancestry",
+            "page_span",
+            "pdf_page_indices",
+            "parsing_flags",
+        ):
+            object.__setattr__(self, name, tuple(getattr(self, name)))
 
 
 @dataclass(frozen=True)
@@ -409,6 +429,10 @@ class Section:
     """Position in the document's reading order; the inspection plan sorts on it."""
     parsing_flags: tuple[str, ...] = ()
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "primary_passage_ids", tuple(self.primary_passage_ids))
+        object.__setattr__(self, "parsing_flags", tuple(self.parsing_flags))
+
 
 @dataclass(frozen=True)
 class SectionBundle:
@@ -426,6 +450,11 @@ class SectionBundle:
     """Zero-based physical pages carrying a table or figure for this section,
     worth rendering as images. Call ``get_page_asset`` for the printed label."""
     notes: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        for name in ("primary_passages", "context_passages",
+                     "visual_pdf_page_indices", "notes"):
+            object.__setattr__(self, name, tuple(getattr(self, name)))
 
 
 @dataclass(frozen=True)
@@ -565,6 +594,12 @@ class ReferenceResolution:
     several plausible targets and refused to pick one silently."""
     resolved_document_id: Optional[str] = None
     resolved_section_id: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "status", ReferenceStatus(self.status))
+        object.__setattr__(
+            self, "candidate_passage_ids", tuple(self.candidate_passage_ids)
+        )
 
     @property
     def is_usable(self) -> bool:
@@ -748,6 +783,13 @@ class ReviewFinding:
     passages. Prose about what is missing belongs in ``explanation``; this field
     is machine-actionable, so a sentence here resolves to nothing."""
     requested_correction: Optional[str] = None
+    code: Optional[str] = None
+    """The reviewer's own fine-grained code, e.g. ``page_unverified``.
+
+    ``category`` is the shared vocabulary all four components agree on; this is
+    the reviewer's finer distinction within it, carried through to the run
+    record and the UI. It exists so a code need not be smuggled into
+    ``explanation`` as a prefix."""
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "category", FindingCategory(self.category))
@@ -767,6 +809,7 @@ class ReviewFinding:
                     self.target_id,
                     self.category.value,
                     self.explanation,
+                    self.code,
                 )[:12],
             )
 
@@ -814,6 +857,26 @@ class ReviewFinding:
     def draft_id(self) -> Optional[str]:
         """The draft this finding concerns, or None if it concerns something else."""
         return self.target_id if self.target_kind is TargetKind.DRAFT else None
+
+    @property
+    def is_actionable(self) -> bool:
+        """Whether this finding asks extraction to do something.
+
+        True when the reviewer requested a correction or more context, or when
+        severity is blocking or revision-requested. An informational finding
+        that requests nothing - a heuristic flag, a duplicate note, an
+        unreviewed draft - is a record, not a request, and spending model calls
+        on it would be waste.
+
+        ``revise_extraction`` and the API layer both read this, so the trigger
+        condition is defined once here rather than guessed in two places.
+        """
+        if self.requested_correction or self.requested_context:
+            return True
+        return self.severity in (
+            FindingSeverity.BLOCKING,
+            FindingSeverity.REVISION_REQUESTED,
+        )
 
 
 @dataclass(frozen=True)
