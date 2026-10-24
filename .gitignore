@@ -227,3 +227,6 @@ web/node_modules/
 web/dist/
 *.pdf
 *.tsbuildinfo
+
+# macOS
+.DS_Store
