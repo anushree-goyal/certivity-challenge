@@ -1,7 +1,7 @@
 # Shared contracts — published reference
 
 **Owner:** Anushree. **Module:** [`src/certivity/contracts.py`](../../src/certivity/contracts.py).
-**Version:** `CONTRACTS_VERSION = "1.0.0"`.
+**Version:** `CONTRACTS_VERSION = "1.1.0"`.
 
 Everyone imports from this module. Do not make a local copy with different
 field names. To change a contract: propose it to this owner, who updates the
@@ -104,9 +104,33 @@ real check you can assert in your own tests.
   target nobody could resolve.
 - `notes` may say `"Primary citation is a context or referenced passage rather
   than a primary passage of this section."` — that is a flag raised for you.
-- Ask for a correction with a `ReviewFinding`. Put section or passage ids in
-  `requested_context`; both are honoured, and a section id pulls in that
-  section's primary and context passages.
+- Build findings with the constructors, which set the addressing for you:
+
+  ```python
+  ReviewFinding.for_draft(draft_id, "missing_condition", "...")
+  ReviewFinding.for_section(section_id, "other", "never reviewed")
+  ReviewFinding.for_run(run_id, "other", "review did not finish")
+  ```
+  `category`, `severity` and `target_kind` accept their plain string values and
+  are coerced; an unrecognised value raises rather than becoming `"other"`.
+  `finding_id` is derived from the content when you leave it empty, and the
+  `draft_id` property returns `None` for a non-draft finding.
+- `requested_context` holds section or passage **ids**, not prose — the agent
+  resolves them (a passage id is fetched, a section id pulls in that section's
+  primary and context passages). Put prose in `explanation`.
+- `remaining_issues` is `tuple[ReviewFinding, ...]`, not strings, so an
+  unsettled issue keeps its target and evidence.
+- Records are **frozen**. Record export ids with
+  `report.with_export_mapping({draft_id: requirement_id})`, which returns a
+  copy; assigning onto a built report raises `FrozenInstanceError`.
+- Lists are accepted anywhere a tuple is declared and normalised on
+  construction, so you can build with lists.
+- `ValidationReport.official_validator_ran` and `official_validator_output`
+  separate "our checks passed" from "the organizers' validator passed". A
+  report with `valid=True` and `official_validator_ran=False` must never be
+  presented as a validated submission.
+- `emit_event` takes a `RunEvent`, not a dict. Use
+  `contracts.make_event(stage, message, completed=..., total=...)`.
 - Use the same `LLMAdapter` with your own prompt text. Keep review prompts in
   your component.
 - `EvaluationReport.semantic_score` and `platform_score` must stay `None`

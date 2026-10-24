@@ -36,7 +36,7 @@ import typing
 from dataclasses import dataclass, field
 from typing import Any, Optional, Protocol, Union, runtime_checkable
 
-CONTRACTS_VERSION = "1.0.0"
+CONTRACTS_VERSION = "1.1.0"
 
 # --------------------------------------------------------------------------- #
 # Enumerations
@@ -645,31 +645,145 @@ class PipelineDraft:
 
 @dataclass(frozen=True)
 class ReviewFinding:
-    finding_id: str
-    target_kind: TargetKind
+    """One thing review found wrong, or needs, about a draft or a section.
+
+    Addressing is by ``target_kind`` + ``target_id`` rather than a bare
+    ``draft_id`` because a finding can also concern a section ("this section was
+    never read") or the whole run ("review did not finish"). Use the
+    ``for_draft`` / ``for_section`` / ``for_run`` constructors, and the
+    ``draft_id`` property when you only care about draft-level findings.
+
+    ``category``, ``severity`` and ``target_kind`` accept their plain string
+    values and are coerced, so a caller holding a string constant does not need
+    to import the enums. An unrecognised value raises rather than silently
+    becoming "other".
+    """
+
     target_id: str
     """A draft_id, section_id, passage_id or run_id, matching target_kind."""
     category: FindingCategory
     explanation: str
+    target_kind: TargetKind = TargetKind.DRAFT
+    finding_id: str = ""
+    """Derived from the content when left empty, so callers need not invent ids."""
     severity: FindingSeverity = FindingSeverity.REVISION_REQUESTED
     supporting_passage_ids: tuple[str, ...] = ()
     requested_context: tuple[str, ...] = ()
-    """Section or passage IDs the reviewer wants pulled in before re-extraction."""
+    """Section or passage **IDs** the reviewer wants pulled in before
+    re-extraction. ``revise_extraction`` resolves these: a passage id is fetched
+    directly and a section id pulls in that section's primary and context
+    passages. Prose about what is missing belongs in ``explanation``; this field
+    is machine-actionable, so a sentence here resolves to nothing."""
     requested_correction: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "category", FindingCategory(self.category))
+        object.__setattr__(self, "severity", FindingSeverity(self.severity))
+        object.__setattr__(self, "target_kind", TargetKind(self.target_kind))
+        object.__setattr__(
+            self, "supporting_passage_ids", tuple(self.supporting_passage_ids)
+        )
+        object.__setattr__(self, "requested_context", tuple(self.requested_context))
+        if not self.finding_id:
+            object.__setattr__(
+                self,
+                "finding_id",
+                "fnd-"
+                + content_hash(
+                    self.target_kind.value,
+                    self.target_id,
+                    self.category.value,
+                    self.explanation,
+                )[:12],
+            )
+
+    @classmethod
+    def for_draft(
+        cls, draft_id: str, category: FindingCategory | str, explanation: str, **kwargs: Any
+    ) -> "ReviewFinding":
+        return cls(
+            target_id=draft_id,
+            category=category,
+            explanation=explanation,
+            target_kind=TargetKind.DRAFT,
+            **kwargs,
+        )
+
+    @classmethod
+    def for_section(
+        cls, section_id: str, category: FindingCategory | str, explanation: str, **kwargs: Any
+    ) -> "ReviewFinding":
+        return cls(
+            target_id=section_id,
+            category=category,
+            explanation=explanation,
+            target_kind=TargetKind.SECTION,
+            **kwargs,
+        )
+
+    @classmethod
+    def for_run(
+        cls, run_id: str, category: FindingCategory | str, explanation: str, **kwargs: Any
+    ) -> "ReviewFinding":
+        """A finding about the review itself, e.g. that it did not finish.
+
+        Use this instead of a draft-level finding with no draft id.
+        """
+        return cls(
+            target_id=run_id,
+            category=category,
+            explanation=explanation,
+            target_kind=TargetKind.RUN,
+            **kwargs,
+        )
+
+    @property
+    def draft_id(self) -> Optional[str]:
+        """The draft this finding concerns, or None if it concerns something else."""
+        return self.target_id if self.target_kind is TargetKind.DRAFT else None
 
 
 @dataclass(frozen=True)
 class QualityReport:
+    """What review decided, and what it could not settle."""
+
     run_id: str
     accepted_draft_ids: tuple[str, ...] = ()
     findings: tuple[ReviewFinding, ...] = ()
-    duplicate_map: dict[str, str] = field(default_factory=dict)
+    duplicate_mapping: dict[str, str] = field(default_factory=dict)
     """removed draft_id -> retained draft_id, so every removal stays explainable."""
     rejected: dict[str, str] = field(default_factory=dict)
     """draft_id -> reason."""
-    remaining_issues: tuple[str, ...] = ()
+    remaining_issues: tuple[ReviewFinding, ...] = ()
+    """Issues review could not settle, as findings rather than prose.
+
+    A remaining issue carries its target and its evidence, so "we ran out of
+    time on these three drafts" stays actionable instead of becoming a sentence
+    nobody can act on."""
+    export_mapping: dict[str, str] = field(default_factory=dict)
+    """draft_id -> requirement_id assigned during export.
+
+    This is the audit trail from a submitted requirement back to the draft and
+    the source evidence that produced it."""
     partial: bool = False
     usage: ModelUsage = field(default_factory=ModelUsage)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "accepted_draft_ids", tuple(self.accepted_draft_ids))
+        object.__setattr__(self, "findings", tuple(self.findings))
+        object.__setattr__(self, "remaining_issues", tuple(self.remaining_issues))
+        object.__setattr__(self, "duplicate_mapping", dict(self.duplicate_mapping))
+        object.__setattr__(self, "rejected", dict(self.rejected))
+        object.__setattr__(self, "export_mapping", dict(self.export_mapping))
+
+    def with_export_mapping(self, mapping: dict[str, str]) -> "QualityReport":
+        """Return a copy carrying the export mapping.
+
+        The records are frozen, so export records its ids this way instead of
+        assigning to a built report - an assignment would raise, and a caller
+        that swallowed the error would lose the audit trail silently.
+        """
+        return dataclasses.replace(self, export_mapping=dict(mapping))
 
     def findings_for_draft(self, draft_id: str) -> tuple[ReviewFinding, ...]:
         return tuple(
@@ -696,11 +810,26 @@ class ValidationError:
 
 @dataclass(frozen=True)
 class ValidationReport:
+    """Result of checking a submission against the official rules.
+
+    ``official_validator_ran`` exists because "our own checks passed" and "the
+    organizers' validator passed" are different claims, and only the second one
+    counts. A report with ``valid=True`` and ``official_validator_ran=False``
+    must never be presented as a validated submission.
+    """
+
     valid: bool
     errors: tuple[ValidationError, ...] = ()
+    official_validator_ran: bool = False
+    official_validator_output: Optional[str] = None
+    """Verbatim output of the supplied validator, kept for the run record."""
     schema_identity: Optional[str] = None
+    """Which schema was checked against, e.g. a path plus checksum."""
     index_identity: Optional[str] = None
     checked_at: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "errors", tuple(self.errors))
 
 
 @dataclass(frozen=True)
@@ -902,6 +1031,35 @@ class LLMAdapter(Protocol):
         prompt_version: str = "v1",
         max_output_tokens: int | None = None,
     ) -> LLMResponse: ...
+
+
+def make_event(
+    stage: str,
+    message: str,
+    *,
+    completed: Optional[int] = None,
+    total: Optional[int] = None,
+    affected_ids: typing.Sequence[str] = (),
+    level: str = "info",
+) -> RunEvent:
+    """Build a ``RunEvent`` with the timestamp filled in.
+
+    ``emit_event`` expects a ``RunEvent``, not a dict. This helper exists so no
+    component has to format the timestamp itself.
+    """
+    import datetime as _datetime
+
+    return RunEvent(
+        stage=stage,
+        message=message,
+        timestamp=_datetime.datetime.now(_datetime.timezone.utc).isoformat(
+            timespec="seconds"
+        ),
+        completed=completed,
+        total=total,
+        affected_ids=tuple(affected_ids),
+        level=level,
+    )
 
 
 EmitEvent = typing.Callable[[RunEvent], None]

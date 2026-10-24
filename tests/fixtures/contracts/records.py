@@ -280,29 +280,39 @@ PIPELINE_DRAFT = PipelineDraft(
     is_synthetic_fixture=True,
 )
 
-FINDING_MISSING_CONDITION = ReviewFinding(
+FINDING_MISSING_CONDITION = ReviewFinding.for_draft(
+    DRAFT_DEFINITION.draft_id,
+    FindingCategory.MISSING_CONDITION,
+    "The obligation does not state which devices the reference-axis limit applies "
+    "to; the scope condition may need to be carried in.",
     finding_id="fnd-fixture-0001",
-    target_kind=TargetKind.DRAFT,
-    target_id=DRAFT_DEFINITION.draft_id,
-    category=FindingCategory.MISSING_CONDITION,
-    explanation=(
-        "The obligation does not state which devices the reference-axis limit applies "
-        "to; the scope condition may need to be carried in."
-    ),
     severity=FindingSeverity.REVISION_REQUESTED,
     supporting_passage_ids=(syn.A_DEF_P2.passage_id,),
     requested_context=(syn.A_SCOPE,),
+)
+
+# A remaining issue is a finding, not prose, so it keeps its target and evidence.
+REMAINING_UNRESOLVED_REFERENCE = ReviewFinding.for_draft(
+    DRAFT_TEST.draft_id,
+    FindingCategory.UNRESOLVED_SOURCE,
+    "This obligation incorporates a regulation that is not in the snapshot, so its "
+    "full scope could not be checked.",
+    finding_id="fnd-fixture-0002",
+    severity=FindingSeverity.INFORMATIONAL,
+    supporting_passage_ids=(syn.A_SPEC_REFERENCE.passage_id,),
 )
 
 QUALITY_REPORT = QualityReport(
     run_id=RUN_ID,
     accepted_draft_ids=(DRAFT_INTENSITY.draft_id, DRAFT_TEST.draft_id),
     findings=(FINDING_MISSING_CONDITION,),
-    duplicate_map={},
+    duplicate_mapping={},
     rejected={},
-    remaining_issues=(
-        "one unresolved cross reference to a regulation outside the snapshot",
-    ),
+    remaining_issues=(REMAINING_UNRESOLVED_REFERENCE,),
+    export_mapping={
+        DRAFT_INTENSITY.draft_id: "REQ-0001",
+        DRAFT_TEST.draft_id: "REQ-0002",
+    },
     partial=True,
 )
 
@@ -348,7 +358,12 @@ RUN_VIEW = RunView(
     coverage_partial=True,
     findings=(FINDING_MISSING_CONDITION,),
     usage=PIPELINE_DRAFT.usage,
-    validation=ValidationReport(valid=True, schema_identity="fixture-schema"),
+    validation=ValidationReport(
+        valid=True,
+        official_validator_ran=True,
+        official_validator_output="FIXTURE: synthetic validator output",
+        schema_identity="fixture-schema",
+    ),
     evaluation=None,
     events=(
         RunEvent(

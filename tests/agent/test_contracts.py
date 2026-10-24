@@ -283,3 +283,105 @@ def test_runtime_code_never_reads_the_golden_answer():
                 offenders.append(f"{path.relative_to(root)}:{node.lineno} name {node.id}")
 
     assert not offenders, f"runtime code referenced the golden answer: {offenders}"
+
+
+# --------------------------------------------------------------------------- #
+# Contract 1.1.0: the ergonomics the quality component asked for
+# --------------------------------------------------------------------------- #
+
+
+def test_a_finding_can_be_addressed_to_a_draft_section_or_run():
+    """Review raises findings about things other than drafts - a section that
+    was never read, or the review itself not finishing."""
+    draft = c.ReviewFinding.for_draft("drf-1", "missing_condition", "no condition")
+    section = c.ReviewFinding.for_section("doc#main/3", "other", "never reviewed")
+    run = c.ReviewFinding.for_run("run-1", "other", "review did not finish")
+
+    assert draft.draft_id == "drf-1"
+    assert section.draft_id is None and section.target_kind is c.TargetKind.SECTION
+    assert run.draft_id is None and run.target_kind is c.TargetKind.RUN
+
+
+def test_finding_ids_are_derived_when_not_supplied():
+    first = c.ReviewFinding.for_draft("drf-1", "numeric_mismatch", "4 should be 12")
+    same = c.ReviewFinding.for_draft("drf-1", "numeric_mismatch", "4 should be 12")
+    other = c.ReviewFinding.for_draft("drf-2", "numeric_mismatch", "4 should be 12")
+
+    assert first.finding_id.startswith("fnd-")
+    assert first.finding_id == same.finding_id, "the same finding needs a stable id"
+    assert first.finding_id != other.finding_id
+
+
+def test_string_values_are_coerced_and_unknown_ones_rejected():
+    """A caller holding string constants should not need to import the enums -
+    but a typo must fail loudly rather than become 'other'."""
+    finding = c.ReviewFinding(
+        target_id="drf-1",
+        category="duplicate",
+        explanation="same obligation",
+        severity="informational",
+        target_kind="draft",
+    )
+    assert finding.category is c.FindingCategory.DUPLICATE
+    assert finding.severity is c.FindingSeverity.INFORMATIONAL
+    assert finding.target_kind is c.TargetKind.DRAFT
+
+    with pytest.raises(ValueError):
+        c.ReviewFinding.for_draft("drf-1", "nonexistent_category", "x")
+
+
+def test_lists_are_accepted_and_stored_as_tuples():
+    """The quality component builds lists; the records are frozen and compared
+    by value, so they must normalise rather than drift in type."""
+    report = c.QualityReport(
+        run_id="run-1",
+        accepted_draft_ids=["a", "b"],
+        findings=[c.ReviewFinding.for_draft("a", "other", "x")],
+        remaining_issues=[c.ReviewFinding.for_run("run-1", "other", "unfinished")],
+    )
+    assert isinstance(report.accepted_draft_ids, tuple)
+    assert isinstance(report.findings, tuple)
+    assert isinstance(report.remaining_issues, tuple)
+
+
+def test_export_mapping_is_recorded_without_mutating_a_frozen_report():
+    """Export assigns requirement ids after review; assigning onto the frozen
+    record would raise, and a caller swallowing that would lose the audit
+    trail from a submitted requirement back to its source evidence."""
+    report = c.QualityReport(run_id="run-1", accepted_draft_ids=("drf-1",))
+    assert report.export_mapping == {}
+
+    mapped = report.with_export_mapping({"drf-1": "REQ-0001"})
+    assert mapped.export_mapping == {"drf-1": "REQ-0001"}
+    assert report.export_mapping == {}, "the original must be untouched"
+
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        report.export_mapping = {"drf-1": "REQ-0001"}  # type: ignore[misc]
+
+
+def test_remaining_issues_carry_their_target_and_evidence():
+    report = QUALITY_REPORT
+    assert report.remaining_issues
+    issue = report.remaining_issues[0]
+    assert isinstance(issue, c.ReviewFinding)
+    assert issue.target_id and issue.supporting_passage_ids
+
+
+def test_validation_distinguishes_our_checks_from_the_official_validator():
+    """valid=True on its own is not a validated submission."""
+    ours_only = c.ValidationReport(valid=True)
+    assert ours_only.official_validator_ran is False
+
+    official = c.ValidationReport(
+        valid=True, official_validator_ran=True, official_validator_output="OK"
+    )
+    assert official.official_validator_ran is True
+    assert official.official_validator_output == "OK"
+
+
+def test_make_event_produces_a_run_event_with_a_timestamp():
+    """emit_event takes a RunEvent, not a dict."""
+    event = c.make_event("quality", "3 of 10 reviewed", completed=3, total=10)
+    assert isinstance(event, c.RunEvent)
+    assert event.timestamp and event.stage == "quality"
+    assert event.completed == 3 and event.total == 10
