@@ -4,6 +4,14 @@ import type { CaseInfo, Health } from "../types";
 import { prettyCase } from "./Sidebar";
 import { ExplodedAssembly } from "./Drawings";
 
+// Fixture (synthetic) processing is for development only: reachable with ?dev=1, read once at load so it
+// survives the app rewriting the URL when an analysis is selected.
+const DEV_MODE = (() => {
+  try { return new URLSearchParams(location.search).get("dev") === "1"; } catch { return false; }
+})();
+
+const CASE_ID_PATTERN = /^[a-z0-9-]+$/;
+
 export function NewRunForm({ health, onCreated }: { health: Health | null; onCreated: (id: string) => void }) {
   const [cases, setCases] = useState<CaseInfo[]>([]);
   const [packageCase, setPackageCase] = useState("");
@@ -18,25 +26,47 @@ export function NewRunForm({ health, onCreated }: { health: Health | null; onCre
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => { api.cases().then(setCases).catch(() => undefined); }, []);
-  useEffect(() => { if (health && !health.real_pipeline_ready) setMode("fixture"); }, [health]);
+
+  const chooseCase = (id: string) => {
+    setPackageCase(id);
+    setCaseId(id);  // the case folder name is the case_id the platform expects
+    setError(null);
+  };
+  const changeTeam = (value: string) => {
+    setTeamId(value);
+    localSet("team_id", value.trim());
+  };
 
   const hasInput = !!packageCase || !!specFile || !!specText.trim() || drawings.length > 0;
+  const trimmedTeam = teamId.trim();
+  const trimmedCase = caseId.trim();
+  const isPackageFolder = cases.some((c) => c.case_id === trimmedCase);  // folder names are accepted as they are
+  const caseIdError = !trimmedCase ? "Case ID is required."
+    : !isPackageFolder && !CASE_ID_PATTERN.test(trimmedCase) ? "Case ID may contain only lowercase letters, digits and hyphens." : null;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const problems = [
+      !hasInput && "choose a case or add a specification or drawing",
+      !trimmedTeam && "enter your team ID (from hackathon.certivity.io)",
+      caseIdError && caseIdError.replace(/\.$/, "").toLowerCase(),
+    ].filter(Boolean);
+    if (problems.length) {
+      setError(`Before starting: ${problems.join("; ")}.`);
+      return;
+    }
     setBusy(true);
     setError(null);
     const form = new FormData();
-    form.set("team_id", teamId);
-    form.set("case_id", caseId || packageCase);
-    form.set("mode", mode);
+    form.set("team_id", trimmedTeam);
+    form.set("case_id", trimmedCase);
+    form.set("mode", DEV_MODE ? mode : "real");
     form.set("reuse_cached", String(reuseCached));
     if (packageCase) form.set("package_case", packageCase);
     if (specFile) form.set("spec_file", specFile);
     else if (specText.trim()) form.set("spec_text", specText);
     drawings.forEach((d) => form.append("drawings", d));
     try {
-      localSet("team_id", teamId);
       const run = await api.createRun(form);
       onCreated(run.run_id);
     } catch (err) {
@@ -47,7 +77,7 @@ export function NewRunForm({ health, onCreated }: { health: Health | null; onCre
   };
 
   return (
-    <form onSubmit={submit}>
+    <form onSubmit={submit} noValidate>
       <div className="crumbs"><span>Analyses</span><span>New</span></div>
       <section className="card hero">
         <div>
@@ -68,7 +98,7 @@ export function NewRunForm({ health, onCreated }: { health: Health | null; onCre
           <h2>Product input</h2>
           <p className="hint">A technical specification and/or an exploded-view drawing of the component.</p>
           <label>Case from the regulation package
-            <select value={packageCase} onChange={(e) => setPackageCase(e.target.value)}>
+            <select value={packageCase} onChange={(e) => chooseCase(e.target.value)}>
               <option value="">Upload my own input</option>
               {cases.map((c) => (
                 <option key={c.case_id} value={c.case_id}>
@@ -96,29 +126,48 @@ export function NewRunForm({ health, onCreated }: { health: Health | null; onCre
         </section>
 
         <section className="card">
-          <h2>Submission</h2>
+          <h2>Run settings</h2>
           <div className="two">
-            <label>Team ID<input value={teamId} onChange={(e) => setTeamId(e.target.value)} placeholder="team-07" /></label>
-            <label>Case ID<input value={caseId} onChange={(e) => setCaseId(e.target.value)} placeholder={packageCase || "case folder name"} /></label>
+            <label>Team ID <span className="req" aria-hidden>*</span>
+              <input value={teamId} onChange={(e) => changeTeam(e.target.value)} required aria-required
+                     placeholder="your team id from hackathon.certivity.io" autoComplete="off" />
+            </label>
+            <label>Case ID <span className="req" aria-hidden>*</span>
+              {packageCase ? (
+                <select value={caseId} onChange={(e) => setCaseId(e.target.value)}>
+                  {cases.map((c) => <option key={c.case_id} value={c.case_id}>{c.case_id}</option>)}
+                </select>
+              ) : (
+                <input value={caseId} onChange={(e) => setCaseId(e.target.value.toLowerCase())} required aria-required
+                       aria-invalid={!!caseId && !!caseIdError} placeholder="e.g. front-bumper" list="case-folders" autoComplete="off" />
+              )}
+              <datalist id="case-folders">{cases.map((c) => <option key={c.case_id} value={c.case_id} />)}</datalist>
+            </label>
           </div>
+          {!packageCase && caseId && caseIdError && <p className="field-error">{caseIdError}</p>}
+          <p className="hint">The case ID is the case's folder name in the regulation package; it is written into the exported file.</p>
+
           <label>Processing
-            <select value={mode} onChange={(e) => setMode(e.target.value as "real" | "fixture")}>
-              <option value="real">Full analysis (corpus and model)</option>
-              <option value="fixture">Fixture: synthetic data for interface testing</option>
-            </select>
+            {DEV_MODE ? (
+              <select value={mode} onChange={(e) => setMode(e.target.value as "real" | "fixture")}>
+                <option value="real">Full analysis (corpus and model)</option>
+                <option value="fixture">Fixture: synthetic data (dev only)</option>
+              </select>
+            ) : (
+              <div className="static-field">Full analysis (corpus and model)</div>
+            )}
           </label>
           <label className="check">
             <input type="checkbox" checked={reuseCached} onChange={(e) => setReuseCached(e.target.checked)} />
             Reuse a cached result for identical input and configuration
           </label>
-          {mode === "real" && health && !health.real_pipeline_ready && (
+          {health && !health.real_pipeline_ready && (!DEV_MODE || mode === "real") && (
             <div className="banner">The full pipeline is not ready (see system status in the sidebar). The run will stop and show why.</div>
           )}
-          {mode === "fixture" && <div className="banner fixture">Fixture output is synthetic and is labelled as such everywhere.</div>}
-          {error && <div className="banner error">{error}</div>}
+          {DEV_MODE && mode === "fixture" && <div className="banner fixture">Fixture output is synthetic and is labelled as such everywhere.</div>}
+          {error && <div className="banner error" role="alert">{error}</div>}
           <div className="form-actions">
-            <button type="submit" disabled={busy || !hasInput}>{busy ? "Starting…" : "Start analysis"}</button>
-            {!hasInput && <span className="hint">Choose a case or add a specification or drawing.</span>}
+            <button type="submit" disabled={busy}>{busy ? "Starting…" : "Start analysis"}</button>
           </div>
         </section>
       </div>

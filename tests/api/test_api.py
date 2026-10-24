@@ -121,3 +121,18 @@ def test_opaque_ids_with_reserved_characters_route_correctly(settings, monkeypat
         assert page.status_code == 200 and page.headers["x-printed-page-label"] == "3"
         assert client.get(f"/api/documents/{encoded}/pdf", params={"mode": "fixture"}).status_code == 404
     monkeypatch.setattr(fixture_mode.FixtureCorpus, "get_page_asset", original)
+
+
+def test_case_id_rule_allows_package_folders(settings):
+    with TestClient(create_app(settings, start_worker=False)) as client:
+        bad = client.post("/api/runs", data={"team_id": "t", "case_id": "Front Bumper", "spec_text": "lamp"})
+        assert bad.status_code == 422 and "lowercase" in bad.json()["detail"]
+        assert client.post("/api/runs", data={"team_id": "t", "case_id": "front-bumper-2", "spec_text": "lamp"}).status_code == 202
+        assert client.post("/api/runs", data={"team_id": "t", "package_case": "dev-rear-lamp"}).status_code == 202
+
+
+def test_health_exposes_no_local_paths(settings):
+    with TestClient(create_app(settings)) as client:
+        text = client.get("/api/health").text
+    assert str(settings.participant_package) not in text and str(settings.corpus_dir) not in text
+    assert '"path"' not in text

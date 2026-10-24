@@ -11,6 +11,7 @@ import importlib
 import inspect
 import json
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
@@ -196,6 +197,26 @@ def _short(exc: BaseException) -> str:
     return f"{type(exc).__name__}: {str(exc)[:300]}"
 
 
+# An absolute POSIX or Windows path that is not part of a URL (no "scheme:" or word character just before it).
+_ABS_PATH = re.compile(r"(?<![\w:/.])(?:[A-Za-z]:\\|/)(?:[^\s'\"`/\\]+[/\\])+[^\s'\"`,;)]*")
+
+
+def _mask_paths(value: Any) -> Any:
+    """Replace absolute filesystem paths inside any text (e.g. an error message) with a placeholder."""
+    if isinstance(value, str):
+        return _ABS_PATH.sub("<local path>", value)
+    if isinstance(value, dict):
+        return {k: _mask_paths(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_mask_paths(v) for v in value]
+    return value
+
+
+def _without_local_paths(data: dict[str, Any]) -> dict[str, Any]:
+    """Health is shown in the browser: drop fields naming server paths, and mask paths quoted in messages."""
+    return _mask_paths({k: v for k, v in data.items() if "path" not in k.lower() and "dir" not in k.lower()})
+
+
 def readiness(settings: Settings) -> dict[str, Any]:
     """What is ready, without making model calls and without exposing secrets."""
     report: dict[str, Any] = {"pipeline_mode": settings.pipeline_mode}
@@ -203,7 +224,6 @@ def readiness(settings: Settings) -> dict[str, Any]:
     package = settings.participant_package
     cases = sorted(p.name for p in settings.cases_dir.iterdir() if p.is_dir()) if settings.cases_dir.is_dir() else []
     report["participant_package"] = {
-        "path": str(package),
         "ready": settings.index_path.is_file(),
         "cases": cases,
         "validator_present": (package / "tools" / "validate.py").is_file(),
@@ -219,7 +239,7 @@ def readiness(settings: Settings) -> dict[str, Any]:
                              "required": name in REQUIRED, "error": str(exc)}
     report["modules"] = modules
 
-    corpus_report: dict[str, Any] = {"ready": False, "path": str(settings.corpus_dir)}
+    corpus_report: dict[str, Any] = {"ready": False}
     try:
         corpus_status = resolve(settings.entry_points["corpus_status"])
     except ComponentError:
@@ -235,7 +255,7 @@ def readiness(settings: Settings) -> dict[str, Any]:
             corpus_report.update(ready=True, snapshot_id=snapshot_id_of(corpus), base_documents=len(docs))
         except Exception as exc:
             corpus_report["error"] = _short(exc)
-    report["corpus"] = corpus_report
+    report["corpus"] = _without_local_paths(corpus_report)
 
     llm_report: dict[str, Any] = {"ready": False, "configuration": model_configuration()}
     if modules["create_llm"]["ready"]:
@@ -254,7 +274,7 @@ def readiness(settings: Settings) -> dict[str, Any]:
         and corpus_report["ready"] and llm_report["ready"] and report["participant_package"]["ready"]
     )
     report["fixture_pipeline_ready"] = True
-    return report
+    return _mask_paths(report)
 
 
 def package_case(settings: Settings, case_id: str) -> dict[str, Any]:

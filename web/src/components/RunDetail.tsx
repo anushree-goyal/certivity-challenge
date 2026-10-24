@@ -7,6 +7,7 @@ import { ApplicabilityView, CoverageView, FindingsView, ProfileView, ValidationV
 import { CompareView } from "./CompareView";
 import { prettyCase } from "./Sidebar";
 import { SourceSheet } from "./Drawings";
+import { ExportPanel } from "./ExportPanel";
 
 const TABS = ["Requirements", "Product", "Applicability", "Coverage", "Review findings", "Validation", "Compare", "Log"] as const;
 type Tab = (typeof TABS)[number];
@@ -71,9 +72,7 @@ export function RunDetail({ runId, onFinished }: { runId: string; onFinished: ()
         {!status.finished && (status.cancel_requested
           ? <span className="muted small">Cancelling after the current stage…</span>
           : <button className="danger" onClick={() => api.cancel(runId).catch((e) => setError(String(e.message)))}>Cancel</button>)}
-        {view?.submission.available
-          ? <a className="button" href={api.submissionUrl(runId)} download>Export requirements JSON</a>
-          : <button disabled title="No validated submission for this run">Export requirements JSON</button>}
+        <ExportPanel runId={runId} status={status} view={view} />
       </div>
 
       {!status.finished && (

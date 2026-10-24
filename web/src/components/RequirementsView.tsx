@@ -6,6 +6,11 @@ import { Value } from "./panels";
 
 type OnReview = (draftId: string, review: EngineerReview | null) => void;
 
+/** Printed page label from the corpus source record, else the page in the official submission. Never derived. */
+function printedPage(r: Requirement): string | number | null {
+  return r.source_link?.printed_page ?? r.source.page ?? null;
+}
+
 export function RequirementsView({ view, runId, onReview }: { view: RunView; runId: string; onReview: OnReview }) {
   const [regulation, setRegulation] = useState("");
   const [pipeline, setPipeline] = useState("submission");
@@ -98,7 +103,7 @@ function GroupRows({ group, reqs, reviews, reviewComplete, selectedId, onSelect 
               onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(r.draft_id); } }}>
             <td className="req-id">{r.requirement_id ?? r.draft_id}</td>
             <td><div className="req-text">{r.text}</div></td>
-            <td className="cite">p. {r.source.page ?? "?"}<br />¶ {r.source.paragraph ?? "—"}</td>
+            <td className="cite">p. {printedPage(r) ?? "?"}<br />¶ {r.source.paragraph ?? "—"}</td>
             <td>
               <PipelineChip req={r} reviewComplete={reviewComplete} />
               {r.findings.length > 0 && <div style={{ marginTop: 3 }}><span className="chip attention">{r.findings.length} issue{r.findings.length > 1 ? "s" : ""}</span></div>}
@@ -130,7 +135,10 @@ function SourcePanel({ req, view, runId, onReview }: { req: Requirement; view: R
       <div className="meta">
         <div><span>Regulation</span><strong>{req.source.regulation ?? "?"}</strong></div>
         <div><span>Version</span><strong>{req.source.version ?? "?"}{doc?.role === "base" ? " (base)" : ""}</strong></div>
-        <div><span>Page</span><strong>{req.source.page ?? "?"}</strong></div>
+        <div><span>Printed page</span><strong>{printedPage(req) ?? "—"}</strong></div>
+        <div title={link ? `Physical page in the supplied PDF (zero-based index ${link.pdf_page_index})` : undefined}>
+          <span>PDF page</span><strong>{link ? link.pdf_page_index + 1 : "—"}</strong>
+        </div>
         <div><span>Paragraph</span><strong>{req.source.paragraph ?? "—"}</strong></div>
       </div>
 

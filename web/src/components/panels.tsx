@@ -124,7 +124,7 @@ export function ValidationView({ view }: { view: RunView }) {
           <ul className="plain">{v.errors.map((e, i) => <li key={i} className="error"><code>{e.path}</code> {e.message}</li>)}</ul>
         )}
         <h3>Usage</h3>
-        <Value value={view.usage} />
+        <Value value={withoutUnmeasured(view.usage)} />
       </section>
       <section className="card">
         <h3>Local metrics (regulation / page level only)</h3>
@@ -134,4 +134,11 @@ export function ValidationView({ view }: { view: RunView }) {
       </section>
     </div>
   );
+}
+
+/** Drop usage fields that were never actually measured (e.g. latency reported as 0). */
+function withoutUnmeasured(usage: Record<string, unknown> | null) {
+  if (!usage) return usage;
+  const { latency_ms_total: latency, ...rest } = usage as Record<string, unknown> & { latency_ms_total?: number };
+  return typeof latency === "number" && latency > 0 ? { ...rest, latency_ms_total: latency } : rest;
 }

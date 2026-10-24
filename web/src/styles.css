@@ -168,7 +168,7 @@ tr.req.selected td:first-child { box-shadow: inset 3px 0 0 var(--teal); }
 .source { position: sticky; top: 1rem; max-height: calc(100vh - 2rem); overflow: auto; }
 .source h2.mono { color: var(--teal); }
 .source-text { font-size: .95rem; margin: .5rem 0 .8rem; }
-.meta { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .5rem; background: var(--bg); border-radius: 6px; padding: .6rem .7rem; }
+.meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: .5rem; background: var(--bg); border-radius: 6px; padding: .6rem .7rem; }
 .meta div > span { display: block; font-size: .66rem; text-transform: uppercase; letter-spacing: .05em; color: var(--teal); }
 .meta div > strong { font-family: var(--mono); font-size: .82rem; color: var(--text); font-weight: 600; }
 dl.kv { margin: .6rem 0 0; font-size: .83rem; display: grid; grid-template-columns: max-content 1fr; gap: .25rem .9rem; }
@@ -342,3 +342,24 @@ body { background:
 .flow-btn:hover .flow-circle { width: 220px; height: 220px; opacity: 1; }
 .flow-block:hover .flow-circle, .flow-lg:hover .flow-circle { width: 320px; height: 320px; }  /* wide buttons: cover fully */
 @media (prefers-reduced-motion: reduce) { .flow-btn, .flow-arrow, .flow-text, .flow-circle { transition: none; } }
+
+/* ---- run settings form ---- */
+.req { color: var(--error); font-weight: 700; }
+.field-error { color: var(--error); font-size: .78rem; margin: -.2rem 0 .3rem; }
+.static-field { margin-top: .25rem; padding: .45rem .55rem; border: 1px dashed var(--border-strong); border-radius: 6px; color: var(--text); font-size: .85rem; }
+input[aria-invalid="true"] { border-color: var(--error); }
+.side-tag.cached { background: rgba(143, 227, 209, .16); color: var(--teal); font-weight: 700; }
+
+/* ---- export panel and confirmation dialog ---- */
+.export-box { display: flex; flex-direction: column; align-items: flex-end; gap: .35rem; max-width: 30rem; }
+.export-row { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.export-row .chip { max-width: 20rem; overflow: hidden; text-overflow: ellipsis; }
+.export-checklist { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: .15rem .9rem; justify-content: flex-end;
+  font-size: .7rem; color: var(--muted); }
+.export-checklist li::before { content: "✓ "; color: var(--teal); }
+.modal-backdrop { position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, .6); display: grid; place-items: center; padding: 1rem; }
+.modal { max-width: 34rem; width: 100%; }
+.modal ul { padding-left: 1.1rem; font-size: .85rem; }
+.modal-actions { display: flex; gap: .5rem; justify-content: flex-end; margin-top: 1rem; }
+.validator-errors { max-height: 40vh; overflow: auto; color: var(--error); }
+@media (max-width: 860px) { .export-box { align-items: stretch; max-width: none; } .export-row, .export-checklist { justify-content: flex-start; } }

@@ -104,7 +104,7 @@ export interface CaseInfo { case_id: string; has_spec: boolean; drawings: string
 export interface Health {
   app: { ok: boolean; version: string; active_run: string | null; queued_runs: number };
   pipeline_mode: string;
-  participant_package: { ready: boolean; path: string; cases: string[] };
+  participant_package: { ready: boolean; cases: string[] };
   modules: Record<string, { ready: boolean; error?: string; required?: boolean }>;
   corpus: { ready: boolean; snapshot_id?: string | null; base_documents?: number; error?: string };
   llm: { ready: boolean; identity?: string | null; error?: string };

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import mimetypes
 import threading
 from contextlib import asynccontextmanager
@@ -31,6 +32,7 @@ from certivity.run_store import RunState, RunStore
 from certivity.run_store.store import now_iso
 
 ENGINEER_REVIEW_STATES = ("unreviewed", "approved", "flagged")
+CASE_ID_PATTERN = re.compile(r"^[a-z0-9-]+$")
 MAX_SPEC_BYTES = 2 * 1024 * 1024
 MAX_DRAWING_BYTES = 25 * 1024 * 1024
 DRAWING_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
@@ -178,6 +180,9 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
         case_id = case_id.strip()
         if not team_id or not case_id:
             raise HTTPException(422, "team_id and case_id are required for the submission")
+        is_package_folder = settings.cases_dir.is_dir() and (settings.cases_dir / case_id).is_dir() and "/" not in case_id
+        if not is_package_folder and not CASE_ID_PATTERN.match(case_id):
+            raise HTTPException(422, "case_id may contain only lowercase letters, digits and hyphens")
 
         input_hash = _sha256(json.dumps(sorted((n, _sha256(c)) for n, c in files.items())).encode())
         snapshot_id = None
@@ -246,8 +251,9 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
             else:
                 reason = "The submission did not pass the official validator; see validation errors in the results."
             return JSONResponse({"available": False, "reason": reason}, status_code=409)
+        safe = lambda v: re.sub(r"[^A-Za-z0-9._-]+", "-", str(v or "")).strip("-") or "unknown"
         return FileResponse(path, media_type="application/json",
-                            filename=f"{m['team_id']}_{m['case_id']}_{run_id}.json")
+                            filename=f"{safe(m['case_id'])}_{safe(m['team_id'])}_{run_id}.json")
 
     @app.get("/api/runs/{run_id}/input/{name}")
     def run_input_file(run_id: str, name: str):

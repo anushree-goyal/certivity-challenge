@@ -44,6 +44,7 @@ def test_fixture_run_end_to_end(settings, package):
         # The download is exactly what passed the official validator.
         sub = client.get(f"/api/runs/{run_id}/submission")
         assert sub.status_code == 200
+        assert f'filename="dev-rear-lamp_team-07_{run_id}.json"' in sub.headers["content-disposition"]
         submission = sub.json()
         assert submission["team_id"] == "team-07" and submission["case_id"] == "dev-rear-lamp"
         assert len(submission["requirements"]) == 5
