@@ -1,4 +1,4 @@
-import type { CaseInfo, Health, RunStatus, RunSummary, RunView } from "./types";
+import type { CaseInfo, Health, RunComparison, RunStatus, RunSummary, RunView } from "./types";
 
 async function getJSON<T>(url: string): Promise<T> {
   const res = await fetch(url);
@@ -21,6 +21,11 @@ export const api = {
     if (!res.ok) throw new Error(typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail));
     return body;
   },
+  async cancel(id: string): Promise<void> {
+    const res = await fetch(`/api/runs/${id}/cancel`, { method: "POST" });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail ?? res.statusText);
+  },
+  compare: (a: string, b: string) => getJSON<RunComparison>(`/api/compare?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`),
   submissionUrl: (id: string) => `/api/runs/${id}/submission`,
   inputUrl: (id: string, name: string) => `/api/runs/${id}/input/${encodeURIComponent(name)}`,
   pageUrl: (documentId: string, pdfPageIndex: number, mode: string, snapshot?: string | null) =>

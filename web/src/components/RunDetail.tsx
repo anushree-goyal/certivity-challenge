@@ -4,8 +4,9 @@ import type { RunStatus, RunView } from "../types";
 import { OriginBadge, StateBadge } from "./badges";
 import { RequirementsView } from "./RequirementsView";
 import { ApplicabilityView, CoverageView, FindingsView, ProfileView, ValidationView } from "./panels";
+import { CompareView } from "./CompareView";
 
-const TABS = ["Requirements", "Product", "Applicability", "Coverage", "Review", "Validation", "Log"] as const;
+const TABS = ["Requirements", "Product", "Applicability", "Coverage", "Review", "Validation", "Compare", "Log"] as const;
 type Tab = (typeof TABS)[number];
 
 export function RunDetail({ runId, onFinished }: { runId: string; onFinished: () => void }) {
@@ -63,6 +64,12 @@ export function RunDetail({ runId, onFinished }: { runId: string; onFinished: ()
           <div className="progress">
             <span className="spinner" /> <strong>{p?.stage ?? status.stage}</strong> {p?.message}
             {p?.total ? <span className="muted"> ({p.completed ?? 0} / {p.total})</span> : null}
+            {" "}
+            {status.cancel_requested ? (
+              <span className="muted small">Cancelling: stops at the next progress step.</span>
+            ) : (
+              <button className="secondary" onClick={() => api.cancel(runId).catch((e) => setError(String(e.message)))}>Cancel run</button>
+            )}
           </div>
         )}
         {status.errors.map((e, i) => <p key={i} className="error">Error in {e.stage}: {e.message}</p>)}
@@ -85,6 +92,7 @@ export function RunDetail({ runId, onFinished }: { runId: string; onFinished: ()
           {tab === "Coverage" && <CoverageView view={view} />}
           {tab === "Review" && <FindingsView view={view} />}
           {tab === "Validation" && <ValidationView view={view} />}
+          {tab === "Compare" && <CompareView runId={runId} />}
           {tab === "Log" && <EventLog status={status} />}
         </>
       )}

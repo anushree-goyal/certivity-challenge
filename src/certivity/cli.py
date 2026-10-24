@@ -16,6 +16,11 @@ import sys
 def _serve(args) -> int:
     import uvicorn
 
+    from certivity.api.settings import REPO_ROOT
+
+    if not (REPO_ROOT / "web" / "dist").is_dir():
+        print("Note: the UI is not built, so only /api is served. Build it with: cd web && npm install && npm run build",
+              file=sys.stderr)
     uvicorn.run("certivity.api.app:create_app", factory=True, host=args.host, port=args.port, reload=args.reload)
     return 0
 

@@ -30,7 +30,12 @@ class EventSink:
         self.store.update(self.run_id, stage=stage)
         self({"stage": stage, "message": message})
 
+    def check_cancelled(self) -> None:
+        if self.store.read(self.run_id).get("cancel_requested"):
+            raise RunCancelled()
+
     def __call__(self, event: Any = None, **fields: Any) -> None:
+        self.check_cancelled()
         data = to_jsonable(event) if event is not None else {}
         if not isinstance(data, dict):
             data = {"message": str(data)}
@@ -42,12 +47,22 @@ class EventSink:
         self.store.update(self.run_id, progress=progress)
 
 
-def _needs_revision(report: dict) -> list[dict]:
-    """Findings asking extraction for more context or a correction."""
+class RunCancelled(Exception):
+    """Raised at the next progress event after a user asks to cancel."""
+
+
+def _needs_revision(report: dict) -> list[int]:
+    """Indices of findings asking extraction for more context or a correction."""
     if report.get("needs_revision") is False:
         return []
-    return [f for f in report.get("findings") or []
+    return [i for i, f in enumerate(report.get("findings") or [])
             if isinstance(f, dict) and any(v for k, v in f.items() if k.startswith("requested") and v)]
+
+
+def _findings_of(report_obj: Any, indices: list[int]) -> list:
+    """The module's own finding records (not their JSON copies), for revise_extraction."""
+    findings = report_obj.get("findings") if isinstance(report_obj, dict) else getattr(report_obj, "findings", None)
+    return [list(findings)[i] for i in indices] if findings else []
 
 
 def _passage_ids(draft: dict, report: dict) -> list[str]:
@@ -66,6 +81,8 @@ def _passage_ids(draft: dict, report: dict) -> list[str]:
 def execute_run(run_id: str, store: RunStore, settings: Settings) -> None:
     """Worker entry point. Never raises: failures are recorded on the run."""
     manifest = store.read(run_id)
+    if manifest["state"] != RunState.QUEUED.value:
+        return  # cancelled while queued, or already handled
     started = time.monotonic()
     deadline = started + settings.run_time_budget_s
     store.update(run_id, state=RunState.RUNNING.value, started_at=now_iso(), stage="starting")
@@ -99,11 +116,14 @@ def execute_run(run_id: str, store: RunStore, settings: Settings) -> None:
         })
 
         emit.set_stage("extraction", "Extracting requirements")
-        draft = to_jsonable(comps.run_extraction(run_input, corpus, llm, emit))
+        # Modules exchange their own record objects; the app keeps JSON copies for storage and the view.
+        draft_obj = comps.run_extraction(run_input, corpus, llm, emit)
+        draft = to_jsonable(draft_obj)
         store.write_artifact(run_id, "pipeline_draft.json", draft)
 
         emit.set_stage("review", "Reviewing drafts")
-        report = to_jsonable(comps.review_requirements(run_input, draft_record(draft, comps), corpus, llm, emit))
+        report_obj = comps.review_requirements(run_input, draft_obj, corpus, llm, emit)
+        report = to_jsonable(report_obj)
         store.write_artifact(run_id, "quality_report.json", report)
 
         rounds = 0
@@ -116,16 +136,19 @@ def execute_run(run_id: str, store: RunStore, settings: Settings) -> None:
                 break
             rounds += 1
             emit.set_stage("revision", f"Revision round {rounds}: {len(pending)} finding(s)")
-            draft = to_jsonable(comps.revise_extraction(run_input, draft_record(draft, comps), pending, corpus, llm, emit))
+            draft_obj = comps.revise_extraction(run_input, draft_obj, _findings_of(report_obj, pending), corpus, llm, emit)
+            draft = to_jsonable(draft_obj)
             store.write_artifact(run_id, f"pipeline_draft.round{rounds}.json", draft)
             emit.set_stage("review", f"Re-reviewing after round {rounds}")
-            report = to_jsonable(comps.review_requirements(run_input, draft_record(draft, comps), corpus, llm, emit))
+            report_obj = comps.review_requirements(run_input, draft_obj, corpus, llm, emit)
+            report = to_jsonable(report_obj)
             store.write_artifact(run_id, f"quality_report.round{rounds}.json", report)
         store.write_artifact(run_id, "pipeline_draft.json", draft)
         store.write_artifact(run_id, "quality_report.json", report)
 
         emit.set_stage("export", "Building and validating submission")
-        submission = to_jsonable(comps.build_submission(run_input, draft_record(draft, comps), report, corpus))
+        submission = to_jsonable(comps.build_submission(run_input, draft_obj, report_obj, corpus))
+        emit.check_cancelled()
         validation = to_jsonable(comps.validate_submission(submission, settings.participant_package))
         valid = bool(first(validation, "valid", "is_valid", default=False))
         if valid:
@@ -167,32 +190,22 @@ def execute_run(run_id: str, store: RunStore, settings: Settings) -> None:
         store.update(run_id, state=state.value, stage="done", finished_at=now_iso(),
                      revision_rounds=rounds, submission_valid=valid,
                      warnings=[*store.read(run_id).get("warnings", []), *warnings])
-        emit({"stage": "done", "message": f"Run {state.value}"})
+        store.append_event(run_id, {"stage": "done", "message": f"Run {state.value}", "timestamp": now_iso()})
     except Exception as exc:
-        tb = traceback.format_exc()
-        (store.module_dir(run_id, "app") / "error.txt").write_text(tb, encoding="utf-8")
-        message = str(exc) if isinstance(exc, ComponentError) else f"{type(exc).__name__}: {exc}"
+        cancelled = isinstance(exc, RunCancelled)
+        if not cancelled:
+            (store.module_dir(run_id, "app") / "error.txt").write_text(traceback.format_exc(), encoding="utf-8")
+        message = ("Cancelled by user." if cancelled else str(exc) if isinstance(exc, ComponentError)
+                   else f"{type(exc).__name__}: {exc}")
         current = store.read(run_id)
-        store.update(run_id, state=RunState.FAILED.value, finished_at=now_iso(),
+        store.update(run_id, state=RunState.FAILED.value, finished_at=now_iso(), cancelled=cancelled,
+                     cancel_requested=False,
                      warnings=[*current.get("warnings", []), *warnings],
                      errors=[*current.get("errors", []), {"stage": emit.stage, "message": message}])
         try:
             emit({"stage": emit.stage, "message": f"Failed: {message}", "level": "error"})
         except Exception:
             pass
-
-
-def draft_record(draft: dict, comps) -> Any:
-    """Modules exchange PipelineDraft records; rebuild one from JSON when contracts provide it."""
-    if comps.mode == "fixture":
-        return draft
-    try:
-        from certivity.contracts import PipelineDraft  # type: ignore[attr-defined]
-    except ImportError:
-        return draft
-    if hasattr(PipelineDraft, "model_validate"):
-        return PipelineDraft.model_validate(draft)
-    return draft
 
 
 # --- RunView ------------------------------------------------------------------------------------

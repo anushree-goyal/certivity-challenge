@@ -83,3 +83,4 @@ th, td { text-align: left; padding: .35rem .4rem; border-bottom: 1px solid var(-
 .finding { border-bottom: 1px solid var(--border); padding: .3rem 0; }
 .finding p { margin: .2rem 0; font-size: .85rem; }
 code { font-size: .8rem; }
+button.secondary { background: transparent; color: var(--bad); border-color: var(--bad); padding: .2rem .6rem; margin-left: .5rem; }

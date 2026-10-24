@@ -65,3 +65,31 @@ def test_unknown_run_and_bad_page_index(settings):
         assert client.get("/api/runs/..%2Fetc").status_code == 404
         assert client.get("/api/documents/fixture:UN_R48:9.3.0/pages/-1", params={"mode": "fixture"}).status_code == 422
         assert client.get("/api/documents/missing/pages/0", params={"mode": "fixture"}).status_code == 404
+
+
+def test_cancel_queued_and_running_runs(settings):
+    with TestClient(create_app(settings, start_worker=False)) as client:
+        queued = client.post("/api/runs", data={"case_id": "x", "spec_text": "lamp"}).json()
+        assert client.post(f"/api/runs/{queued['run_id']}/cancel").json()["cancelled"] is True
+        status = client.get(f"/api/runs/{queued['run_id']}").json()
+        assert status["state"] == "failed" and "Cancelled" in status["errors"][-1]["message"]
+        assert client.post(f"/api/runs/{queued['run_id']}/cancel").status_code == 409
+
+    with TestClient(create_app(settings)) as client:
+        run = client.post("/api/runs", data={"package_case": "dev-rear-lamp"}).json()
+        client.post(f"/api/runs/{run['run_id']}/cancel")
+        status = wait_finished(client, run["run_id"])
+        assert status["state"] == "failed"
+        assert any("Cancelled" in e["message"] for e in status["errors"])
+        assert client.get(f"/api/runs/{run['run_id']}/submission").status_code == 409
+
+
+def test_compare_two_runs(settings):
+    with TestClient(create_app(settings)) as client:
+        ids = [client.post("/api/runs", data={"package_case": "dev-rear-lamp"}).json()["run_id"] for _ in range(2)]
+        for run_id in ids:
+            wait_finished(client, run_id)
+        diff = client.get("/api/compare", params={"a": ids[0], "b": ids[1]}).json()
+        assert diff["regulations"] == {"both": 2, "only_a": [], "only_b": []}
+        assert diff["a"]["requirements"] == diff["b"]["requirements"] == 5
+        assert client.get("/api/compare", params={"a": ids[0], "b": "missing"}).status_code == 404

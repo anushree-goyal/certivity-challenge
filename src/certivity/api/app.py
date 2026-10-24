@@ -28,6 +28,7 @@ from certivity.api.serialization import first, to_jsonable
 from certivity.api.settings import REPO_ROOT, Settings, load_settings
 from certivity.api.worker import RunWorker
 from certivity.run_store import RunState, RunStore
+from certivity.run_store.store import now_iso
 
 MAX_SPEC_BYTES = 2 * 1024 * 1024
 MAX_DRAWING_BYTES = 25 * 1024 * 1024
@@ -65,11 +66,18 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
     app = FastAPI(title="Certivity requirements", version=__version__, lifespan=lifespan)
     app.state.settings, app.state.store, app.state.worker = settings, store, worker
 
-    def corpus_for(mode: str):
-        """Read-only corpus, one per HTTP thread and mode (SQLite connections are thread-bound)."""
+    def corpus_for(mode: str, snapshot_id: str | None = None):
+        """Read-only corpus, one per HTTP thread and mode (SQLite connections are thread-bound).
+
+        Reopened when a different snapshot is requested, so a new import is picked up without a restart.
+        """
         cache = getattr(local, "corpora", None)
         if cache is None:
             cache = local.corpora = {}
+        if mode in cache and snapshot_id and snapshot_id_of(cache[mode]) not in (None, snapshot_id):
+            close = getattr(cache.pop(mode), "close", None)
+            if callable(close):
+                close()
         if mode not in cache:
             try:
                 cache[mode] = load_components(settings, mode).open_corpus()
@@ -214,7 +222,7 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
         return {k: m.get(k) for k in (
             "run_id", "state", "stage", "origin", "mode", "cached_from", "team_id", "case_id", "progress",
             "warnings", "errors", "interrupted", "created_at", "started_at", "finished_at", "revision_rounds",
-            "submission_valid", "corpus_snapshot_id")} | {
+            "submission_valid", "corpus_snapshot_id", "cancel_requested", "cancelled")} | {
             "finished": RunState(m["state"]).finished,
             "events": store.read_events(m.get("cached_from") or run_id, limit=100)}
 
@@ -259,6 +267,54 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
         store.write_artifact(run_id, "platform_metrics.json", {**data, "source": "entered manually from the platform"})
         return store.read_artifact(run_id, "platform_metrics.json")
 
+    @app.post("/api/runs/{run_id}/cancel")
+    def cancel_run(run_id: str) -> dict[str, Any]:
+        """Queued runs stop at once. Running runs stop at their next progress event; a model call already
+        in flight finishes first."""
+        m = get_manifest(run_id)
+        state = RunState(m["state"])
+        if state.finished:
+            raise HTTPException(409, f"Run is already {state.value}")
+        if state == RunState.QUEUED:
+            store.update(run_id, state=RunState.FAILED.value, cancelled=True, cancel_requested=True, finished_at=now_iso(),
+                         errors=[*m.get("errors", []), {"stage": "queued", "message": "Cancelled by user before it started."}])
+            return {"run_id": run_id, "state": RunState.FAILED.value, "cancelled": True}
+        store.update(run_id, cancel_requested=True)
+        return {"run_id": run_id, "state": state.value, "cancel_requested": True}
+
+    @app.get("/api/compare")
+    def compare_runs(a: str, b: str) -> dict[str, Any]:
+        """Citation-level difference between two runs' outputs. Not a semantic comparison."""
+        sides = {}
+        for key, run_id in (("a", a), ("b", b)):
+            m = get_manifest(run_id)
+            source = m.get("cached_from") or run_id
+            path = store.artifact_path(source, "submission.json")
+            sub = (json.loads(path.read_text(encoding="utf-8")) if path.is_file()
+                   else store.read_artifact(source, "submission.invalid.json")) or {"requirements": []}
+            reqs = sub.get("requirements") or []
+            sides[key] = {
+                "run": {k: m.get(k) for k in ("run_id", "state", "origin", "case_id", "team_id", "created_at", "submission_valid")},
+                "requirements": len(reqs),
+                "regulations": {r["source"]["regulation"] for r in reqs},
+                "pages": {(r["source"]["regulation"], r["source"]["version"], r["source"]["page"]) for r in reqs},
+                "paragraphs": {(r["source"]["regulation"], r["source"].get("paragraph")) for r in reqs
+                               if r["source"].get("paragraph")},
+                "evaluation": store.read_artifact(source, "evaluation.json"),
+            }
+
+        def diff(field: str) -> dict[str, Any]:
+            sa, sb = sides["a"][field], sides["b"][field]
+            fmt = (lambda x: x) if field == "regulations" else (lambda t: " ".join(str(v) for v in t))
+            return {"both": len(sa & sb), "only_a": sorted(fmt(x) for x in sa - sb), "only_b": sorted(fmt(x) for x in sb - sa)}
+
+        return {
+            "a": {k: v for k, v in sides["a"].items() if k in ("run", "requirements", "evaluation")},
+            "b": {k: v for k, v in sides["b"].items() if k in ("run", "requirements", "evaluation")},
+            "regulations": diff("regulations"), "pages": diff("pages"), "paragraphs": diff("paragraphs"),
+            "note": "Compares cited regulations, pages and paragraphs only; requirement meaning is not compared.",
+        }
+
     # --- source documents ------------------------------------------------------------------
 
     def check_snapshot(corpus, snapshot_id: str | None) -> None:
@@ -269,14 +325,14 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
 
     @app.get("/api/documents")
     def documents(mode: str = "", snapshot_id: str | None = None) -> list[dict[str, Any]]:
-        corpus = corpus_for(mode or settings.pipeline_mode)
+        corpus = corpus_for(mode or settings.pipeline_mode, snapshot_id)
         check_snapshot(corpus, snapshot_id)
         hidden = {"file_path", "path", "local_path"}  # internal paths stay server-side
         return [{k: v for k, v in to_jsonable(d).items() if k not in hidden} for d in corpus.list_documents(role="base")]
 
     @app.get("/api/documents/{document_id}/pdf")
     def document_pdf(document_id: str, mode: str = "", snapshot_id: str | None = None):
-        corpus = corpus_for(mode or settings.pipeline_mode)
+        corpus = corpus_for(mode or settings.pipeline_mode, snapshot_id)
         check_snapshot(corpus, snapshot_id)
         path = None
         if hasattr(corpus, "get_document_path"):
@@ -293,7 +349,7 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
     def document_page(document_id: str, pdf_page_index: int, mode: str = "", snapshot_id: str | None = None):
         if pdf_page_index < 0:
             raise HTTPException(422, "pdf_page_index is zero-based and must be >= 0")
-        corpus = corpus_for(mode or settings.pipeline_mode)
+        corpus = corpus_for(mode or settings.pipeline_mode, snapshot_id)
         check_snapshot(corpus, snapshot_id)
         try:
             asset = corpus.get_page_asset(document_id, pdf_page_index)

@@ -18,6 +18,17 @@ export interface RunSummary {
 export interface RunStatus extends RunSummary {
   progress?: Progress; warnings: string[]; errors: RunError[]; finished: boolean;
   revision_rounds?: number; corpus_snapshot_id?: string | null; events: RunEvent[];
+  cancel_requested?: boolean; cancelled?: boolean;
+}
+
+export interface CitationDiff { both: number; only_a: string[]; only_b: string[] }
+export interface ComparisonSide {
+  run: Pick<RunSummary, "run_id" | "state" | "origin" | "case_id" | "team_id" | "created_at" | "submission_valid">;
+  requirements: number; evaluation: Record<string, unknown> | null;
+}
+export interface RunComparison {
+  a: ComparisonSide; b: ComparisonSide;
+  regulations: CitationDiff; pages: CitationDiff; paragraphs: CitationDiff; note: string;
 }
 
 export interface Source { regulation: string | null; version: string | null; page: number | null; paragraph?: string | null }

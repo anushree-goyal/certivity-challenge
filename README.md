@@ -59,6 +59,8 @@ Per-run folders: `agent/` (Anushree), `quality/` (Teammate 3), `app/` (app). The
 | `GET /api/runs/{id}/submission` | the exact validated JSON, or 409 with the reason |
 | `GET /api/runs/{id}/input/{name}` | the stored input files |
 | `PUT /api/runs/{id}/platform-metrics` | record scores read off the organizer platform (never computed here) |
+| `POST /api/runs/{id}/cancel` | queued runs stop at once; running runs stop at their next progress event |
+| `GET /api/compare?a=&b=` | cited regulations/pages/paragraphs that differ between two runs (not a semantic comparison) |
 | `GET /api/documents[/{id}/pdf \| /{id}/pages/{pdf_page_index}]` | source documents of the loaded snapshot; page index is zero-based; `?snapshot_id=` refuses a mismatched snapshot |
 | `GET /api/cases`, `GET /api/health` | participant-package cases; readiness |
 
@@ -72,9 +74,11 @@ Entry points are configurable (`CERTIVITY_EP_*` in `.env.example`). Defaults:
 - **Quality:** a finding triggers revision when any `requested_*` field is set, unless the report has `needs_revision: false`. Please add `export_mapping: {draft_id: requirement_id}` to `QualityReport`. Without it, the app infers the mapping from export order and shows a warning.
 - `emit_event` accepts a `RunEvent` record, a dict, or keyword arguments.
 
+`tests/integration/test_contract_conformance.py` checks these signatures as soon as a module is merged. Until then it is skipped. `tests/integration/test_real_mode_wiring.py` runs real mode against dataclass stand-ins.
+
 ## Integration checklist (after each component merge)
 
-- [ ] `pytest` passes; `certivity health` shows the merged module ready
+- [ ] `pytest` passes, with no conformance skips for merged modules; `certivity health` shows the merged module ready
 - [ ] `certivity run --case dev-rear-lamp` reaches `completed` or `partial`, not `failed`
 - [ ] the downloaded JSON passes `python data/participant-package/tools/validate.py <file>`
 - [ ] one requirement's source page opens, and its printed page matches the citation
