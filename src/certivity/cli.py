@@ -53,10 +53,12 @@ def _bootstrap(args) -> int:
     try:
         bootstrap = resolve(entry)
     except ComponentError as exc:
-        print(f"Corpus bootstrap is not available yet ({exc}).\n"
-              f"Until the corpus module provides it, download PDFs with:\n"
-              f"  python {settings.participant_package / 'tools' / 'fetch_regulations.py'} --role base",
-              file=sys.stderr)
+        pdfs = list((settings.participant_package / "regulations" / "pdf").glob("*/base/*.pdf"))
+        hint = (f"{len(pdfs)} base PDFs are already downloaded; the corpus module will import them once merged."
+                if pdfs else
+                f"Until the corpus module provides it, download PDFs with:\n"
+                f"  python {settings.participant_package / 'tools' / 'fetch_regulations.py'} --role base")
+        print(f"Corpus bootstrap is not available yet ({exc}).\n{hint}", file=sys.stderr)
         return 1
     from certivity.api.components import call_accepting
     from certivity.api.serialization import to_jsonable
