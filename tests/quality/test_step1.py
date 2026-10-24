@@ -183,6 +183,18 @@ class Export(unittest.TestCase):
         self.assertEqual(len(set(ids)), 3)
         self.assertEqual([t["draft_id"] for t in res.trace], ["d0", "d1", "d2"])
 
+    def test_exclusion_kept_in_report_but_not_exported(self):
+        from certivity.contracts import ObligationKind
+        rule = F.Draft("d1", "Intensity at least 4 cd.", "p-ok", ["p-ok"])
+        excl = F.Draft("d2", "No requirements apply to the minimum area of the apparent surface.",
+                       "p-ok", ["p-ok"], obligation_kind=ObligationKind.EXCLUSION)
+        run, pipe, rep = self._build([rule, excl])
+        self.assertIn("d2", rep.accepted_draft_ids)               # on record in the QualityReport
+        res = build_submission_detailed(run, pipe, rep, F.corpus())
+        self.assertEqual([r["text"] for r in res.submission["requirements"]], ["Intensity at least 4 cd."])
+        self.assertIn("exclusion", res.excluded["d2"])
+        self.assertNotIn("d2", res.export_mapping)
+
     def test_rejected_draft_not_exported(self):
         good = F.Draft("d1", "Intensity at least 4 cd.", "p-ok", ["p-ok"])
         bad = F.Draft("d2", "Intensity at least 5 cd.", "p-latest", ["p-latest"])

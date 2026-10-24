@@ -18,6 +18,7 @@ Three rules hold the whole thing together:
 from __future__ import annotations
 
 import dataclasses
+import threading
 from dataclasses import dataclass, field
 from typing import Any, Iterable
 
@@ -36,21 +37,32 @@ passages, so one broad reference cannot crowd out the section being read."""
 
 @dataclass
 class ReferenceTracker:
-    """Per-run record of which reference targets have already been resolved."""
+    """Per-run record of which reference targets have already been resolved.
+
+    Shared across the threads that extract sections concurrently, so every
+    access is locked. The visited set is what stops a reference cycle, and a
+    lost write there would mean resolving the same target repeatedly - paying
+    for it each time - or, with a cycle, not terminating.
+    """
 
     visited: dict[str, ReferenceResolution] = field(default_factory=dict)
     unresolved: list[ReferenceResolution] = field(default_factory=list)
+    lock: threading.Lock = field(default_factory=threading.Lock)
 
     def seen(self, request: ReferenceRequest) -> bool:
-        return request.key() in self.visited
+        with self.lock:
+            return request.key() in self.visited
 
     def record(self, resolution: ReferenceResolution) -> None:
-        self.visited[resolution.request.key()] = resolution
-        if resolution.status is not ReferenceStatus.RESOLVED:
-            self.unresolved.append(resolution)
+        with self.lock:
+            key = resolution.request.key() if resolution.request else ""
+            self.visited[key] = resolution
+            if resolution.status is not ReferenceStatus.RESOLVED:
+                self.unresolved.append(resolution)
 
     def get(self, request: ReferenceRequest) -> ReferenceResolution | None:
-        return self.visited.get(request.key())
+        with self.lock:
+            return self.visited.get(request.key())
 
 
 def _with_request(

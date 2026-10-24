@@ -23,6 +23,7 @@ components, not here.
 from __future__ import annotations
 
 import base64
+import dataclasses
 import json
 import logging
 import mimetypes
@@ -475,7 +476,12 @@ class StructuredLLMAdapter:
         text = "".join(
             block.text for block in response.content if getattr(block, "type", None) == "text"
         )
-        usage = _usage_from_response(response, model)
+        # Carry the measured latency into the usage record, not just onto the
+        # response. ModelUsage.latency_ms_total is what accumulates across a
+        # run, so without this it summed zeros and every run reported 0 ms.
+        usage = dataclasses.replace(
+            _usage_from_response(response, model), latency_ms_total=latency_ms
+        )
         return text, {
             "model": getattr(response, "model", model) or model,
             "latency_ms": latency_ms,
@@ -553,6 +559,27 @@ def adapter_from_env(
     ``ANTHROPIC_BASE_URL``. Credentials are resolved by the SDK and are never
     read into this process's own records.
     """
+    # Per-task model overrides from the environment, so the expensive stage can
+    # be moved to a cheaper model without a code or API change. Measured on the
+    # real corpus: extraction is ~95% of the calls in a full run, so pointing
+    # just `extract_obligations` at a cheaper model is most of the saving while
+    # the judgement-heavy stages keep the stronger model.
+    env_overrides = {
+        task: os.environ[var]
+        for task, var in (
+            ("product_profile", "CERTIVITY_MODEL_PROFILE"),
+            ("candidate_scope", "CERTIVITY_MODEL_APPLICABILITY"),
+            ("document_scope", "CERTIVITY_MODEL_APPLICABILITY"),
+            ("extract_obligations", "CERTIVITY_MODEL_EXTRACT"),
+            ("revise_obligations", "CERTIVITY_MODEL_REVISE"),
+            ("quality_review", "CERTIVITY_MODEL_REVIEW"),
+            ("quality_dedup", "CERTIVITY_MODEL_REVIEW"),
+        )
+        if os.environ.get(var)
+    }
+    # An explicit argument always beats the environment.
+    merged_overrides = {**env_overrides, **(model_overrides or {})}
+
     config = ProviderConfig(
         model=os.environ.get("CERTIVITY_MODEL", DEFAULT_MODEL),
         effort=os.environ.get("CERTIVITY_MODEL_EFFORT", "high") or None,
@@ -567,7 +594,7 @@ def adapter_from_env(
         config,
         cache=cache,
         max_calls=max_calls,
-        model_overrides=model_overrides,
+        model_overrides=merged_overrides,
     )
 
 

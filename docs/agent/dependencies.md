@@ -65,3 +65,32 @@ configuration, so a run can be reproduced and a cached result attributed.
  "credentials_configured": false, "credential_source": null,
  "refusal_fallbacks": true, "cache": "NullCache", "calls_used": 0}
 ```
+
+## Cost and throughput controls (added for the held-out run)
+
+| Variable | Effect |
+| --- | --- |
+| `CERTIVITY_MODEL_EXTRACT` | Model for `extract_obligations` only — ~95% of a full run's calls, so this is the main cost lever |
+| `CERTIVITY_MODEL_APPLICABILITY` | Model for candidate screening and scope decisions |
+| `CERTIVITY_MODEL_PROFILE` | Model for the product profile |
+| `CERTIVITY_MODEL_REVIEW` | Model for the quality component's review and dedup tasks |
+| `CERTIVITY_MODEL_REVISE` | Model for targeted revision |
+
+An explicit `model_overrides` argument always beats the environment.
+
+`RunConfig.max_parallel_sections` (default 4) bounds concurrent section
+extraction. Serially the real corpus needs ~6.7 hours of model calls against a
+5-hour submission window; four workers brings that to roughly 1.7 hours. The
+ceiling is the provider's rate limit, not local CPU.
+
+**Recommended setting for a full run**, which keeps the judgement-heavy stages
+on the stronger model and moves only the high-volume one:
+
+```bash
+CERTIVITY_MODEL=claude-opus-5          # profile, applicability, review
+CERTIVITY_MODEL_EXTRACT=claude-sonnet-5
+```
+
+Measured per-call usage on the real corpus is ~9.2k input / ~0.9k output
+tokens, so a ~1,200-call run is roughly 11M input / 1.1M output tokens: about
+$80 entirely on Opus 5, or about $25 with extraction on Sonnet 5.

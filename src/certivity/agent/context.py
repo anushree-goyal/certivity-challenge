@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import logging
+import threading
 from dataclasses import dataclass, field
 from typing import Any, Optional, Sequence
 
@@ -45,6 +46,12 @@ class RunContext:
     budget_exhausted: bool = False
     """Set once the model budget is hit, so the run finishes as partial rather
     than raising out of a half-processed corpus."""
+    lock: threading.Lock = field(default_factory=threading.Lock)
+    """Guards usage, warnings and budget_exhausted.
+
+    Sections are extracted concurrently, so these are written from several
+    worker threads. Without the lock, usage totals would be lost to
+    read-modify-write races and the warning list could interleave."""
 
     @property
     def config(self) -> RunConfig:
@@ -73,13 +80,16 @@ class RunContext:
             level=level,
         )
         try:
-            self.emit_event(event)
+            with self.lock:
+                self.emit_event(event)
         except Exception:  # pragma: no cover - a UI problem is not a run problem
             logger.warning("emit_event raised for stage %s", stage, exc_info=True)
 
     def warn(self, message: str, *, stage: str = "agent") -> None:
         """Record a warning once, and surface it as an event."""
-        if message not in self.warnings:
+        with self.lock:
+            if message in self.warnings:
+                return
             self.warnings.append(message)
         self.event(stage, message, level="warning")
 
@@ -112,9 +122,11 @@ class RunContext:
                 max_output_tokens=max_output_tokens,
             )
         except ModelBudgetExceeded:
-            self.budget_exhausted = True
+            with self.lock:
+                self.budget_exhausted = True
             raise
-        self.usage = self.usage.merged_with(response.usage)
+        with self.lock:
+            self.usage = self.usage.merged_with(response.usage)
         for warning in response.warnings:
             self.warn(f"{task}: {warning}", stage=task)
         return response

@@ -10,13 +10,15 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Iterable, Optional
 
 from certivity.contracts import (
     CoverageItem,
     CoverageStatus,
     Document,
+    ProductProfile,
     Section,
+    SourcePassage,
     TargetKind,
 )
 from certivity.agent.context import RunContext
@@ -34,6 +36,103 @@ be distinguished later from a section with nothing in it.
 Definitions, scope, markings, installation, tests, tables and annexes are all
 substantive and are never excluded here - a definition can carry an operative
 measurement rule."""
+
+
+# --------------------------------------------------------------------------- #
+# Inspection priority
+#
+# Coverage is still every section; priority only decides the ORDER they are
+# read in. That matters because a run can be stopped by a model budget, a time
+# budget or a cancellation, and whatever was read by then is what the
+# submission contains.
+#
+# The first real end-to-end run made the case: it spent its whole budget on
+# UN R10's definitions clause - ESA types, immunity-related functions - and
+# produced four requirements that appear nowhere in the dev case's answer key,
+# while R148's photometric and marking sections went unread.
+# --------------------------------------------------------------------------- #
+
+_OBLIGATION_WORDS = ("shall", "must", "shall not", "may not")
+_PERMISSION_WORDS = ("may", "is permitted", "need not")
+
+_LOW_VALUE_HEADINGS = (
+    "transitional provisions",
+    "names and addresses",
+    "modification of the type",
+    "conformity of production",
+    "penalties for non-conformity",
+    "production definitively discontinued",
+    "communication",
+    "general remarks",
+)
+"""Administrative apparatus that binds the approval authority rather than the
+product. Deprioritised, never excluded - a submission can legitimately cite
+them, they are just the last thing worth spending a bounded budget on."""
+
+
+def _profile_terms(profile: Optional[ProductProfile]) -> set[str]:
+    """Lowercased words describing the product, for overlap scoring."""
+    if profile is None:
+        return set()
+    parts: list[str] = [profile.product_type or "", profile.summary or ""]
+    parts.extend(profile.vehicle_categories)
+    for group in (profile.facts, profile.components, profile.functions, profile.materials):
+        for fact in group:
+            parts.append(fact.key.replace("_", " "))
+            parts.append(fact.value or "")
+    words = {
+        w
+        for part in parts
+        for w in re.split(r"[^a-z0-9]+", part.lower())
+        if len(w) > 3
+    }
+    return words - {"lamp", "lamps", "vehicle", "vehicles", "device", "devices"}
+
+
+def section_priority(
+    section: Section, passages: list[SourcePassage], terms: set[str]
+) -> float:
+    """Higher means read sooner. Free to compute - no model call.
+
+    Three signals, all cheap:
+
+    * obligation language, because a section with no "shall" rarely states a
+      requirement;
+    * overlap with the product's own vocabulary, which is what distinguishes
+      the rear-lamp sections of a regulation from its front-lamp sections;
+    * a small penalty for administrative apparatus.
+
+    Deliberately not a model call: ranking 856 sections with the model would
+    cost more than reading the good ones.
+    """
+    text = " ".join(p.text for p in passages).lower()
+    if not text.strip():
+        # No readable text: nothing to extract, so this must sort last - below
+        # even administrative apparatus, which can at least carry a citable
+        # requirement. Reachable when a corpus read fails, since sections with
+        # no passages never enter the plan in the first place.
+        return -1000.0
+
+    score = 0.0
+    obligations = sum(text.count(w) for w in _OBLIGATION_WORDS)
+    score += min(obligations, 8) * 1.5
+    score += min(sum(text.count(w) for w in _PERMISSION_WORDS), 4) * 0.5
+
+    if terms:
+        hits = sum(1 for t in terms if t in text)
+        score += min(hits, 10) * 2.0
+
+    # A numeric limit is a strong sign of a checkable requirement.
+    if re.search(r"\d\s*(cd|lx|mm|cm|%|°|v\b|k\b)", text):
+        score += 3.0
+
+    heading = (section.heading or "").strip().lower()
+    if any(marker in heading for marker in _LOW_VALUE_HEADINGS):
+        score -= 6.0
+    if section.namespace == "main" and (section.paragraph_label or "").startswith("1"):
+        score -= 1.0  # scope, read already for applicability
+
+    return score
 
 
 @dataclass(frozen=True)
@@ -54,7 +153,9 @@ def _is_navigation_only(section: Section) -> bool:
 
 
 def build_inspection_plan(
-    ctx: RunContext, documents: Iterable[Document]
+    ctx: RunContext,
+    documents: Iterable[Document],
+    profile: Optional[ProductProfile] = None,
 ) -> tuple[list[PlanItem], list[CoverageItem]]:
     """Return the ordered work list and the initial coverage ledger.
 
@@ -133,13 +234,51 @@ def build_inspection_plan(
                 ctx, plan, coverage, document, limit
             )
 
+    plan = _prioritise(ctx, plan, profile)
     ctx.event(
         "plan",
         f"Inspection plan: {len(plan)} section(s) across "
-        f"{len({item.document.document_id for item in plan})} document(s)",
+        f"{len({item.document.document_id for item in plan})} document(s), "
+        "ordered by expected requirement density",
         total=len(plan),
     )
     return plan, coverage
+
+
+def _prioritise(
+    ctx: RunContext, plan: list[PlanItem], profile: Optional[ProductProfile]
+) -> list[PlanItem]:
+    """Reorder the plan so the most promising sections are read first.
+
+    This changes order only. Every section stays in the plan and in the
+    coverage ledger, so with an unbounded budget the result is identical; with
+    a bounded one, the budget is spent on the sections most likely to state a
+    requirement about this product.
+    """
+    terms = _profile_terms(profile)
+    scored: list[tuple[float, int, PlanItem]] = []
+    for index, item in enumerate(plan):
+        try:
+            passages = ctx.corpus.get_passages(list(item.section.primary_passage_ids))
+        except Exception:
+            passages = []
+        scored.append((section_priority(item.section, passages, terms), index, item))
+
+    # Descending score, document order as the tiebreak so reading stays coherent.
+    scored.sort(key=lambda row: (-row[0], row[1]))
+    ordered = [row[2] for row in scored]
+
+    if ordered:
+        top = ordered[:3]
+        ctx.event(
+            "plan",
+            "First sections to read: "
+            + "; ".join(
+                f"{i.document.regulation} {i.section.paragraph_label or i.section.heading[:28]}"
+                for i in top
+            ),
+        )
+    return ordered
 
 
 _LABEL_PART = re.compile(r"(\d+)|([^\d]+)")

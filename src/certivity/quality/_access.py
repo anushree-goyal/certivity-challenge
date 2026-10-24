@@ -6,6 +6,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from certivity.contracts import ObligationKind
+
 
 def pick(obj: Any, *names: str, default: Any = None) -> Any:
     for name in names:
@@ -48,6 +50,10 @@ def draft_exceptions(d: Any) -> list[str]:
 
 def draft_section_id(d: Any) -> str | None:
     return d.section_id
+
+
+def draft_is_exclusion(d: Any) -> bool:
+    return d.obligation_kind is ObligationKind.EXCLUSION
 
 
 def draft_unresolved_references(d: Any) -> list:

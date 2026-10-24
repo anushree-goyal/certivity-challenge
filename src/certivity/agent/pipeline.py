@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import logging
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional, Sequence
 
 from certivity.contracts import (
@@ -117,7 +118,7 @@ def run_extraction(
             stage="applicability",
         )
 
-    plan, coverage = build_inspection_plan(ctx, selected)
+    plan, coverage = build_inspection_plan(ctx, selected, profile)
     conditions_by_document = {
         document_id: decision.conditions
         for decision in decisions
@@ -130,58 +131,15 @@ def run_extraction(
     coverage_by_target = {(item.target_kind, item.target_id): item for item in coverage}
     total = len(plan)
 
-    for position, item in enumerate(plan, start=1):
-        if ctx.budget_exhausted:
-            break
-        try:
-            result = extract_section(
-                ctx,
-                item,
-                profile_facts,
-                conditions_by_document.get(item.document.document_id, ()),
-                tracker,
-            )
-        except ModelBudgetExceeded:
-            ctx.warn(
-                f"model budget exhausted after {position - 1} of {total} section(s); "
-                "the rest are recorded as pending and coverage is partial",
-                stage="extract",
-            )
-            break
-        except LLMCallError as exc:
-            # One unusable section must not lose the sections after it.
-            ctx.warn(f"section {item.section_id} failed: {exc}", stage="extract")
-            result = None
-
-        key = (TargetKind.SECTION, item.section_id)
-        if result is None:
-            coverage_by_target[key] = CoverageItem(
-                target_kind=TargetKind.SECTION,
-                target_id=item.section_id,
-                status=CoverageStatus.FAILED,
-                explanation="the model call for this section did not produce usable output",
-                document_id=item.document.document_id,
-            )
-            continue
-
-        drafts.extend(result.drafts)
-        coverage_by_target[key] = CoverageItem(
-            target_kind=TargetKind.SECTION,
-            target_id=item.section_id,
-            status=CoverageStatus.FAILED if result.failed else CoverageStatus.PROCESSED,
-            explanation=result.failure_reason or ("; ".join(result.notes) or None),
-            inspected_passage_ids=tuple(result.inspected_passage_ids),
-            draft_ids=tuple(d.draft_id for d in result.drafts),
-            document_id=item.document.document_id,
-        )
-        ctx.event(
-            "extract",
-            f"{item.document.regulation} {item.section.paragraph_label or item.section.heading}: "
-            f"{len(result.drafts)} obligation(s)",
-            completed=position,
-            total=total,
-            affected_ids=[item.section_id],
-        )
+    results = _extract_plan(
+        ctx, plan, profile_facts, conditions_by_document, tracker, coverage_by_target
+    )
+    # Applied in plan order, not completion order, so the output is identical
+    # whatever the concurrency and whatever order the provider answers in.
+    for item in plan:
+        result = results.get(item.section_id)
+        if result is not None:
+            drafts.extend(result.drafts)
 
     coverage = _finalise_document_coverage(list(coverage_by_target.values()))
     return _assemble(
@@ -255,6 +213,128 @@ def revise_extraction(
         total=len(findings),
     )
     return result
+
+
+def _extract_plan(
+    ctx: RunContext,
+    plan: list,
+    profile_facts: dict,
+    conditions_by_document: dict,
+    tracker: ReferenceTracker,
+    coverage_by_target: dict,
+) -> dict:
+    """Extract every planned section, up to ``max_parallel_sections`` at a time.
+
+    Concurrency is bounded because the limit is the provider's rate limit, not
+    local CPU. Serially the real corpus needs about 6.7 hours of model calls
+    against a 5-hour submission window, so this is required rather than an
+    optimisation.
+
+    Ordering guarantees: results are keyed by section and applied by the caller
+    in plan order, so output does not depend on which call returns first. The
+    plan itself is already sorted by expected requirement density, and work is
+    submitted in that order, so a run stopped by its budget has spent it on the
+    most promising sections.
+    """
+    workers = max(1, int(getattr(ctx.config, "max_parallel_sections", 1) or 1))
+    total = len(plan)
+    results: dict[str, object] = {}
+    done = 0
+
+    def work(item):
+        return extract_section(
+            ctx,
+            item,
+            profile_facts,
+            conditions_by_document.get(item.document.document_id, ()),
+            tracker,
+        )
+
+    def record(item, result, error: Optional[BaseException]) -> None:
+        nonlocal done
+        done += 1
+        key = (TargetKind.SECTION, item.section_id)
+        if error is not None:
+            ctx.warn(f"section {item.section_id} failed: {error}", stage="extract")
+            coverage_by_target[key] = CoverageItem(
+                target_kind=TargetKind.SECTION,
+                target_id=item.section_id,
+                status=CoverageStatus.FAILED,
+                explanation=f"{type(error).__name__}: {error}",
+                document_id=item.document.document_id,
+            )
+            return
+        results[item.section_id] = result
+        coverage_by_target[key] = CoverageItem(
+            target_kind=TargetKind.SECTION,
+            target_id=item.section_id,
+            status=CoverageStatus.FAILED if result.failed else CoverageStatus.PROCESSED,
+            explanation=result.failure_reason or ("; ".join(result.notes) or None),
+            inspected_passage_ids=tuple(result.inspected_passage_ids),
+            draft_ids=tuple(d.draft_id for d in result.drafts),
+            document_id=item.document.document_id,
+        )
+        ctx.event(
+            "extract",
+            f"{item.document.regulation} "
+            f"{item.section.paragraph_label or item.section.heading}: "
+            f"{len(result.drafts)} obligation(s)",
+            completed=done,
+            total=total,
+            affected_ids=[item.section_id],
+        )
+
+    if workers == 1:
+        for item in plan:
+            if ctx.budget_exhausted:
+                break
+            try:
+                record(item, work(item), None)
+            except ModelBudgetExceeded:
+                _warn_budget(ctx, done, total)
+                break
+            except LLMCallError as exc:
+                record(item, None, exc)
+        return results
+
+    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="extract") as pool:
+        pending: dict = {}
+        queue = iter(plan)
+        stop = False
+
+        def submit_next() -> bool:
+            for item in queue:
+                pending[pool.submit(work, item)] = item
+                return True
+            return False
+
+        for _ in range(workers):
+            if not submit_next():
+                break
+
+        while pending:
+            for future in as_completed(list(pending)):
+                item = pending.pop(future)
+                try:
+                    record(item, future.result(), None)
+                except ModelBudgetExceeded:
+                    if not stop:
+                        _warn_budget(ctx, done, total)
+                    stop = True
+                except LLMCallError as exc:
+                    record(item, None, exc)
+                if not stop and not ctx.budget_exhausted:
+                    submit_next()
+                break
+        return results
+
+
+def _warn_budget(ctx: RunContext, done: int, total: int) -> None:
+    ctx.warn(
+        f"model budget exhausted after {done} of {total} section(s); the rest are "
+        "recorded as pending and coverage is partial",
+        stage="extract",
+    )
 
 
 # --------------------------------------------------------------------------- #
