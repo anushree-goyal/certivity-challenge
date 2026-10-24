@@ -1,0 +1,3 @@
+# generated corpus snapshots, parse cache and page renders: reproducible with `python -m certivity.corpus build`
+*
+!.gitignore
