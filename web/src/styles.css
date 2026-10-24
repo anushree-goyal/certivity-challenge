@@ -264,8 +264,14 @@ ul.plain { margin: 0; padding-left: 1rem; font-size: .83rem; }
 .hero h1 { font-size: 1.6rem; }
 .hero p { color: var(--muted); margin: .4rem 0 0; max-width: 34rem; }
 .steps { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 1rem; }
-.step { display: flex; gap: .5rem; align-items: center; font-size: .82rem; color: var(--text); }
-.step b { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: rgba(143, 227, 209, .14); color: var(--teal); font-size: .75rem; }
+.step { display: flex; gap: .5rem; align-items: center; font-size: .82rem; font-weight: 500; color: var(--text);
+  background: transparent; border: 1px solid transparent; border-radius: 999px; padding: .25rem .65rem .25rem .3rem;
+  cursor: pointer; transition: border-color 200ms ease-out, background 200ms ease-out; }
+.step:hover, .step.active { border-color: var(--border-strong); background: rgba(143, 227, 209, .08); filter: none; }
+.step:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+.step b { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: rgba(143, 227, 209, .14);
+  color: var(--teal); font-size: .75rem; transition: background 200ms ease-out, color 200ms ease-out; }
+.step.active b { background: var(--teal); color: #04140f; }
 .empty-art { max-width: 420px; margin: 0 auto 1rem; }
 @media (max-width: 860px) { .hero { grid-template-columns: minmax(0, 1fr); } }
 
@@ -363,3 +369,35 @@ input[aria-invalid="true"] { border-color: var(--error); }
 .modal-actions { display: flex; gap: .5rem; justify-content: flex-end; margin-top: 1rem; }
 .validator-errors { max-height: 40vh; overflow: auto; color: var(--error); }
 @media (max-width: 860px) { .export-box { align-items: stretch; max-width: none; } .export-row, .export-checklist { justify-content: flex-start; } }
+
+/* ---- step chips drive the drawing (data-step on the SVG root) ---- */
+.input-panel { transition: box-shadow 200ms ease-out, border-color 200ms ease-out; }
+.input-panel.step-target { border-color: rgba(143, 227, 209, .55); box-shadow: 0 0 0 1px rgba(143, 227, 209, .35), 0 0 24px rgba(143, 227, 209, .12); }
+.fx .part, .fx .callout { transition: transform 220ms ease-out, opacity 220ms ease-out, filter 220ms ease-out; transition-delay: 0ms; }
+.fx .part .fx-ink { transition: stroke-width 220ms ease-out; }
+.fx .callout .fx-label { transition: fill 220ms ease-out; }
+/* 1: input: each part lifts and glows in turn, labels brighten */
+.fx[data-step="1"] .part, .fx[data-step="1"] .callout { transition-delay: calc(var(--i) * 60ms); }
+.fx[data-step="1"] .part { transform: translateY(-4px); filter: drop-shadow(0 0 5px rgba(143, 227, 209, .75)); }
+.fx[data-step="1"] .part .fx-ink { stroke-width: 1.9; }
+.fx[data-step="1"] .callout .fx-label { fill: #fff; }
+/* 2: applicable regulations: tags fade in; parts without a regulation of their own dim */
+.fx .reg-tag, .fx .example-card { opacity: 0; transition: opacity 220ms ease-out; pointer-events: none; }
+.fx .reg-pill { fill: rgba(0, 0, 0, .82); stroke: var(--teal); stroke-width: 1; }
+.fx .reg-text { fill: var(--teal); font-weight: 700; }
+.fx .reg-lead { stroke: var(--teal); stroke-dasharray: 2 2; }
+.fx[data-step="2"] .reg-tag { opacity: 1; }
+.fx[data-step="2"] .part-gasket, .fx[data-step="2"] .part-fasteners { opacity: .3; }
+/* 3: cited requirement: the outer lens stands out and an example callout appears */
+.fx[data-step="3"] .part:not(.part-lens), .fx[data-step="3"] .callout { opacity: .25; }
+.fx[data-step="3"] .part-lens { filter: drop-shadow(0 0 7px rgba(143, 227, 209, .9)); }
+.fx[data-step="3"] .part-lens .fx-ink { stroke-width: 2; }
+.fx[data-step="3"] .example-card { opacity: 1; }
+.fx .example-rect { fill: rgba(0, 0, 0, .86); stroke: var(--teal); stroke-width: 1; }
+.fx .example-tag { fill: var(--teal); font-weight: 700; letter-spacing: .12em; }
+.fx .example-text { fill: #fff; font-size: 9.5px; }
+@media (prefers-reduced-motion: reduce) {
+  .fx[data-step="1"] .part { transform: none; }
+  .fx .part, .fx .callout, .fx .reg-tag, .fx .example-card { transition-duration: 0ms; transition-delay: 0ms; }
+  .step, .step b, .input-panel { transition: none; }
+}

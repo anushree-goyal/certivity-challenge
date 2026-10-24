@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import type { CaseInfo, Health } from "../types";
 import { prettyCase } from "./Sidebar";
@@ -12,6 +12,31 @@ const DEV_MODE = (() => {
 
 const CASE_ID_PATTERN = /^[a-z0-9-]+$/;
 
+type Step = 1 | 2 | 3;
+const STEPS: [Step, string][] = [[1, "Specification or drawing"], [2, "Applicable regulations"], [3, "Cited requirements"]];
+
+/** Pipeline step chips: hover or keyboard focus previews the step on the drawing; a tap toggles it on touch. */
+function StepChips({ active, onChange }: { active: Step | null; onChange: (step: Step | null) => void }) {
+  // "mouse" also covers keyboard focus (no pointer involved); touch and pen taps toggle instead.
+  const lastPointer = useRef<string>("mouse");
+  return (
+    <div className="steps" role="group" aria-label="How it works">
+      {STEPS.map(([n, label]) => (
+        <button key={n} type="button" className={`step${active === n ? " active" : ""}`} aria-pressed={active === n}
+                onPointerDown={(e) => { lastPointer.current = e.pointerType; }}
+                onKeyDown={() => { lastPointer.current = "mouse"; }}
+                onPointerEnter={(e) => { if (e.pointerType === "mouse") onChange(n); }}
+                onPointerLeave={(e) => { if (e.pointerType === "mouse") onChange(null); }}
+                onFocus={() => { if (lastPointer.current === "mouse") onChange(n); }}  // touch taps toggle via onClick
+                onBlur={() => onChange(null)}
+                onClick={() => { if (lastPointer.current !== "mouse") onChange(active === n ? null : n); }}>
+          <b>{n}</b>{label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function NewRunForm({ health, onCreated }: { health: Health | null; onCreated: (id: string) => void }) {
   const [cases, setCases] = useState<CaseInfo[]>([]);
   const [packageCase, setPackageCase] = useState("");
@@ -24,6 +49,7 @@ export function NewRunForm({ health, onCreated }: { health: Health | null; onCre
   const [reuseCached, setReuseCached] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeStep, setActiveStep] = useState<Step | null>(null);
 
   const loadCases = () => api.cases().then(setCases).catch(() => undefined);
   useEffect(() => { loadCases(); }, []);
@@ -86,17 +112,13 @@ export function NewRunForm({ health, onCreated }: { health: Health | null; onCre
           <h1>New compliance analysis</h1>
           <p>Upload a technical specification or an exploded-view drawing. ProofTech finds the UN Regulations that apply,
             extracts each engineering obligation and links it to the exact base-version page and paragraph.</p>
-          <div className="steps">
-            <span className="step"><b>1</b>Specification or drawing</span>
-            <span className="step"><b>2</b>Applicable regulations</span>
-            <span className="step"><b>3</b>Cited requirements</span>
-          </div>
+          <StepChips active={activeStep} onChange={setActiveStep} />
         </div>
-        <ExplodedAssembly />
+        <ExplodedAssembly step={activeStep} />
       </section>
 
       <div className="form-grid">
-        <section className="card">
+        <section className={`card input-panel${activeStep === 1 ? " step-target" : ""}`}>
           <h2>Product input</h2>
           <p className="hint">A technical specification and/or an exploded-view drawing of the component.</p>
           <label>Case from the regulation package
