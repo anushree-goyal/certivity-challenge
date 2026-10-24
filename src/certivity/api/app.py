@@ -106,8 +106,7 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
             for case_dir in sorted(p for p in settings.cases_dir.iterdir() if p.is_dir()):
                 case = package_case(settings, case_dir.name)
                 out.append({"case_id": case["case_id"], "has_spec": case["spec_path"] is not None,
-                            "drawings": [p.name for p in case["drawing_paths"]],
-                            "has_expected_for_evaluation": case["has_expected"]})
+                            "drawings": [p.name for p in case["drawing_paths"]]})
         return out
 
     # --- runs ------------------------------------------------------------------------------
@@ -268,7 +267,7 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
         store.write_artifact(run_id, "platform_metrics.json", {**data, "source": "entered manually from the platform"})
         return store.read_artifact(run_id, "platform_metrics.json")
 
-    @app.put("/api/runs/{run_id}/reviews/{draft_id}")
+    @app.put("/api/runs/{run_id}/reviews/{draft_id:path}")
     async def put_engineer_review(run_id: str, draft_id: str, request: Request) -> dict[str, Any]:
         """An engineer's own review of one requirement. Recorded with the run; never written into the submission."""
         m = get_manifest(run_id)
@@ -342,6 +341,8 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
         }
 
     # --- source documents ------------------------------------------------------------------
+    # IDs are opaque corpus identifiers (e.g. "un-r48:9-3-0:sha256-…"). Clients URL-encode them; the :path
+    # converter also accepts IDs containing "/", which the server decodes before routing.
 
     def check_snapshot(corpus, snapshot_id: str | None) -> None:
         current = snapshot_id_of(corpus)
@@ -356,7 +357,7 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
         hidden = {"file_path", "path", "local_path"}  # internal paths stay server-side
         return [{k: v for k, v in to_jsonable(d).items() if k not in hidden} for d in corpus.list_documents(role="base")]
 
-    @app.get("/api/documents/{document_id}/pdf")
+    @app.get("/api/documents/{document_id:path}/pdf")
     def document_pdf(document_id: str, mode: str = "", snapshot_id: str | None = None):
         corpus = corpus_for(mode or settings.pipeline_mode, snapshot_id)
         check_snapshot(corpus, snapshot_id)
@@ -376,7 +377,7 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
         return FileResponse(path, media_type="application/pdf", content_disposition_type="inline",
                             filename=Path(path).name)
 
-    @app.get("/api/documents/{document_id}/pages/{pdf_page_index}")
+    @app.get("/api/documents/{document_id:path}/pages/{pdf_page_index}")
     def document_page(document_id: str, pdf_page_index: int, mode: str = "", snapshot_id: str | None = None):
         if pdf_page_index < 0:
             raise HTTPException(422, "pdf_page_index is zero-based and must be >= 0")

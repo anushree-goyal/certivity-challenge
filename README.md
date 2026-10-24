@@ -43,7 +43,7 @@ Headless run of one case: `certivity run --case dev-rear-lamp --team team-07`.
 2. calls `run_extraction`, then `review_requirements`;
 3. while review findings request context or a correction, calls `revise_extraction` and reviews again, up to `CERTIVITY_MAX_REVISION_ROUNDS` and the time budget. Unfinished findings are reported;
 4. calls `build_submission` and `validate_submission` (official validator). Only a valid file is offered for download;
-5. stores evidence passages and runs local regulation/page scoring if the case has an `expected.json`. Only the evaluation module reads that file, after runtime processing ends.
+5. stores evidence passages, then asks the evaluation module for local regulation/page scoring via `evaluate_case(submission_path, case_id, participant_package)`. The app never locates or reads the golden answer; the evaluation module does both, and returns nothing for a case without one.
 
 Run states: `queued`, `running`, `completed` (valid output, full coverage, no open issues), `partial` (valid output but pending/failed coverage or open review issues), `failed`. A server restart marks unfinished runs `failed` with `interrupted: true`. A cached run (opt-in "reuse cached") reuses a fresh run with the same input, team/case, corpus snapshot, component versions and model settings, and is labelled "cached result".
 

@@ -1,3 +1,4 @@
+from urllib.parse import quote
 import json
 
 from fastapi.testclient import TestClient
@@ -95,3 +96,23 @@ def test_compare_two_runs(settings):
         assert diff["regulations"] == {"both": 2, "only_a": [], "only_b": []}
         assert diff["a"]["requirements"] == diff["b"]["requirements"] == 5
         assert client.get("/api/compare", params={"a": ids[0], "b": "missing"}).status_code == 404
+
+
+def test_opaque_ids_with_reserved_characters_route_correctly(settings, monkeypatch):
+    from certivity.api import fixture_mode
+
+    odd = "un-r48:9-3-0:sha256-ab/cd#e f"
+    original = fixture_mode.FixtureCorpus.get_page_asset
+
+    def get_page_asset(self, document_id, pdf_page_index):
+        assert document_id == odd
+        return {"document_id": odd, "pdf_page_index": pdf_page_index, "printed_page": "3",
+                "media_type": "image/svg+xml", "content": b"<svg xmlns='http://www.w3.org/2000/svg'/>"}
+
+    monkeypatch.setattr(fixture_mode.FixtureCorpus, "get_page_asset", get_page_asset)
+    with TestClient(create_app(settings)) as client:
+        encoded = quote(odd, safe="")
+        page = client.get(f"/api/documents/{encoded}/pages/2", params={"mode": "fixture"})
+        assert page.status_code == 200 and page.headers["x-printed-page-label"] == "3"
+        assert client.get(f"/api/documents/{encoded}/pdf", params={"mode": "fixture"}).status_code == 404
+    monkeypatch.setattr(fixture_mode.FixtureCorpus, "get_page_asset", original)

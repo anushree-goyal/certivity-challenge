@@ -99,7 +99,7 @@ export interface RunView {
 export type EngineerReviewStatus = "unreviewed" | "approved" | "flagged";
 export interface EngineerReview { status: EngineerReviewStatus; note: string; updated_at: string }
 
-export interface CaseInfo { case_id: string; has_spec: boolean; drawings: string[]; has_expected_for_evaluation: boolean }
+export interface CaseInfo { case_id: string; has_spec: boolean; drawings: string[] }
 
 export interface Health {
   app: { ok: boolean; version: string; active_run: string | null; queued_runs: number };

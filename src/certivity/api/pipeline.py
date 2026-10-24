@@ -191,14 +191,15 @@ def execute_run(run_id: str, store: RunStore, settings: Settings) -> None:
         documents = to_jsonable(corpus.list_documents(role="base"))
         store.write_artifact(run_id, "evidence.json", {"passages": passages, "documents": documents})
 
-        evaluation = None
-        expected = settings.cases_dir / manifest["case_id"] / "expected.json"
-        if valid and comps.evaluate_submission and expected.is_file():
-            emit.set_stage("evaluation", "Local regulation/page scoring (evaluation module only)")
+        # Local scoring is the evaluation module's job end to end: it alone locates and reads the golden answer.
+        # The app passes only the case id and returns None when that case has no answer to score against.
+        if valid and comps.evaluate_case:
+            emit.set_stage("evaluation", "Local regulation/page scoring (evaluation module)")
             try:
-                evaluation = to_jsonable(comps.evaluate_submission(
-                    store.module_dir(run_id, "app") / "submission.json", expected))
-                store.write_artifact(run_id, "evaluation.json", evaluation)
+                evaluation = to_jsonable(comps.evaluate_case(
+                    store.module_dir(run_id, "app") / "submission.json", manifest["case_id"], settings.participant_package))
+                if evaluation is not None:
+                    store.write_artifact(run_id, "evaluation.json", evaluation)
             except Exception as exc:
                 warnings.append(f"Local evaluation failed: {type(exc).__name__}: {exc}")
 

@@ -18,7 +18,8 @@ dependencies = [
     "pymupdf>=1.24",
     # quality / evaluation (Teammate 3): the official validator needs jsonschema
     "jsonschema>=4.21",
-    # agent / llm (Anushree): add the chosen provider SDK here once selected
+    # agent / llm (Anushree): provider SDK, see docs/agent/dependencies.md
+    "anthropic>=2.3",
 ]
 
 [project.optional-dependencies]

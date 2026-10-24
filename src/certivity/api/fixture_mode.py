@@ -247,6 +247,6 @@ def components(settings: Settings):
         build_submission=build_submission,
         build_submission_detailed=None,
         validate_submission=validate_submission,
-        evaluate_submission=None,  # fixture output is never scored
+        evaluate_case=None,  # fixture output is never scored
         make_run_input=dict,
     )

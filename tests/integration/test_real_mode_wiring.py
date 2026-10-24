@@ -16,7 +16,7 @@ def _real_settings(settings):
         "build_submission": "build_submission", "build_submission_detailed": "build_submission_detailed",
         "validate_submission": "validate_submission",
         "make_run_input": "make_run_input", "corpus_status": "corpus_status"}.items()}
-    eps["evaluate_submission"] = "tests.integration.fake_modules:missing"  # optional: absent is fine
+    eps["evaluate_case"] = "tests.integration.fake_modules:missing"  # optional: absent is fine
     return dataclasses.replace(settings, pipeline_mode="real", entry_points={**settings.entry_points, **eps})
 
 

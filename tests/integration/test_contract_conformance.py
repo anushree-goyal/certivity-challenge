@@ -17,7 +17,7 @@ PLANNED = {
     "build_submission": ["run_input", "draft", "report", "corpus"],
     "build_submission_detailed": ["run_input", "draft", "report", "corpus"],
     "validate_submission": ["submission", "participant_package_path"],
-    "evaluate_submission": ["submission_path", "expected_path"],
+    "evaluate_case": ["submission_path", "case_id", "participant_package"],
 }
 CORPUS_METHODS = ["list_documents", "read_scope", "list_sections", "read_section", "get_passages",
                   "resolve_reference", "get_page_asset"]

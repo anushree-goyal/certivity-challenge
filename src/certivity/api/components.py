@@ -48,13 +48,13 @@ class Components:
     build_submission: Callable[..., Any]
     build_submission_detailed: Callable[..., Any] | None
     validate_submission: Callable[..., Any]
-    evaluate_submission: Callable[..., Any] | None
+    evaluate_case: Callable[..., Any] | None  # (submission_path, case_id, participant_package) -> report | None
     make_run_input: Callable[[dict[str, Any]], Any]
 
 
 REQUIRED = ("open_corpus", "create_llm", "run_extraction", "review_requirements",
             "build_submission", "validate_submission", "make_run_input")
-OPTIONAL = ("revise_extraction", "evaluate_submission", "build_submission_detailed")
+OPTIONAL = ("revise_extraction", "evaluate_case", "build_submission_detailed")
 
 
 def _record_factory(factory: Any) -> Callable[[dict[str, Any]], Any]:
@@ -142,7 +142,7 @@ def load_components(settings: Settings, mode: str | None = None) -> Components:
         build_submission=loaded["build_submission"],
         build_submission_detailed=loaded["build_submission_detailed"],
         validate_submission=loaded["validate_submission"],
-        evaluate_submission=loaded["evaluate_submission"],
+        evaluate_case=loaded["evaluate_case"],
         make_run_input=_record_factory(loaded["make_run_input"]),
     )
 
@@ -180,10 +180,14 @@ def component_versions(settings: Settings, mode: str) -> dict[str, str]:
 _SECRET_MARKERS = ("KEY", "SECRET", "TOKEN", "PASSWORD")
 
 
+MODEL_SETTINGS = ("CERTIVITY_MODEL", "CERTIVITY_MODEL_EFFORT", "CERTIVITY_MAX_OUTPUT_TOKENS",
+                  "CERTIVITY_DISABLE_REFUSAL_FALLBACKS", "ANTHROPIC_BASE_URL")
+
+
 def model_configuration() -> dict[str, str]:
-    """Non-secret model settings (CERTIVITY_LLM_*), used in the cache key and shown in health."""
+    """Non-secret model settings (docs/agent/dependencies.md), used in the cache key and shown in health."""
     return {k: v for k, v in sorted(os.environ.items())
-            if k.startswith("CERTIVITY_LLM_") and not any(m in k for m in _SECRET_MARKERS)}
+            if (k in MODEL_SETTINGS or k.startswith("CERTIVITY_LLM_")) and not any(m in k for m in _SECRET_MARKERS)}
 
 
 def _short(exc: BaseException) -> str:
@@ -252,7 +256,7 @@ def readiness(settings: Settings) -> dict[str, Any]:
 
 
 def package_case(settings: Settings, case_id: str) -> dict[str, Any]:
-    """Input files of a case shipped in the participant package. expected.json is never read here."""
+    """Input files of a case shipped in the participant package. The golden answer is never looked up here."""
     case_dir = settings.cases_dir / case_id
     if not case_id or "/" in case_id or not case_dir.is_dir():
         raise KeyError(case_id)
@@ -262,7 +266,6 @@ def package_case(settings: Settings, case_id: str) -> dict[str, Any]:
         "case_id": case_id,
         "spec_path": spec if spec.is_file() else None,
         "drawing_paths": drawings,
-        "has_expected": (case_dir / "expected.json").is_file(),
     }
 
 

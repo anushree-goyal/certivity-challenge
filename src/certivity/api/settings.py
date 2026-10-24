@@ -66,7 +66,7 @@ DEFAULT_ENTRY_POINTS = {
     "build_submission": "certivity.quality:build_submission",
     "build_submission_detailed": "certivity.quality:build_submission_detailed",
     "validate_submission": "certivity.quality:validate_submission",
-    "evaluate_submission": "certivity.evaluation:evaluate_submission",
+    "evaluate_case": "certivity.evaluation:evaluate_case",
     "make_run_input": "certivity.contracts:make_run_input",
 }
 
@@ -83,7 +83,8 @@ def load_settings() -> Settings:
     return Settings(
         runs_dir=_path("CERTIVITY_RUNS_DIR", "runs"),
         participant_package=_path("CERTIVITY_PARTICIPANT_PACKAGE", "data/participant-package"),
-        corpus_dir=_path("CERTIVITY_CORPUS_DIR", "data/cache/corpus"),
+        # CERTIVITY_CORPUS_CACHE is the corpus module's own name for the same folder.
+        corpus_dir=_path("CERTIVITY_CORPUS_DIR", os.environ.get("CERTIVITY_CORPUS_CACHE", "data/cache/corpus")),
         pipeline_mode=mode,
         default_team_id=os.environ.get("CERTIVITY_TEAM_ID", ""),
         max_revision_rounds=_int("CERTIVITY_MAX_REVISION_ROUNDS", 2),
