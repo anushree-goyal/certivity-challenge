@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 
 from certivity.agent import revise_extraction, run_extraction
+from certivity.agent.prompts import PROMPT_VERSIONS
 from certivity.contracts import (
     FindingCategory,
     FindingSeverity,
@@ -150,7 +151,9 @@ def test_a_correction_replaces_the_draft_and_records_its_ancestry(
     assert replacement.applicability_condition
     assert replacement.draft_id != target.draft_id
     assert revised.draft_by_id(target.draft_id) is None
-    assert replacement.prompt_version == "v1"
+    # Reference the source of truth rather than a literal, so a prompt-version
+    # bump does not fail a test that is about revision ancestry.
+    assert replacement.prompt_version == PROMPT_VERSIONS["revise_obligations"]
 
 
 def test_a_correction_citing_an_unsupplied_passage_is_refused(

@@ -30,6 +30,35 @@ Responder = Callable[[Any], Any]
 FIXTURE_MODEL = "synthetic-fixture-model"
 
 
+def _omit_absent(schema: dict[str, Any], data: Any) -> Any:
+    """Drop ``None`` values for fields the schema marks optional.
+
+    A real structured-output model cannot return null for a field typed
+    ``string``: it omits the key instead. The scripts below are written with
+    ``None`` for readability, so this normalises them to what the provider would
+    actually send - and keeps the fixture honest about the difference between
+    "omitted" and an explicit null.
+
+    Fields in ``required`` are left alone, because a null there is load-bearing
+    (a product fact with no value, an unconditional obligation).
+    """
+    if isinstance(data, dict) and isinstance(schema, dict):
+        required = set(schema.get("required", []))
+        properties = schema.get("properties", {})
+        out: dict[str, Any] = {}
+        for key, value in data.items():
+            if value is None and key not in required:
+                continue
+            sub = properties.get(key)
+            out[key] = _omit_absent(sub, value) if isinstance(sub, dict) else value
+        return out
+    if isinstance(data, list) and isinstance(schema, dict):
+        items = schema.get("items")
+        if isinstance(items, dict):
+            return [_omit_absent(items, item) for item in data]
+    return data
+
+
 @dataclass
 class RecordedCall:
     task: str
@@ -80,6 +109,7 @@ class ScriptedLLMAdapter:
             entry = self.script[task]
             data = entry(payload) if callable(entry) else entry
 
+        data = _omit_absent(schema, data)
         errors = schema_errors(schema, data)
         if errors:
             raise AssertionError(
