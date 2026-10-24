@@ -24,7 +24,7 @@ from .config import CorpusPaths
 from .parse import PARSER_VERSION, ParsedDocument, parse_pdf
 from .registry import DocumentSpec, file_sha256, index_sha256, load_index
 
-SCHEMA_VERSION = "corpus-schema-2"
+SCHEMA_VERSION = "corpus-schema-3"
 
 SCHEMA = """
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -32,7 +32,8 @@ CREATE TABLE documents (
     document_id TEXT PRIMARY KEY, regulation TEXT NOT NULL, regulation_title TEXT NOT NULL, title TEXT NOT NULL,
     role TEXT NOT NULL, version_label TEXT NOT NULL, filename TEXT NOT NULL, checksum TEXT NOT NULL,
     size_bytes INTEGER NOT NULL, page_count INTEGER NOT NULL, package_relpath TEXT NOT NULL,
-    footer_regulation TEXT, footer_version TEXT, parser_version TEXT NOT NULL, body_size REAL, left_margin REAL
+    footer_regulation TEXT, footer_version TEXT, parser_version TEXT NOT NULL, body_size REAL, left_margin REAL,
+    index_entry TEXT NOT NULL, index_order INTEGER NOT NULL
 );
 CREATE TABLE pages (
     document_id TEXT NOT NULL, pdf_page_index INTEGER NOT NULL, printed_page INTEGER, printed_verified INTEGER NOT NULL,
@@ -230,6 +231,14 @@ def prune_snapshots(paths: CorpusPaths, keep: int = 2) -> list[str]:
 
 
 def _write_database(db_path: Path, snapshot_id: str, paths: CorpusPaths, specs: list[DocumentSpec], parsed: dict[str, ParsedDocument], diagnostics: list[tuple], index_hash: str) -> dict[str, int]:
+    # the verbatim index entry and index position are stored, so a reader never depends on finding index.json later
+    raw_index = json.loads((paths.package_root / "regulations" / "index.json").read_text(encoding="utf-8"))
+    entries = {e["regulation"]: e for e in raw_index}
+    order: dict[tuple[str, str, str], int] = {}
+    for e in raw_index:
+        for v in e.get("versions", []):
+            for f in v.get("files", []):
+                order.setdefault((e["regulation"], v.get("role"), f.get("name")), len(order))
     conn = sqlite3.connect(db_path)
     conn.executescript(SCHEMA)
     try:
@@ -243,10 +252,11 @@ def _write_database(db_path: Path, snapshot_id: str, paths: CorpusPaths, specs: 
         doc = parsed[spec.document_id]
         assembled: AssembledDocument = assemble(spec, doc)
         conn.execute(
-            "INSERT INTO documents VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO documents VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (spec.document_id, spec.regulation, spec.regulation_title, spec.version_title or f"{spec.regulation}, version {spec.version_label}", spec.role, spec.version_label,
              spec.filename, spec.sha256, spec.size_bytes, doc.page_count, str(spec.local_path.relative_to(paths.package_root)),
-             doc.footer_regulation, doc.footer_version, doc.parser_version, doc.body_size, doc.left_margin),
+             doc.footer_regulation, doc.footer_version, doc.parser_version, doc.body_size, doc.left_margin,
+             json.dumps(entries.get(spec.regulation, {})), order.get((spec.regulation, spec.role, spec.filename), len(order))),
         )
         if doc.footer_regulation and (doc.footer_regulation != spec.regulation or doc.footer_version != spec.version_label):
             diagnostics.append((spec.document_id, None, "error", "footer_identity_mismatch", f"footer names {doc.footer_regulation} {doc.footer_version}, index says {spec.regulation} {spec.version_label}"))

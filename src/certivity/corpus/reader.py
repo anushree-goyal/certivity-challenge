@@ -34,7 +34,7 @@ MAX_DEFINITION_CONTEXT = 20
 LARGE_SECTION_CHARS = 12000
 _SCOPE_HEADING = re.compile(r"^(scope|field of application|application)\b(?!\s+for\b)", re.IGNORECASE)
 _DEFINITIONS_HEADING = re.compile(r"^definitions?\b", re.IGNORECASE)
-_FOOTNOTE_START = re.compile(r"^(\(?[a-z]\)|\*+|\d{1,2}/|\(\d{1,2}\)|Notes?\b)", re.IGNORECASE)
+_FOOTNOTE_START = re.compile(r"^(\(?[a-z]\)|\*+|\^?\d{1,2}/|\^\d{1,2}|\(\d{1,2}\)|Notes?\b)", re.IGNORECASE)
 
 
 class CorpusNotReady(RuntimeError):
@@ -58,7 +58,6 @@ class SqliteCorpusReader:
         self._paths = paths
         self._package_root = Path(self.manifest.get("package_root") or paths.package_root)
         self._local = threading.local()
-        self._index_entries, self._index_order = _load_index(self._package_root)
 
     # --- plumbing -----------------------------------------------------------------------------
 
@@ -123,7 +122,7 @@ class SqliteCorpusReader:
             checksum=row["checksum"],
             snapshot_id=self.snapshot_id,
             page_count=row["page_count"],
-            index_entry=dict(self._index_entries.get(row["regulation"], {})),
+            index_entry=json.loads(row["index_entry"]),
         )
 
     def _doc_row(self, document_id: str) -> sqlite3.Row:
@@ -140,9 +139,8 @@ class SqliteCorpusReader:
             rows = self._db.execute("SELECT * FROM documents")
         else:
             rows = self._db.execute("SELECT * FROM documents WHERE role = ?", (getattr(role, "value", role),))
-        docs = [self._document(r) for r in rows]
-        last = len(self._index_order)
-        return sorted(docs, key=lambda d: (self._index_order.get((d.regulation, d.role.value, d.filename), last), _regulation_sort_key(d.regulation), d.filename))
+        rows = sorted(rows, key=lambda r: (r["index_order"], r["filename"]))
+        return [self._document(r) for r in rows]
 
     def get_document(self, document_id: str) -> Document:
         return self._document(self._doc_row(document_id))
@@ -539,20 +537,6 @@ def _paragraph_targets(paragraph: str) -> list[str]:
     return [p.strip().rstrip(".") for p in paragraph.split("-") if p.strip()]
 
 
-def _load_index(package_root: Path) -> tuple[dict[str, dict], dict[tuple[str, str, str], int]]:
-    """Verbatim index entries by regulation, and each (regulation, role, filename)'s position in index.json."""
-    try:
-        entries = json.loads((package_root / "regulations" / "index.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {}, {}
-    order: dict[tuple[str, str, str], int] = {}
-    for entry in entries:
-        for version in entry.get("versions", []):
-            for file in version.get("files", []):
-                order.setdefault((entry["regulation"], version.get("role"), file.get("name")), len(order))
-    return {e["regulation"]: e for e in entries}, order
-
-
 def _png_size(path: Path) -> tuple[int | None, int | None]:
     try:
         with open(path, "rb") as handle:
@@ -562,11 +546,6 @@ def _png_size(path: Path) -> tuple[int | None, int | None]:
     except OSError:
         pass
     return None, None
-
-
-def _regulation_sort_key(regulation: str) -> tuple:
-    match = re.match(r"^UN\s+R(\d+)", regulation)
-    return (0, int(match.group(1)), regulation) if match else (1, 0, regulation)
 
 
 def open_corpus(corpus_dir: str | Path | None = None, *, snapshot_id: str | None = None, paths: CorpusPaths | None = None) -> SqliteCorpusReader:

@@ -18,7 +18,7 @@ import pymupdf
 
 from . import structure as st
 
-PARSER_VERSION = "corpus-parse-9"
+PARSER_VERSION = "corpus-parse-10"
 
 FOOTER = re.compile(r"^(?P<reg>.+?),\s*version\s+(?P<ver>\S+)\s*\|\s*page\s+(?P<page>\d+)\s+of\s+(?P<total>\d+)$")
 BANNER = re.compile(r"^(Consolidated text of this version, rendered by Certivity|Role in the hackathon:|the bottom of every page)", re.IGNORECASE)
@@ -105,12 +105,47 @@ class ParsedDocument:
 # --- low-level extraction ---------------------------------------------------------------------
 
 
+SUPERSCRIPT_FLAG = 1  # PyMuPDF span flag bit 0
+
+
+def _is_superscript(span: dict, main: dict) -> bool:
+    """Flagged superscript, or (for PDFs that do not set the flag) smaller and raised above the main baseline."""
+    if span is main:
+        return False
+    if span["flags"] & SUPERSCRIPT_FLAG:
+        return True
+    return span["size"] < main["size"] * 0.85 and span["origin"][1] < main["origin"][1] - 1.0
+
+
+def spans_text(spans: list[dict]) -> str:
+    """Join a line's spans, keeping superscripts explicit as ``^``: ``4∙10`` + ``0`` -> ``4∙10^0``,
+    ``2.5∙10`` + ``-1`` + ``cd`` -> ``2.5∙10^-1 cd``, ``100 cm`` + ``2`` -> ``100 cm^2``. Flattened, these read as
+    ``4∙100`` / ``100 cm2`` - a wrong limit that looks perfectly citable (R148 photometry)."""
+    spans = [s for s in spans if s["text"]]
+    if not spans:
+        return ""
+    main = max(spans, key=lambda s: len(s["text"].strip()))
+    out = ""
+    previous_sup = False
+    for span in spans:
+        text = span["text"]
+        if _is_superscript(span, main) and text.strip():
+            out += "^" + text.strip()
+            previous_sup = True
+            continue
+        if previous_sup and text[:1].isalnum():
+            out += " "  # "10^-1cd" -> "10^-1 cd": the renderer drew a gap, not a space character
+        out += text
+        previous_sup = False
+    return out
+
+
 def _page_lines(page: pymupdf.Page, index: int) -> list[Line]:
     lines: list[Line] = []
     for block in page.get_text("dict")["blocks"]:
         for raw in block.get("lines", []):
             spans = [s for s in raw["spans"] if s["text"]]
-            text = "".join(s["text"] for s in spans)
+            text = spans_text(spans)
             if not text.strip():
                 continue
             main = max(spans, key=lambda s: len(s["text"].strip()))
@@ -130,7 +165,15 @@ def _layout_stats(all_lines: list[Line]) -> tuple[float, float]:
 
 
 def _cell_text(page: pymupdf.Page, bbox) -> str:
-    return " ".join(page.get_text("text", clip=pymupdf.Rect(bbox)).split())
+    """Cell text read with a clip (Table.extract() drops decimal points), superscripts kept as ``^``."""
+    rect = pymupdf.Rect(bbox)
+    parts = []
+    for block in page.get_text("dict", clip=rect)["blocks"]:
+        for line in block.get("lines", []):
+            text = spans_text(line["spans"])
+            if text.strip():
+                parts.append(text)
+    return " ".join(" ".join(parts).split())
 
 
 def _tables(page: pymupdf.Page) -> list[tuple[pymupdf.Rect, list[list[str]]]]:
@@ -408,7 +451,7 @@ def _add_footnote(builder: _Builder, text: str, page: int) -> None:
         lines = getattr(earlier, "_lines", None)
         if earlier.kind == "footnote" and earlier.pdf_pages[-1] == page and lines and " ".join(lines[0].split()) == " ".join(text.split()):
             return  # the renderer repeats a footnote once per marker on the page
-    if previous is not None and previous.kind == "footnote" and getattr(previous, "_lines", None) is not None and previous.pdf_pages[-1] == page and not re.match(r"^\d{1,2}\s?[A-Z]", text):
+    if previous is not None and previous.kind == "footnote" and getattr(previous, "_lines", None) is not None and previous.pdf_pages[-1] == page and not re.match(r"^\^?\d{1,2}\s?[A-Z]", text):
         previous._lines.append(text)  # type: ignore[attr-defined]
         return
     fn = ParsedPassage(builder._key(f"{builder.namespace}|_footnote"), builder.namespace, None, "footnote", "", [page], ["footnote"])

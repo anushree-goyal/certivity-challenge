@@ -103,6 +103,11 @@ shared by a worker's threads. Writes fail.
   the table's page(s): footnote passages on that page, plus short lines right after the table that start with a
   marker (`(a)`, `a)`, `*`, `1/`, `Note`). This is an interim rule until footnotes are tied to their table at parse
   time; it over-includes on purpose, because a dropped footnote turns a conditional cell into an unconditional limit.
+- **Superscripts are explicit as `^`.** Exponents, units and footnote markers are rendered by the PDFs as raised
+  spans; joined naively they flatten into wrong values (`4∙10`+`0` reads as `4∙100`, i.e. 100 instead of 4 cd). The
+  corpus writes `4∙10^0`, `2.5∙10^-1 cd`, `100 cm^2`, and footnote markers as `^1`, in body text and table cells alike.
+  Subscripts are not marked (`β2` stays `β2`).
+- **`Document.index_entry`** is the verbatim `index.json` entry, stored in the snapshot at build time.
 - **`parsing_flags`** on a `SourcePassage`:
   - `kind:paragraph|heading|intro|table|caption|footnote|front_matter` marks the passage type.
   - `context:parent|context:definition` appears only on bundle context passages.
@@ -172,12 +177,16 @@ renders/<pdf sha256>/<page>@<dpi>.png          page images
 - New files or code produce a new id. The old snapshot stays readable until it is pruned manually.
 - Bump `PARSER_VERSION` in `parse.py` when parse output changes; the parse cache is keyed by it.
 
-## Verified on the real base corpus (snapshot `snap-80cf23669d98`)
+## Verified on the real base corpus (snapshot `snap-29ca187ccf30`)
 
 - **Acquisition:** 56 of 56 base PDFs downloaded and checksum-verified, with no failures. The `latest` versions and
   the sub-goal old/new PDFs have **not** been downloaded yet, and the links expire after the event.
-- **Import:** 56 documents, 3,029 pages, 31,881 passages (including 576 figure/table captions), 6,265 sections,
-  1,519 definitions and 13,065 reference candidates. There were no parse failures.
+- **Import:** 56 documents, 3,029 pages, 31,878 passages (including 576 figure/table captions), 6,273 sections,
+  1,519 definitions and 13,062 reference candidates. There were no parse failures.
+- **Superscript fix:** R148 Table 3 reads `4∙10^0 | 1.40∙10^2 | 7.0∙10^1`; no flattened power of ten remains in R148.
+  Against the pre-fix baseline, all 27,925 labelled paragraphs are unchanged, and 11,543 reference outcomes are
+  identical; the rest improved, because footnote markers had been fused into numbers (`No. 45`+`1` read as the
+  non-existent `No. 451`, `Annex 4`+`2` as `Annex 42`).
 - **Pages:** printed-page footers match physical positions on 3,029 of 3,029 pages, and the regulation/version
   in each footer matches the index.
 - **Paragraphs:** all 190 cited paragraphs in `cases/dev-rear-lamp/expected.json` (R148, R48, R150, R10) exist in the
@@ -188,7 +197,7 @@ renders/<pdf sha256>/<page>@<dpi>.png          page images
   migration (same status, same target passages, compared by citation rather than ID). Anushree's model-free agent
   paths run on the real corpus: the inspection plan covers 668 sections of R48/R148/R150/R10, and following
   corpus-detected references from 400 of them resolves 94% (572 of 607).
-- **Tests:** `tests/corpus` has 36 tests; with Anushree's tests the repository runs 117 passed, 3 skipped (billed
+- **Tests:** `tests/corpus` has 39 tests; with Anushree's tests the repository runs 117 passed, 3 skipped (billed
   real-model tests). Corpus tests cover structure rules, snapshot behaviour (missing file, checksum mismatch, reuse,
   refresh keeps the old snapshot) and the real corpus:
   - metadata, footer verification and contract-shaped records (IDs, namespaces, enums, index order);

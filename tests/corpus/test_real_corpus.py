@@ -229,3 +229,25 @@ def test_reader_satisfies_published_protocols(corpus):
     from certivity.contracts import CorpusReader, CorpusSearch
 
     assert isinstance(corpus, CorpusReader) and isinstance(corpus, CorpusSearch)
+
+
+def test_superscript_exponents_are_kept(corpus, docs):
+    """R148 Table 3: 4∙10^0 cd, not 4∙100 cd. A flattened exponent is a wrong limit no later check can detect."""
+    doc = docs["UN R148"].document_id
+    passages = [p for s in corpus.list_sections(doc) for p in corpus.read_section(s.section_id, False).primary_passages]
+    table = next(p for p in passages if p.is_table and p.text.startswith("Table 3 "))
+    assert "4∙10^0 | 1.40∙10^2 | 7.0∙10^1" in table.text and "5∙10^-2" in table.text
+    import re
+    assert not any(re.search(r"∙10\d", p.text) for p in passages)  # no flattened power of ten left anywhere in R148
+    assert any("100 cm^2" in p.text for p in passages)
+
+
+def test_footnote_marker_no_longer_corrupts_references(corpus, docs, by_label):
+    p = by_label(docs["UN R48"].document_id, "6.2.9.2")
+    raws = [r.raw_reference for r in corpus.list_reference_candidates([p.passage_id])]
+    assert "UN Regulation No. 45" in raws and not any("451" in r for r in raws)
+
+
+def test_index_entry_comes_from_the_snapshot(corpus, docs):
+    entry = docs["UN R148"].index_entry
+    assert entry["regulation"] == "UN R148" and entry["title"] and entry["versions"]
