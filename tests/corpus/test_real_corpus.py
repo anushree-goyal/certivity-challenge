@@ -251,3 +251,27 @@ def test_footnote_marker_no_longer_corrupts_references(corpus, docs, by_label):
 def test_index_entry_comes_from_the_snapshot(corpus, docs):
     entry = docs["UN R148"].index_entry
     assert entry["regulation"] == "UN R148" and entry["title"] and entry["versions"]
+
+
+def test_main_body_parts_are_headings_not_namespaces(corpus, docs, by_label):
+    """R89's PART I/II/III continue one numbering (3-10, 11-18, 19-26): paragraphs stay in main and cite as "13.1".
+    They used to collide with the GTR 9 rationale rule and lose every clause heading."""
+    doc = docs["UN R89"].document_id
+    p = by_label(doc, "13.1")
+    assert p.namespace == "main" and p.paragraph_label == "13.1"
+    assert {s.namespace for s in corpus.list_sections(doc)} >= {"main"} and not any(s.namespace.startswith("part:") for s in corpus.list_sections(doc))
+    assert by_label(doc, "4").text.startswith("4. APPROVAL")
+    assert not [d for d in corpus.diagnostics(doc) if d["code"] == "label_out_of_sequence"]
+    # GTR 9's rationale is still its own division
+    assert any(s.namespace == "part:i" for s in corpus.list_sections(docs["UN GTR 9"].document_id))
+
+
+def test_above_below_points_within_the_originating_annex(corpus, docs, by_label):
+    from certivity.corpus._contracts import ReferenceRequest
+
+    origin = by_label(docs["UN R123"].document_id, "Annex 4 2.2.2")
+    res = corpus.resolve_reference(ReferenceRequest(origin.passage_id, "paragraph 2.2.1. above"))
+    assert res.status == "resolved" and [p.paragraph_label for p in corpus.get_passages(res.candidate_passage_ids)] == ["Annex 4 2.2.1"]
+    assert "points within Annex 4" in res.explanation
+    # without a direction word the same label stays ambiguous between main and the annex
+    assert corpus.resolve_reference(ReferenceRequest(origin.passage_id, "paragraph 2.2.1.")).status == "ambiguous"

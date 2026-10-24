@@ -332,8 +332,22 @@ class SqliteCorpusReader:
         found_ns = {ns for ns, _ in candidates}
         ids = list(dict.fromkeys(r["passage_id"] for _, r in candidates))
         duplicates = any("duplicate_label" in json.loads(r["flags"]) for _, r in candidates)
+        basis = ""
         if len(found_ns) > 1 and not prefer_first:
-            return ("ambiguous", ids, f"{request.raw_reference!r} matches paragraph {paragraph} in {', '.join(sorted(found_ns))} of {target_name}; the reference does not say which")
+            # "paragraph 6. above" written inside Annex 14: if only the originating division has a match on that
+            # side of the reference in reading order, the direction word identifies it. Otherwise do not guess.
+            direction = re.search(r"\b(above|below)\b", request.raw_reference, re.IGNORECASE)
+            if direction:
+                above = direction.group(1).lower() == "above"
+                local = [r for ns, r in candidates if ns == origin_ns and (r["ord"] < origin["ord"] if above else r["ord"] > origin["ord"])]
+                if local:
+                    found_ns, ids = {origin_ns}, [r["passage_id"] for r in local]
+                    candidates = [(origin_ns, r) for r in local]
+                    duplicates = any("duplicate_label" in json.loads(r["flags"]) for r in local)
+                    prefer_first = True
+                    basis = f"; also in main, but '{direction.group(1)}' points within {origin_ns}"
+            if len(found_ns) > 1:
+                return ("ambiguous", ids, f"{request.raw_reference!r} matches paragraph {paragraph} in {', '.join(sorted(found_ns))} of {target_name}; the reference does not say which")
         if prefer_first and len(found_ns) > 1:
             first_ns = next(ns for ns in namespaces if ns in found_ns)
             ids = [r["passage_id"] for ns, r in candidates if ns == first_ns]
@@ -345,7 +359,7 @@ class SqliteCorpusReader:
         where_found = next(iter(found_ns))
         what = f"{where_found} {paragraph}" if paragraph else where_found
         searched = f" (searched {where})" if not prefer_first else ""
-        return ("resolved", ids, f"{request.raw_reference!r} -> {what} of {target_name}{note}{searched}")
+        return ("resolved", ids, f"{request.raw_reference!r} -> {what} of {target_name}{note}{searched}{basis}")
 
     def get_page_asset(self, document_id: str, pdf_page_index: int, dpi: int = DEFAULT_DPI) -> PageAsset:
         doc = self._doc_row(document_id)
