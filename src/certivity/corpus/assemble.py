@@ -300,6 +300,8 @@ def assemble(spec: DocumentSpec, parsed: ParsedDocument) -> AssembledDocument:
         if row.kind == "footnote" and "non_regulatory_banner" in row.flags:
             continue
         for cand in st.find_references(row.text):
+            if row.kind in ("table", "caption") and cand.start == 0 and (cand.target_paragraph or "").startswith(("Table", "Figure")):
+                continue  # the passage's own caption, not a reference
             references.append(
                 ReferenceRow(row.passage_id, doc_id, cand.raw, cand.start, cand.end, cand.target_regulation_number, cand.target_annex, cand.target_paragraph, cand.explicit_this_regulation)
             )

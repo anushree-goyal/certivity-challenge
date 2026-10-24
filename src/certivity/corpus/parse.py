@@ -18,7 +18,7 @@ import pymupdf
 
 from . import structure as st
 
-PARSER_VERSION = "corpus-parse-11"
+PARSER_VERSION = "corpus-parse-13"
 
 FOOTER = re.compile(r"^(?P<reg>.+?),\s*version\s+(?P<ver>\S+)\s*\|\s*page\s+(?P<page>\d+)\s+of\s+(?P<total>\d+)$")
 BANNER = re.compile(r"^(Consolidated text of this version, rendered by Certivity|Role in the hackathon:|the bottom of every page)", re.IGNORECASE)

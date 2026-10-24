@@ -12,7 +12,8 @@ from dataclasses import dataclass
 
 # "6.10.4.2. In height", "1. Scope", "A.1.4.1.2. If the", "2.1. General". A trailing dot is required:
 # continuation lines such as "60 ± 2 ..." or "10 m" must not become labels.
-LABEL_LINE = re.compile(r"^(?P<label>(?:[A-Z]\.)?\d{1,3}(?:\.\d{1,3}){0,9}\.)(?:\s+(?P<rest>\S.*))?$")
+LABEL_LINE = re.compile(r"^(?P<label>(?:[A-Z]\.)?\d{1,3}(?:\.\d{1,3}){0,9}\.)(?:(?:\s+|(?=\())(?P<rest>\S.*))?$")
+# (a label may run straight into a sub-item with no space: R13H Annex 5 "3.1.(A) For all states of load ...")
 
 # "5.7 Grouped, combined ..." - some headings drop the trailing dot. Only multi-level, only before a capital,
 # and only accepted when it is the exact next label (see judge_label strict=True).
@@ -106,9 +107,9 @@ SCOPE_HEADING = re.compile(r"^Scope\b", re.IGNORECASE)
 MAJOR_LABEL_NODOT = re.compile(r"^(?P<label>\d{1,2})\s+(?P<rest>[A-Z].*)$")
 APPENDIX_HEADING = re.compile(r"^Appendix\s+(?P<appendix>\d+[A-Z]?|[IVX]+)\b(?P<rest>.*)$", re.IGNORECASE)
 PART_HEADING = re.compile(rf"^Part\s+(?P<part>\d+[A-Z]?|[IVX]+|[A-Z])\b(?:{_DASH}|\s+)?(?P<rest>.*)$", re.IGNORECASE)
-CAPTION = re.compile(
-    r"^(?P<kind>Table|Figure)\s+(?P<name>[A-Z]{0,3}\d+[A-Za-z]?(?:[-.]\d+[A-Za-z]?)*|[IVX]{1,5})(?![\w-])", re.IGNORECASE
-)  # "Table A6-1", "Figure 3a", "Figure I" (R148)
+# A table/figure name: "4", "3a", "A6-1", "A2-1", "I", "A3-I" (R148 Annex 3), "A3-II"
+CAPTION_NAME = r"(?:[A-Z]{0,3}\d+[A-Za-z]?|[IVX]{1,5})(?:[-.](?:\d+[A-Za-z]?|[IVX]{1,5}))*"
+CAPTION = re.compile(rf"^(?P<kind>Table|Figure)\s+(?P<name>{CAPTION_NAME})(?![\w-])", re.IGNORECASE)
 
 MAIN = "main"
 
@@ -211,8 +212,14 @@ _REG = r"(?:UN\s+)?Regulations?\s+No(?:s)?\.?\s*(?P<reg>\d{1,3}[A-Z]?)"
 REFERENCE_PATTERNS = [
     # "paragraph 5.1.7. of Annex 4", "paragraphs 2.2.1.1. to 2.2.1.4.", "paragraph 6.2 of UN Regulation No. 10"
     re.compile(
-        rf"\bparagraphs?\s+(?P<paras>{_PARA_LIST})(?:\s*(?:above|below))?"
+        rf"\b(?:paragraphs?|paras?\.|par\.)\s+(?P<paras>{_PARA_LIST})(?:\s*\((?P<sub>[a-z]{{1,2}}|[ivx]{{1,5}})\))?(?:\s*(?:above|below))?"
         rf"(?:\s*(?:of|in|to)\s+(?:(?P<this_annex>this\s+annex|this\s+appendix)|{_APPX_OF_ANNEX}{_ANNEX_REF}|(?P<this_reg>this\s+Regulation)|{_REG}))?",
+        re.IGNORECASE,
+    ),
+    # "Table 4", "Table A2-1 of Annex 2", "Figure A3-I": tables and figures are addressed by caption
+    re.compile(
+        rf"\b(?P<capkind>Table|Figure)s?\s+(?P<capname>{CAPTION_NAME}(?:\s*(?:,|and|or)\s*{CAPTION_NAME})*)(?![\w-])"
+        rf"(?:\s+(?:of|in|to)\s+(?:(?P<this_annex>this\s+annex)|{_APPX_OF_ANNEX}{_ANNEX_REF}))?",
         re.IGNORECASE,
     ),
     # "Annex 4, paragraph 2.1", "Appendix 1 to Annex 5", "Part 2 of Annex 6", "Annex 3, Part 7", bare "Annex 5"
@@ -267,7 +274,7 @@ def find_references(text: str) -> list[ReferenceCandidate]:
             if overlaps(match.start(), match.end()):
                 continue
             groups = match.groupdict()
-            if index == 2:
+            if groups.get("regs"):
                 for reg in re.findall(r"\d{1,3}[A-Z]?", groups["regs"]):
                     found.append(ReferenceCandidate(match.group(0), match.start(), match.end(), reg, None, None))
                 taken.append((match.start(), match.end()))
@@ -277,7 +284,13 @@ def find_references(text: str) -> list[ReferenceCandidate]:
                 annex = "this annex"
             elif groups.get("annex"):
                 annex = namespace_label(groups["annex"], groups.get("part") or groups.get("part2"), groups.get("appendix") or groups.get("appendix2"))
-            paras = _split_paras(groups["paras"]) if groups.get("paras") else [None]
+            if groups.get("capkind"):
+                names = re.findall(rf"{CAPTION_NAME}(?![\w-])", groups["capname"], re.IGNORECASE)
+                paras = [f"{groups['capkind'].capitalize()} {name}" for name in names]  # "Table 4", resolved by caption
+            else:
+                paras = _split_paras(groups["paras"]) if groups.get("paras") else [None]
+                if groups.get("sub") and paras[-1]:
+                    paras[-1] = f"{paras[-1]} ({groups['sub'].lower()})"  # "4.8.3.1 (a)": a sub-item inside 4.8.3.1
             for para in paras:
                 found.append(
                     ReferenceCandidate(

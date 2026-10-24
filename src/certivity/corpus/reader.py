@@ -34,6 +34,7 @@ MAX_DEFINITION_CONTEXT = 20
 LARGE_SECTION_CHARS = 12000
 _SCOPE_HEADING = re.compile(r"^(scope|field of application|application)\b(?!\s+for\b)", re.IGNORECASE)
 _DEFINITIONS_HEADING = re.compile(r"^definitions?\b", re.IGNORECASE)
+_SUB_ITEM = re.compile(r"^(?P<paragraph>.*?\d)\.?\s*\((?P<item>[a-z]{1,2}|[ivx]{1,5})\)$", re.IGNORECASE)
 _FOOTNOTE_START = re.compile(r"^(\(?[a-z]\)|\*+|\^?\d{1,2}/|\^\d{1,2}|\(\d{1,2}\)|Notes?\b)", re.IGNORECASE)
 
 
@@ -77,7 +78,7 @@ class SqliteCorpusReader:
             self._local.conn = None
 
     def _passage(self, row: sqlite3.Row, extra_flags: list[str] | None = None) -> SourcePassage:
-        flags = json.loads(row["flags"]) + [f"kind:{row['kind']}"] + (extra_flags or [])
+        flags = list(dict.fromkeys(json.loads(row["flags"]) + [f"kind:{row['kind']}"] + (extra_flags or [])))
         is_table = row["kind"] == "table"
         start = row["printed_start_page"]
         return SourcePassage(
@@ -256,6 +257,24 @@ class SqliteCorpusReader:
         if origin is None:
             return ("missing", [], f"originating passage {request.originating_passage_id!r} is not in snapshot {self.snapshot_id}")
         regulation, namespace, paragraph, this_reg = self._reference_hints(request)
+        # "4.8.3.1 (a)": a sub-item lives inside its paragraph's passage, so resolve the paragraph and say which part
+        sub = _SUB_ITEM.match(paragraph) if paragraph else None
+        if sub:
+            paragraph = sub.group("paragraph")
+        status, ids, explanation = self._resolve_target(request, origin, regulation, namespace, paragraph, this_reg)
+        if sub:
+            item = sub.group("item")
+            if status == "ambiguous" and len(ids) > 1:
+                # a label the source splits into sub-items ("3.1.(A) ...", "3.1.(B) ..."): the named one decides
+                pattern = re.compile(rf"^\S+\s*\({re.escape(item)}\)", re.IGNORECASE)
+                named = [p.passage_id for p in self.get_passages(ids) if pattern.match(p.text)]
+                if len(named) == 1:
+                    return "resolved", named, explanation + f"; of these, only one passage is sub-item ({item}) itself"
+            explanation += f"; the reference names sub-item ({item}), which is part of this paragraph's text"
+        return status, ids, explanation
+
+    def _resolve_target(self, request: ReferenceRequest, origin: sqlite3.Row, regulation: str | None, namespace: str | None,
+                        paragraph: str | None, this_reg: bool) -> tuple[str, list[str], str]:
         origin_doc = self._doc_row(origin["document_id"])
 
         # 1. which document
@@ -275,6 +294,11 @@ class SqliteCorpusReader:
                 target_docs, cross = [origin_doc], False
         else:
             target_docs, cross = [origin_doc], False
+
+        # tables and figures are addressed by caption ("Table 4", "Figure A3-I"), not by paragraph label
+        caption = st.CAPTION.match(paragraph) if paragraph else None
+        if caption:
+            return self._caption_targets(request, origin, target_docs, namespace, caption)
 
         # 2. whole-regulation reference
         if paragraph is None and namespace is None:
@@ -495,6 +519,43 @@ class SqliteCorpusReader:
                 role = "context:definition" if cid in {pid for _, pid in hits} else "context:parent"
                 out.append(self._passage(rows[cid], [role]))
         return out
+
+    def _caption_targets(self, request: ReferenceRequest, origin: sqlite3.Row, target_docs: list, namespace: str | None,
+                         caption: re.Match) -> tuple[str, list[str], str]:
+        kind, name = caption.group("kind").lower(), caption.group("name").lower()
+        wanted = f"{kind.capitalize()} {caption.group('name')}"
+        if namespace == "this annex":
+            annex = st.namespace_parts(origin["namespace"]).get("annex")
+            namespace = st.namespace_label(annex) if annex else origin["namespace"]
+        hits: list[sqlite3.Row] = []
+        for doc in target_docs:
+            for row in self._db.execute(
+                "SELECT * FROM passages WHERE document_id = ? AND kind IN ('table', 'caption') ORDER BY ord", (doc["document_id"],)
+            ):
+                found = st.CAPTION.match(row["text"].split("\n", 1)[0])
+                if not found or found.group("kind").lower() != kind or found.group("name").lower() != name:
+                    continue
+                if namespace and not (row["namespace"] == namespace or row["namespace"].startswith(namespace + " ")):
+                    continue  # "Table A2-1 of Annex 2" may sit in "Annex 2 Part A"
+                hits.append(row)
+        target_name = f"{target_docs[0]['regulation']} {target_docs[0]['version_label']}"
+        where = f" in {namespace}" if namespace else ""
+        if not hits:
+            return ("missing", [], f"{request.raw_reference!r}: no {wanted}{where} of {target_name}")
+        if len({h["namespace"] for h in hits}) > 1:
+            local = [h for h in hits if h["namespace"] == origin["namespace"]]
+            if len(local) == 1:
+                hits = local
+            else:
+                return ("ambiguous", [h["passage_id"] for h in hits],
+                        f"{request.raw_reference!r}: {wanted} occurs in {', '.join(sorted({h['namespace'] for h in hits}))} of {target_name}")
+        if len(hits) > 1:
+            return ("ambiguous", [h["passage_id"] for h in hits], f"{request.raw_reference!r}: {len(hits)} captions read {wanted} in {hits[0]['namespace']} of {target_name}")
+        hit = hits[0]
+        pages = json.loads(hit["page_span"])
+        extra = " The figure itself is an image: render its page with get_page_asset." if kind == "figure" else ""
+        return ("resolved", [hit["passage_id"]],
+                f"{request.raw_reference!r} -> {wanted} ({hit['kind']} passage, {hit['namespace']}, page {pages[0] if pages else '?'}) of {target_name}.{extra}")
 
     def _table_context(self, row: sqlite3.Row) -> str | None:
         """Caption, the column-heading row, and footnote-like text from the table's page(s).

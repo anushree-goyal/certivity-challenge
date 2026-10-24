@@ -156,6 +156,12 @@ The reader follows these rules:
     is **`ambiguous`** with both candidates; the reader does not guess.
   - Exception, based on the text: "paragraph 2.2.1. **above**" (or **below**) written inside an annex resolves to the
     annex's own paragraph when only that one lies on the stated side in reading order. The explanation says so.
+- **Sub-items:** `Par. 4.8.3.1. (a)` resolves to paragraph 4.8.3.1, and the explanation names sub-item (a), because
+  sub-items are part of their paragraph's text. Where the source splits one label into sub-item passages (R13H
+  Annex 5 `3.1.(A)` / `3.1.(B)`), the named sub-item picks its passage.
+- **Tables and figures** are addressed by caption: `Table 4`, `Table A2-1 of Annex 2`, `Figure A3-I` resolve to the
+  table passage or the figure's caption passage (a figure itself is an image; render its page). Detection covers
+  `paragraph(s)`, `para.` and `Par.`, sub-items, and `Table`/`Figure` references including lists (`Tables 3 and 4`).
 - An absent label returns `missing`, naming the nearest existing ancestor. Labels flagged as duplicates return
   `ambiguous`. A range (`2.2.1.1. to 2.2.1.4.`) resolves to its endpoints.
 
@@ -179,15 +185,17 @@ renders/<pdf sha256>/<page>@<dpi>.png          page images
 - New files or code produce a new id. The old snapshot stays readable until it is pruned manually.
 - Bump `PARSER_VERSION` in `parse.py` when parse output changes; the parse cache is keyed by it.
 
-## Verified on the real base corpus (snapshot `snap-a0f2a558c19f`)
+## Verified on the real base corpus (snapshot `snap-e31747586003`)
 
 - **Acquisition:** 56 of 56 base PDFs downloaded and checksum-verified, with no failures. The `latest` versions and
   the sub-goal old/new PDFs have **not** been downloaded yet, and the links expire after the event.
-- **Import:** 56 documents, 3,029 pages, 31,879 passages (including 576 figure/table captions), 6,300 sections,
-  1,520 definitions and 13,062 reference candidates. There were no parse failures. A cold build from a clean checkout
+- **Import:** 56 documents, 3,029 pages, 31,946 passages (including figure/table captions), 6,300 sections,
+  1,520 definitions and 15,049 reference candidates. There were no parse failures. A cold build from a clean checkout
   takes about 87 s and reproduces the same snapshot ID.
-- **Reference resolution** over all 11,552 distinct detected references: 9,851 resolved, 730 ambiguous, 650
-  missing, 491 outside the corpus.
+- **Reference resolution** over all 13,545 distinct detected references: 11,234 resolved, 1,029 ambiguous, 791
+  missing, 491 outside the corpus. Of the 11,552 references detected before sub-items, tables and figures were added,
+  11,349 resolve identically, 198 are now detected in a fuller form (`Annex 3` -> `Figure 4 in Annex 3`), 2 improved,
+  and 1 became honestly ambiguous (it had matched the main body only because the annex's own paragraph was unparsed).
 - **Superscript fix:** R148 Table 3 reads `4∙10^0 | 1.40∙10^2 | 7.0∙10^1`; no flattened power of ten remains in R148.
   Against the pre-fix baseline, all 27,925 labelled paragraphs are unchanged, and 11,543 reference outcomes are
   identical; the rest improved, because footnote markers had been fused into numbers (`No. 45`+`1` read as the
@@ -202,7 +210,7 @@ renders/<pdf sha256>/<page>@<dpi>.png          page images
   migration (same status, same target passages, compared by citation rather than ID). Anushree's model-free agent
   paths run on the real corpus: the inspection plan covers 668 sections of R48/R148/R150/R10, and following
   corpus-detected references from 400 of them resolves 94% (572 of 607).
-- **Tests:** `tests/corpus` has 41 tests; with Anushree's tests the branch runs 122 passed, 3 skipped (billed
+- **Tests:** `tests/corpus` has 44 tests; merged with current `main` the branch runs 131 passed, 3 skipped (billed
   real-model tests). Corpus tests cover structure rules, snapshot behaviour (missing file, checksum mismatch, reuse,
   refresh keeps the old snapshot) and the real corpus:
   - metadata, footer verification and contract-shaped records (IDs, namespaces, enums, index order);
