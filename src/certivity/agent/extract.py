@@ -340,13 +340,18 @@ def _build_drafts(
 
         notes = entry.get("notes")
         if primary not in primary_candidate_ids:
-            # Allowed, because an obligation can sit in an inherited condition,
-            # but the reviewer needs to know the citation is not section-primary.
-            marker = (
-                "Primary citation is a context or referenced passage rather than a "
-                "primary passage of this section."
+            # The obligation belongs to the section that owns this passage, and
+            # that section is read in its own right. Keeping it here as well
+            # produced the same requirement twice under two citations in a live
+            # run, so it is dropped rather than flagged.
+            ctx.warn(
+                f"an obligation in {section_id} was cited to {primary!r}, a context "
+                "or referenced passage rather than a primary passage of this "
+                "section; it was dropped because the section owning that passage "
+                "is inspected separately",
+                stage="extract",
             )
-            notes = f"{notes} {marker}".strip() if notes else marker
+            continue
 
         try:
             kind = ObligationKind(entry.get("obligation_kind") or "mandatory")

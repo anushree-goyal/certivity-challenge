@@ -31,13 +31,18 @@ from __future__ import annotations
 from typing import Any
 
 PROMPT_VERSIONS: dict[str, str] = {
-    # v2: schemas reshaped to fit the provider's 16-union limit. The prompt text
-    # is unchanged, but the version bump is still correct: cached v1 answers were
-    # produced under a different schema and must not be replayed.
+    # v2: schemas reshaped to fit the provider's 16-union limit.
+    # v3 (extract_obligations): the first live run returned a scope statement as
+    # an obligation and restated the regulation's whole scope as the condition on
+    # every draft.
+    # v4 (extract_obligations): v3 then produced each obligation twice - once
+    # from the section that owns it and once from a section that merely received
+    # it as context or as a followed reference. A primary citation must now be a
+    # primary passage of the section being read.
     "product_profile": "v2",
     "candidate_scope": "v2",
     "document_scope": "v2",
-    "extract_obligations": "v2",
+    "extract_obligations": "v4",
     "revise_obligations": "v2",
 }
 
@@ -312,12 +317,16 @@ Citation
 - `primary_passage_id` must be the one passage that states the obligation
   itself. It must appear in `supporting_passage_ids`. The official output
   carries a single source, and this is it.
-- If the obligation only exists by combining passages, so that no single
-  passage states it, set `primary_passage_id` to the passage closest to the
-  operative wording and explain the combination in `notes`. Do not silently
-  cite a context passage as if it stated the rule.
-- Context passages are supplied for interpretation. Do not attribute an
-  obligation to a context passage when a primary passage states it.
+- `primary_passage_id` must be one of the **primary** passages. Context and
+  referenced passages may appear in `supporting_passage_ids` and may inform the
+  wording, but they must never be the primary citation.
+- Do not return an obligation that a context or referenced passage states on its
+  own. Every section of this regulation is read in its own right, so that
+  obligation is extracted where it belongs. Returning it here as well produces
+  the same requirement twice with two different citations.
+- Use context and referenced passages to state *this* section's obligation
+  correctly - to carry in an inherited condition, resolve a defined term, or
+  supply a value the section points to.
 
 Kind
 - "mandatory": a constraint that must hold.
@@ -352,6 +361,30 @@ References
   paragraph 2.3". Set it false for a navigational aside.
 - A reference does not mean the whole referenced regulation applies. It means
   the referenced provision is incorporated for the stated purpose only.
+
+What is not an obligation
+- A statement of the regulation's scope or field of application is not an
+  obligation. "This Regulation applies to devices of category X on vehicles of
+  category Y" tells you *whether* the regulation applies; it is recorded
+  separately as applicability. Never return scope text as a requirement.
+- A pure definition is not an obligation. "'Reference axis' means the axis
+  marked on the device" is a definition. It becomes a "definition_rule" only
+  when it also imposes something measurable or testable - for example a limit,
+  a tolerance, a required marking or a stated method.
+- Marking, labelling, installation, test and documentation provisions **are**
+  obligations. Do not exclude them as administrative.
+
+Conditions: only what distinguishes this obligation
+- The regulation's own scope is already recorded once, for the regulation as a
+  whole. Do not restate it in `applicability_condition` on every obligation.
+- Put in `applicability_condition` only the condition that narrows this
+  obligation *within* the regulation - a device category, a marking, a mounting
+  position, a voltage, a test state, a date.
+- If the obligation applies to everything the regulation covers, with no further
+  condition, use null. That null is a claim that there is no narrowing
+  condition, so do not use it to avoid stating one that exists.
+- `text` must still read as a self-contained sentence, so a condition that is
+  part of the obligation's own wording stays in `text`.
 
 Empty is a valid answer
 - A section that states no obligation returns an empty `obligations` list. Say
