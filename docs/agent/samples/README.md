@@ -50,3 +50,34 @@ sub-item (`Par. 4.8.3.1. (a)`) and table or figure targets (`Table 4`,
 `Table A2-1`, `Figure A3-I`). Both are open corpus items raised in
 `docs/agent/corpus-pr-review.md`, not extraction defects — the obligations
 citing them are correspondingly incomplete.
+
+
+## `pipeline_draft-v6.json` — use this one
+
+Same two R148 sections, re-extracted with `extract_obligations` **v6**, which
+answers all five findings from the first offline scoring round.
+
+| | |
+| --- | --- |
+| Run | `run-v6check` |
+| Snapshot | `snap-e31747586003` |
+| Obligations | **6** (v5 produced 29) |
+| Model | 9 calls, 87,669 in / 46,270 out |
+
+What changed, measured:
+
+- **24 front-lamp obligations excluded.** Every remaining draft is from 5.2
+  (rear lamps). The excluded ones carry reasons naming the categories, e.g.
+  "written for front position lamps (A, MA) and front end-outline marker lamps
+  (AM); the product is a rear lamp module".
+- **5.2.1 is no longer over-split.** One mandatory obligation carrying Table 4,
+  plus one `permitted_alternative` for the separate 60 cd allowance — down from
+  12 drafts.
+- **Plain decimals in `text`**: "4 cd", "17 cd", "60 cd", "0.05 cd". `values`
+  still carries the source notation (`4∙10^0`, `5∙10^-2`), so text is readable
+  and evidence stays faithful.
+- **Citations are on the operative paragraph**: 5.2.7 now cites 5.2.7, not the
+  parent "Specific technical requirements" passage.
+- One `exclusion` remains (5.2.3, "No requirements apply to..."). It is marked
+  `obligation_kind=exclusion` and **should be filtered in export** — it is
+  applicability information, not a requirement.
