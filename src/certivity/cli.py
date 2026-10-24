@@ -106,11 +106,61 @@ def _run(args) -> int:
             if status["finished"]:
                 break
             time.sleep(1)
-        print(json.dumps({k: status[k] for k in ("run_id", "state", "warnings", "errors")}, indent=2))
-        app_dir = client.app.state.store.module_dir(run_id, "app")
-        if (app_dir / "submission.json").is_file():
-            print(f"validated submission: {app_dir / 'submission.json'}", file=sys.stderr)
+        print(json.dumps({k: status[k] for k in ("run_id", "state", "case_id", "warnings", "errors")}, indent=2))
+        # The export is built now, with the current CERTIVITY_TEAM_ID, and validated by the official validator.
+        export = client.get(f"/api/runs/{run_id}/submission")
+        if export.status_code == 200:
+            submission = export.json()
+            target = client.app.state.store.module_dir(run_id, "app") / f"{submission['case_id']}_{submission['team_id']}_{run_id}.json"
+            target.write_bytes(export.content)
+            print(f"validated export ({len(submission['requirements'])} requirements): {target}", file=sys.stderr)
+        else:
+            print(f"no export: {export.json().get('reason')}", file=sys.stderr)
         return 0 if status["state"] in ("completed", "partial") else 1
+
+
+def _heldout(args) -> int:
+    """Sunday routine: pull the package, download base PDFs, refresh the corpus, run the held-out case."""
+    import os
+    import subprocess
+
+    from certivity.api import package
+    from certivity.api.settings import load_settings, team_id_problem
+
+    if args.max_calls:
+        os.environ["CERTIVITY_MAX_MODEL_CALLS"] = str(args.max_calls)
+    if args.review_calls:
+        os.environ["CERTIVITY_MAX_REVIEW_CALLS"] = str(args.review_calls)
+    settings = load_settings()
+    pkg = settings.participant_package
+    print(f"1/4 git pull in the participant package", file=sys.stderr)
+    if subprocess.run(["git", "-C", str(pkg), "pull", "--ff-only"]).returncode != 0:
+        print("git pull failed; fix the package checkout and retry", file=sys.stderr)
+        return 1
+    print("2/4 downloading base regulation PDFs (checksum-verified)", file=sys.stderr)
+    env = dict(os.environ)
+    try:
+        import certifi
+        env.setdefault("SSL_CERT_FILE", certifi.where())  # python.org builds on macOS lack CA certificates
+    except ImportError:
+        pass
+    if subprocess.run([sys.executable, "tools/fetch_regulations.py", "--role", "base"], cwd=pkg, env=env).returncode != 0:
+        print("some PDFs failed to download; continuing with what is present", file=sys.stderr)
+    print("3/4 refreshing the corpus snapshot", file=sys.stderr)
+    args.fetch = False
+    if _bootstrap(args) != 0:
+        print("corpus is not ready; cannot run", file=sys.stderr)
+        return 1
+    cases = [c["case_id"] for c in package.list_cases(settings) if c["type"] == "main"]
+    case = args.case or next((c for c in cases if c.startswith(package.HELD_OUT_PREFIX)), None)
+    if not case or case not in cases:
+        print(f"held-out case not found (cases: {', '.join(cases)}); is it released yet?", file=sys.stderr)
+        return 1
+    if problem := team_id_problem(settings.default_team_id):
+        print(f"Warning: {problem}", file=sys.stderr)
+    print(f"4/4 running {case}", file=sys.stderr)
+    args.case, args.team, args.mode = case, None, "real"
+    return _run(args)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -137,6 +187,12 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--team", help="team_id (default: CERTIVITY_TEAM_ID)")
     run.add_argument("--mode", choices=["real", "fixture"])
     run.set_defaults(func=_run)
+
+    held = sub.add_parser("heldout", help="pull the package, fetch PDFs, refresh the corpus and run the held-out case")
+    held.add_argument("--case", help="case folder (default: the first heldout-* case)")
+    held.add_argument("--max-calls", type=int, help="extraction model-call budget (default: CERTIVITY_MAX_MODEL_CALLS)")
+    held.add_argument("--review-calls", type=int, help="review model-call budget (default: CERTIVITY_MAX_REVIEW_CALLS)")
+    held.set_defaults(func=_heldout)
 
     args = parser.parse_args(argv)
     return args.func(args)

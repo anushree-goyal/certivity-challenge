@@ -96,6 +96,8 @@ Entry points are configurable (`CERTIVITY_EP_*` in `.env.example`). Defaults:
 
 The held-out case arrives as a new folder in the participant package. Nothing in the code needs to change.
 
+**One command:** `certivity heldout` does steps 1–4 in one go: pull, download base PDFs, refresh the corpus, then run the first `heldout-*` case. It prints where the validated export was saved. Budgets: `--max-calls N --review-calls M`. Steps 1–5 below do the same in the UI.
+
 1. Run `git pull` in the participant package (`git -C data/participant-package pull`).
 2. Run `python tools/fetch_regulations.py --role base` in the participant package to download any new base PDFs.
 3. Start or refresh the app (`certivity serve`, then http://localhost:8000). If the banner says "Regulation package changed — corpus needs re-import", click **Re-import corpus** and wait for it to finish. The **Regulations** page shows what is downloaded and imported.
