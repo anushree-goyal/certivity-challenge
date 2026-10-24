@@ -92,11 +92,70 @@ Entry points are configurable (`CERTIVITY_EP_*` in `.env.example`). Defaults:
 - Download the validated JSON from the run and upload it on the platform. For the held-out case the **last valid upload counts**, so keep the chosen file. Teammate 3 coordinates scoring uploads.
 - Repository/demo: this repository plus `certivity serve`. No hosted services are required.
 
+## Progress is never lost (checkpoints, resume, export)
+
+Extraction saves each finished section to disk before starting the next one, so
+an interrupted run keeps what it read. Two caches sit outside the run folder:
+
+| Path | Holds | Turn off with |
+| --- | --- | --- |
+| `data/cache/checkpoints/<case>-<snapshot>-<input>-<prompts>/` | finished sections and their obligations | `CERTIVITY_CHECKPOINT_DIR=off` |
+| `data/cache/llm/{agent,quality}/` | model answers, keyed by the whole call | `CERTIVITY_LLM_CACHE=off` |
+
+Both are keyed on the work rather than the run id, so **running the same case
+again resumes it**: sections already finished are skipped, and model answers
+already paid for are replayed. Sections recorded as failed are retried, because
+those are usually timeouts. A prompt change gives a new checkpoint key, so a
+resume never keeps obligations the current prompt would not produce.
+
+```bash
+certivity run --case dev-rear-lamp            # resumes by itself; re-run to continue
+certivity run --case dev-rear-lamp --fast     # bounded mode, finishes inside the window
+certivity run --case dev-rear-lamp --fresh    # ignore saved checkpoints (keeps them)
+certivity export --latest --out upload.json   # valid JSON from checkpoints; no model call
+certivity export --run <id> --from-draft runs/<old>/agent/pipeline_draft.json
+certivity apistats --latest                   # calls, 429s, retries, tokens, cost, diagnosis
+certivity probe --calls 8 --concurrency 4     # controlled latency / rate-limit probe
+```
+
+`export` makes no API call, so it works when the provider does not. It runs the
+same deterministic checks and the same official export code as a full run: a
+requirement whose citation does not resolve is dropped, never guessed, so a gap
+shows up as fewer requirements rather than an invented page.
+
+### Extraction modes
+
+`full` (default) reads every section of every selected document, follows
+references and revises against review findings. `fast` reads the same corpus
+with the same prompts and citation checks, but caps how many sections are read
+(after prioritisation, so the tail that is dropped is the least promising), uses
+one batch per section, and skips the reference second pass and revision rounds.
+Fast mode does **not** narrow the regulation set: applicability already finds
+all four regulations the worked example expects, and the score weights recall.
+
+Per-dimension overrides for benchmarking: `CERTIVITY_MAX_SECTIONS_TOTAL`,
+`CERTIVITY_PASSAGES_PER_BATCH`, `CERTIVITY_MAX_PARALLEL_SECTIONS`,
+`CERTIVITY_MAX_REFERENCE_DEPTH`, `CERTIVITY_MAX_BATCHES_PER_SECTION`,
+`CERTIVITY_MAX_MODEL_CALLS`, `CERTIVITY_REQUEST_TIMEOUT_S`.
+
+### Rate limiting
+
+The shared limiter is **off** unless configured, and concurrency defaults are
+unchanged. Turn it on only against a measurement:
+`CERTIVITY_LIMIT_CONCURRENCY`, `CERTIVITY_LIMIT_REQUESTS_PER_MINUTE`,
+`CERTIVITY_LIMIT_INPUT_TOKENS_PER_MINUTE`. Retries are handled in the adapter
+rather than the SDK so every attempt and every `retry-after` is counted;
+`CERTIVITY_SDK_RETRIES=1` hands them back to the SDK.
+
 ## Sunday held-out steps
 
 The held-out case arrives as a new folder in the participant package. Nothing in the code needs to change.
 
-**One command:** `certivity heldout` does steps 1–4 in one go: pull, download base PDFs, refresh the corpus, then run the first `heldout-*` case. It prints where the validated export was saved. Budgets: `--max-calls N --review-calls M`. Steps 1–5 below do the same in the UI.
+**Check first that the Anthropic account has credit** (`certivity probe --calls 1`). Without it no extraction is possible, and `certivity export` is the only thing that still produces a file.
+
+**One command:** `certivity heldout` does steps 1–4 in one go: pull, download base PDFs, refresh the corpus, then run the first `heldout-*` case. It prints where the validated export was saved. Budgets: `--max-calls N --review-calls M`. Mode: `--fast` for the bounded run. Steps 1–5 below do the same in the UI.
+
+**If a run is interrupted or runs out of time:** re-run the same command to resume it, or run `certivity export --latest --out upload.json` to get a valid file from whatever finished. Upload early and often — the last valid upload counts, so a partial file uploaded at 11:00 is strictly better than nothing at 13:00.
 
 1. Run `git pull` in the participant package (`git -C data/participant-package pull`).
 2. Run `python tools/fetch_regulations.py --role base` in the participant package to download any new base PDFs.
