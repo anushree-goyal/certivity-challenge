@@ -295,7 +295,13 @@ def build_run_view(store: RunStore, run_id: str) -> dict[str, Any] | None:
     if mapping is None and official and len(official) == len(accepted):
         mapping = {d: r["id"] for d, r in zip(accepted, official)}
         view_warnings.append("Draft-to-requirement mapping inferred from export order; ask quality module for export_mapping.")
+    explicit_mapping = bool(mapping) and not view_warnings  # from the quality module, not inferred from order
     mapping = mapping or {}
+    # Drafts accepted by review but left out of the submission (draft_id -> reason). Older quality versions
+    # reported a list of {draft_id, reason}.
+    raw_excluded = export.get("excluded") or {}
+    excluded = (dict(raw_excluded) if isinstance(raw_excluded, dict)
+                else {e.get("draft_id"): e.get("reason") for e in raw_excluded if isinstance(e, dict)})
     official_by_id = {r["id"]: r for r in official}
 
     requirements = []
@@ -311,8 +317,20 @@ def build_run_view(store: RunStore, run_id: str) -> dict[str, Any] | None:
             "paragraph": primary.get("paragraph_label") if primary else None,
         }
         pdf_pages = (primary or {}).get("pdf_page_indices") or []
-        status = ("accepted" if did in accepted else "duplicate" if did in duplicates
-                  else "rejected" if did in rejected else "pending")
+        # "accepted" means it is in the submission: trust the export mapping, not accepted_draft_ids, because
+        # exclusions stay in accepted_draft_ids without a requirement ID.
+        if did in mapping:
+            status = "accepted"
+        elif did in duplicates:
+            status = "duplicate"
+        elif did in rejected:
+            status = "rejected"
+        elif did in excluded or (did in accepted and explicit_mapping):
+            status = "excluded"
+        elif did in accepted:
+            status = "accepted"  # no explicit mapping available: fall back to review acceptance
+        else:
+            status = "pending"
         requirements.append({
             "draft_id": did,
             "requirement_id": official_req["id"] if official_req else None,
@@ -326,6 +344,7 @@ def build_run_view(store: RunStore, run_id: str) -> dict[str, Any] | None:
             "unresolved_references": d.get("unresolved_references") or [],
             "duplicate_of": duplicates.get(did),
             "rejection_reason": rejected.get(did),
+            "exclusion_reason": (excluded.get(did) or "accepted by review but not in the export") if status == "excluded" else None,
             "findings": [f for f in findings if f.get("draft_id") == did],
             "source_link": {"document_id": primary["document_id"], "pdf_page_index": pdf_pages[0],
                             "printed_page": primary.get("printed_start_page")} if primary and pdf_pages else None,

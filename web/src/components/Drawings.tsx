@@ -76,14 +76,33 @@ function Plate({ x, y, w, h, depth = 6, r = 10, panel, children, dashed }: {
   );
 }
 
-/** One exploded part that drifts along the assembly axis and back, staggered from its neighbours. */
-function Part({ i, children }: { i: number; children: ReactNode }) {
+/** One exploded part: the outer group is what the step highlights target (lift, glow, dim); the inner group
+ *  keeps its own slow drift along the assembly axis, so the two transforms never fight. */
+function Part({ i, name, children }: { i: number; name: string; children: ReactNode }) {
   const drift = { "--dx": `${(i - 2) * 3}px`, "--dy": `${(2 - i) * 0.9}px`, animationDelay: `${i * 0.35}s` } as CSSProperties;
-  return <g className="fx-part" style={drift}>{children}</g>;
+  return (
+    <g className={`part part-${name}`} style={{ "--i": i } as CSSProperties}>
+      <g className="fx-part" style={drift}>{children}</g>
+    </g>
+  );
+}
+
+/** A small regulation tag with leader lines to the parts it applies to (shown for step 2). */
+function RegTag({ x, y, label, to }: { x: number; y: number; label: string; to: [number, number][] }) {
+  const w = label.length * 6.1 + 14;
+  return (
+    <g className="reg-tag">
+      {to.map(([tx, ty]) => <path key={`${tx}-${ty}`} d={`M${x + w / 2} ${y} L${tx} ${ty}`} className="fx-lead reg-lead" />)}
+      <rect x={x} y={y} width={w} height={14} rx={7} className="reg-pill" />
+      <text x={x + w / 2} y={y + 10} textAnchor="middle" className="fx-label reg-text">{label}</text>
+    </g>
+  );
 }
 
 /** Exploded view of a lamp-style assembly along an axis, with coded callouts and a dimension line. */
-export function ExplodedAssembly({ title = "ASSY-01 // EXPLODED VIEW" }: { title?: string }) {
+export function ExplodedAssembly({ title = "ASSY-01 // EXPLODED VIEW", step = null }: {
+  title?: string; step?: 1 | 2 | 3 | null;
+}) {
   const id = useSvgId();
   const panel = `${id}-panel`;
   const callouts: [number, number, number, number, string][] = [
@@ -94,7 +113,8 @@ export function ExplodedAssembly({ title = "ASSY-01 // EXPLODED VIEW" }: { title
     [452, 46, 430, 68, "OUTER LENS"],
   ];
   return (
-    <svg className="drawing-art fx" viewBox="0 0 540 330" role="img" aria-label="Technical exploded-view drawing of a generic lamp assembly">
+    <svg className="drawing-art fx" viewBox="0 0 540 330" role="img" data-step={step ?? undefined}
+         aria-label="Technical exploded-view drawing of a generic lamp assembly">
       <Defs id={id} />
       <rect width="540" height="330" fill={`url(#${id}-dots)`} />
       <HudFrame w={540} h={330} title={title} meta="SCALE 1:2 · REV A" />
@@ -103,14 +123,14 @@ export function ExplodedAssembly({ title = "ASSY-01 // EXPLODED VIEW" }: { title
       <path d="M40 262 L512 126" className="fx-axis" />
 
       <g filter={`url(#${id}-glow)`}>
-        <Part i={0}>
+        <Part i={0} name="housing">
           <Plate x={58} y={132} w={86} h={124} depth={16} r={14} panel={panel}>
             {[[18, 18], [68, 18], [18, 106], [68, 106]].map(([cx, cy]) => <circle key={`${cx}${cy}`} cx={cx} cy={cy} r={5} className="fx-ink fx-hollow" />)}
             <rect x={30} y={44} width={26} height={36} rx={4} className="fx-thin" />
           </Plate>
         </Part>
-        <Part i={1}><Plate x={160} y={114} w={78} h={112} depth={3} r={12} panel={panel} dashed /></Part>
-        <Part i={2}>
+        <Part i={1} name="gasket"><Plate x={160} y={114} w={78} h={112} depth={3} r={12} panel={panel} dashed /></Part>
+        <Part i={2} name="led">
           <Plate x={236} y={98} w={70} h={98} depth={4} r={4} panel={panel}>
             {[0, 1, 2].map((c) => [0, 1, 2, 3].map((r) => (
               <rect key={`${c}-${r}`} x={12 + c * 18} y={12 + r * 20} width={9} height={9} rx={1.5}
@@ -119,28 +139,30 @@ export function ExplodedAssembly({ title = "ASSY-01 // EXPLODED VIEW" }: { title
             <rect x={24} y={92} width={22} height={10} className="fx-ink fx-hollow" />
           </Plate>
         </Part>
-        <Part i={3}>
+        <Part i={3} name="reflector">
           <Plate x={318} y={80} w={74} h={104} depth={8} r={10} panel={panel}>
             <rect x={9} y={9} width={56} height={86} rx={8} className="fx-thin" />
             <rect x={18} y={18} width={38} height={68} rx={6} className="fx-thin" />
           </Plate>
         </Part>
-        <Part i={4}>
+        <Part i={4} name="lens">
           <Plate x={410} y={62} w={80} h={112} depth={10} r={16} panel={panel}>
             {[0, 1, 2, 3, 4, 5].map((k) => <path key={k} d={`M10 ${16 + k * 15} h60`} className="fx-thin" />)}
           </Plate>
         </Part>
-        {[[30, 270], [44, 292]].map(([x, y], k) => (
-          <g key={k} transform={`translate(${x} ${y}) rotate(-16)`}>
-            <rect x={0} y={-4} width={8} height={8} className="fx-ink fx-hollow" />
-            <path d="M8 0 H24" className="fx-ink" strokeWidth="2.4" strokeDasharray="1.6 1.4" />
-          </g>
-        ))}
+        <g className="part part-fasteners" style={{ "--i": 5 } as CSSProperties}>
+          {[[30, 270], [44, 292]].map(([x, y], k) => (
+            <g key={k} transform={`translate(${x} ${y}) rotate(-16)`}>
+              <rect x={0} y={-4} width={8} height={8} className="fx-ink fx-hollow" />
+              <path d="M8 0 H24" className="fx-ink" strokeWidth="2.4" strokeDasharray="1.6 1.4" />
+            </g>
+          ))}
+        </g>
       </g>
 
       {/* coded callouts with pulsing anchor points */}
       {callouts.map(([bx, by, tx, ty, label], k) => (
-        <g key={label}>
+        <g key={label} className="callout" style={{ "--i": k } as CSSProperties}>
           <path d={`M${bx} ${by + 7} L${tx} ${ty}`} className="fx-lead" />
           <circle cx={tx} cy={ty} r={2} className="fx-fill" />
           <circle cx={tx} cy={ty} r={5} className="fx-pulse" style={{ animationDelay: `${k * 0.4}s` }} />
@@ -155,6 +177,23 @@ export function ExplodedAssembly({ title = "ASSY-01 // EXPLODED VIEW" }: { title
       <path d="M66 296 V312 M494 296 V312" className="fx-dim" />
       <rect x="236" y="290" width="88" height="12" rx="2" className="fx-tag" />
       <text x="280" y="299" textAnchor="middle" className="fx-label">ASSEMBLY AXIS</text>
+
+      {/* step 2: which regulations apply to which parts (illustrative, labelled as an example) */}
+      <g className="reg-tag"><text x="516" y="36" textAnchor="end" className="fx-label example-tag">EXAMPLE TAGS · NOT A RESULT</text></g>
+      <RegTag x={214} y={222} label="UN R10" to={[[268, 196], [118, 246]]} />
+      <RegTag x={322} y={204} label="UN R150" to={[[356, 178]]} />
+      <RegTag x={436} y={186} label="UN R148" to={[[452, 164]]} />
+      <RegTag x={352} y={276} label="UN R48 · whole assembly" to={[]} />
+
+      {/* step 3: one example cited requirement (real text and page from UN R148, labelled as an example) */}
+      <g className="example-card">
+        <path d="M478 168 L470 206" className="fx-lead" />
+        <rect x="262" y="206" width="246" height="66" rx="6" className="example-rect" />
+        <text x="274" y="221" className="fx-label example-tag">EXAMPLE · NOT A RESULT</text>
+        <text x="274" y="237" className="fx-label example-text">Stop lamp S1 (steady): 60–260 cd</text>
+        <text x="274" y="250" className="fx-label example-text">luminous intensity, single lamp</text>
+        <text x="274" y="264" className="fx-label">UN R148 1.6.0 · ¶ 5.5.1 Table 7 · p. 19</text>
+      </g>
 
       {/* slow scan sweep */}
       <rect x="0" y="30" width="70" height="262" fill={`url(#${id}-scan)`} className="fx-scan" />

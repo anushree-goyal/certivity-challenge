@@ -121,3 +121,74 @@ def test_opaque_ids_with_reserved_characters_route_correctly(settings, monkeypat
         assert page.status_code == 200 and page.headers["x-printed-page-label"] == "3"
         assert client.get(f"/api/documents/{encoded}/pdf", params={"mode": "fixture"}).status_code == 404
     monkeypatch.setattr(fixture_mode.FixtureCorpus, "get_page_asset", original)
+
+
+def test_case_id_rule_allows_package_folders(settings):
+    with TestClient(create_app(settings, start_worker=False)) as client:
+        bad = client.post("/api/runs", data={"team_id": "t", "case_id": "Front Bumper", "spec_text": "lamp"})
+        assert bad.status_code == 422 and "lowercase" in bad.json()["detail"]
+        assert client.post("/api/runs", data={"team_id": "t", "case_id": "front-bumper-2", "spec_text": "lamp"}).status_code == 202
+        assert client.post("/api/runs", data={"team_id": "t", "package_case": "dev-rear-lamp"}).status_code == 202
+
+
+def test_health_exposes_no_local_paths(settings):
+    with TestClient(create_app(settings)) as client:
+        text = client.get("/api/health").text
+    assert str(settings.participant_package) not in text and str(settings.corpus_dir) not in text
+    assert '"path"' not in text
+
+
+def _package_copy(tmp_path, package):
+    """A writable copy of the participant package (index, tools, schemas, cases)."""
+    import shutil
+
+    copy = tmp_path / "package"
+    for name in ("regulations/index.json", "tools", "schemas", "cases"):
+        src, dst = package / name, copy / name
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        (shutil.copytree if src.is_dir() else shutil.copy2)(src, dst)
+    return copy
+
+
+def test_case_list_reflects_folders_on_disk_without_restart(settings, package, tmp_path):
+    settings = dataclasses.replace(settings, participant_package=_package_copy(tmp_path, package))
+    with TestClient(create_app(settings, start_worker=False)) as client:
+        assert [c["case_id"] for c in client.get("/api/cases").json()] == ["dev-rear-lamp"]
+        held_out = settings.cases_dir / "heldout-front-bumper"  # e.g. unzipped on Sunday morning
+        held_out.mkdir()
+        (held_out / "spec.md").write_text("# spec: Front bumper\n", encoding="utf-8")
+        assert "heldout-front-bumper" in [c["case_id"] for c in client.get("/api/cases").json()]
+        run = client.post("/api/runs", data={"team_id": "t", "package_case": "heldout-front-bumper"})
+        assert run.status_code == 202
+        assert client.get(f"/api/runs/{run.json()['run_id']}").json()["case_id"] == "heldout-front-bumper"
+
+
+def test_package_case_fixes_case_id_to_folder_name(settings):
+    with TestClient(create_app(settings, start_worker=False)) as client:
+        filled = client.post("/api/runs", data={"team_id": "t", "package_case": "dev-rear-lamp", "case_id": ""})
+        assert client.get(f"/api/runs/{filled.json()['run_id']}").json()["case_id"] == "dev-rear-lamp"
+        other = client.post("/api/runs", data={"team_id": "t", "package_case": "dev-rear-lamp", "case_id": "something-else"})
+        assert other.status_code == 422 and "folder name" in other.json()["detail"]
+
+
+def test_own_input_case_id_is_required_and_validated(settings):
+    with TestClient(create_app(settings, start_worker=False)) as client:
+        assert client.post("/api/runs", data={"team_id": "t", "spec_text": "lamp"}).status_code == 422
+        assert client.post("/api/runs", data={"team_id": "t", "case_id": "heldout_front", "spec_text": "lamp"}).status_code == 422
+        assert client.post("/api/runs", data={"team_id": "t", "case_id": "heldout-front-bumper", "spec_text": "lamp"}).status_code == 202
+
+
+def test_team_id_required(settings):
+    settings = dataclasses.replace(settings, default_team_id="")
+    with TestClient(create_app(settings, start_worker=False)) as client:
+        missing = client.post("/api/runs", data={"package_case": "dev-rear-lamp", "team_id": "  "})
+        assert missing.status_code == 422 and "team_id" in missing.json()["detail"]
+
+
+def test_fixture_processing_needs_dev_flag(settings):
+    settings = dataclasses.replace(settings, pipeline_mode="real")
+    with TestClient(create_app(settings, start_worker=False)) as client:
+        refused = client.post("/api/runs", data={"team_id": "t", "package_case": "dev-rear-lamp", "mode": "fixture"})
+        assert refused.status_code == 422 and "dev=1" in refused.json()["detail"]
+        allowed = client.post("/api/runs", data={"team_id": "t", "package_case": "dev-rear-lamp", "mode": "fixture", "dev": "true"})
+        assert allowed.status_code == 202 and allowed.json()["origin"] == "fixture"

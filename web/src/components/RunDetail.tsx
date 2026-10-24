@@ -7,11 +7,14 @@ import { ApplicabilityView, CoverageView, FindingsView, ProfileView, ValidationV
 import { CompareView } from "./CompareView";
 import { prettyCase } from "./Sidebar";
 import { SourceSheet } from "./Drawings";
+import { ExportPanel } from "./ExportPanel";
 
 const TABS = ["Requirements", "Product", "Applicability", "Coverage", "Review findings", "Validation", "Compare", "Log"] as const;
 type Tab = (typeof TABS)[number];
 
-export function RunDetail({ runId, onFinished }: { runId: string; onFinished: () => void }) {
+export function RunDetail({ runId, onFinished, onOpenRegulation }: {
+  runId: string; onFinished: () => void; onOpenRegulation: (regulation: string) => void;
+}) {
   const [status, setStatus] = useState<RunStatus | null>(null);
   const [view, setView] = useState<RunView | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -71,9 +74,7 @@ export function RunDetail({ runId, onFinished }: { runId: string; onFinished: ()
         {!status.finished && (status.cancel_requested
           ? <span className="muted small">Cancelling after the current stage…</span>
           : <button className="danger" onClick={() => api.cancel(runId).catch((e) => setError(String(e.message)))}>Cancel</button>)}
-        {view?.submission.available
-          ? <a className="button" href={api.submissionUrl(runId)} download>Export requirements JSON</a>
-          : <button disabled title="No validated submission for this run">Export requirements JSON</button>}
+        <ExportPanel runId={runId} status={status} view={view} />
       </div>
 
       {!status.finished && (
@@ -122,7 +123,7 @@ export function RunDetail({ runId, onFinished }: { runId: string; onFinished: ()
           </nav>
           {tab === "Requirements" && <RequirementsView view={view} runId={runId} onReview={setReview} />}
           {tab === "Product" && <ProfileView view={view} runId={runId} />}
-          {tab === "Applicability" && <ApplicabilityView view={view} />}
+          {tab === "Applicability" && <ApplicabilityView view={view} onOpenRegulation={onOpenRegulation} />}
           {tab === "Coverage" && <CoverageView view={view} />}
           {tab === "Review findings" && <FindingsView view={view} />}
           {tab === "Validation" && <ValidationView view={view} />}

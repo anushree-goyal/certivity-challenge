@@ -37,6 +37,7 @@ export function PipelineChip({ req, reviewComplete = true }: { req: Requirement;
   if (req.status === "accepted") return <span className="chip green" title="Accepted by the automated evidence review">Source-checked</span>;
   if (req.status === "duplicate") return <span className="chip neutral">Duplicate{req.duplicate_of ? ` of ${req.duplicate_of}` : ""}</span>;
   if (req.status === "rejected") return <span className="chip outline" title={req.rejection_reason ?? undefined}>Rejected</span>;
+  if (req.status === "excluded") return <span className="chip neutral" title={req.exclusion_reason ?? undefined}>Not exported</span>;
   return <span className="chip attention">Needs review</span>;
 }
 
