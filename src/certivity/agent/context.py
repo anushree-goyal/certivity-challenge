@@ -79,9 +79,15 @@ class RunContext:
             affected_ids=tuple(affected_ids),
             level=level,
         )
+        # Deliberately NOT under self.lock. emit_event is the caller's code: it
+        # writes to the application's run store, which has a lock of its own.
+        # Holding this lock across that call inverted the lock order against a
+        # worker that took the store's lock and then called warn(), and the
+        # first full run deadlocked after about 45 minutes - alive, sleeping,
+        # no progress. A lock may guard this object's own state and nothing
+        # else.
         try:
-            with self.lock:
-                self.emit_event(event)
+            self.emit_event(event)
         except Exception:  # pragma: no cover - a UI problem is not a run problem
             logger.warning("emit_event raised for stage %s", stage, exc_info=True)
 
@@ -91,6 +97,7 @@ class RunContext:
             if message in self.warnings:
                 return
             self.warnings.append(message)
+        # event() is called after releasing the lock, for the same reason.
         self.event(stage, message, level="warning")
 
     # -- model calls ------------------------------------------------------ #

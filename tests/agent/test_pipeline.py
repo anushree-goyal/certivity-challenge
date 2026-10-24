@@ -426,3 +426,35 @@ def test_usage_totals_survive_concurrent_accumulation(run_input, corpus, script)
     )
     draft = run_extraction(scoped, corpus, llm)
     assert draft.usage.calls == len(llm.calls)
+
+
+def test_emit_event_is_never_called_while_holding_the_context_lock():
+    """A lock may guard this object's own state and nothing else.
+
+    emit_event is the caller's code and writes to the application's run store,
+    which has its own lock. Holding RunContext.lock across that call inverted
+    the lock order against a worker that held the store's lock and then called
+    warn(). The first full run deadlocked after ~45 minutes: process alive,
+    sleeping, 25 threads, no progress.
+    """
+    from certivity.agent.context import RunContext
+
+    observed: list[bool] = []
+
+    def emit(event):
+        # If the lock were held by this thread's caller, a non-blocking
+        # acquire from here would fail.
+        got = ctx.lock.acquire(blocking=False)
+        observed.append(got)
+        if got:
+            ctx.lock.release()
+
+    ctx = RunContext(run_input=None, corpus=None, llm=None, emit_event=emit)
+    ctx.event("extract", "progress")
+    ctx.warn("something to report", stage="extract")
+
+    assert observed, "emit_event was never called"
+    assert all(observed), (
+        "emit_event was called while RunContext.lock was held; that is the "
+        "lock-order inversion that deadlocked the first full run"
+    )
