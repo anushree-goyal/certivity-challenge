@@ -17,7 +17,7 @@ export interface RunSummary {
 
 export interface RunStatus extends RunSummary {
   progress?: Progress; warnings: string[]; errors: RunError[]; finished: boolean;
-  revision_rounds?: number; corpus_snapshot_id?: string | null; events: RunEvent[];
+  revision_rounds?: number; corpus_snapshot_id?: string | null; events: RunEvent[]; started_at?: string | null;
   cancel_requested?: boolean; cancelled?: boolean;
 }
 
@@ -40,11 +40,12 @@ export interface Finding {
 
 export interface Requirement {
   draft_id: string; requirement_id: string | null;
-  status: "accepted" | "duplicate" | "rejected" | "pending";
+  status: "accepted" | "duplicate" | "rejected" | "excluded" | "pending";
   text: string; source: Source;
   applicability_condition?: string | null; applicability_reason?: string | null;
   primary_passage_id?: string | null; supporting_passage_ids: string[];
   unresolved_references: unknown[]; duplicate_of?: string | null; rejection_reason?: string | null;
+  exclusion_reason?: string | null;
   findings: Finding[];
   source_link: { document_id: string; pdf_page_index: number; printed_page: number | null } | null;
 }

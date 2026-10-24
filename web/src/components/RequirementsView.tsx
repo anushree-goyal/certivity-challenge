@@ -55,7 +55,7 @@ export function RequirementsView({ view, runId, onReview }: { view: RunView; run
           <select value={pipeline} onChange={(e) => setPipeline(e.target.value)} aria-label="Pipeline status">
             <option value="submission">In submission</option>
             <option value="attention">Needs review</option>
-            <option value="excluded">Duplicates / rejected</option>
+            <option value="excluded">Not in submission</option>
             <option value="">All drafts</option>
           </select>
           <select value={engineer} onChange={(e) => setEngineer(e.target.value)} aria-label="Engineer review">
@@ -147,6 +147,7 @@ function SourcePanel({ req, view, runId, onReview }: { req: Requirement; view: R
         {req.applicability_reason && <><dt>Why it applies</dt><dd>{req.applicability_reason}</dd></>}
         {req.duplicate_of && <><dt>Duplicate of</dt><dd className="mono">{req.duplicate_of}</dd></>}
         {req.rejection_reason && <><dt>Rejected</dt><dd>{req.rejection_reason}</dd></>}
+        {req.exclusion_reason && <><dt>Not exported</dt><dd>{req.exclusion_reason}</dd></>}
         {req.unresolved_references.length > 0 && <><dt>Open references</dt><dd><Value value={req.unresolved_references} /></dd></>}
       </dl>
 

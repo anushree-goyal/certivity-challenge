@@ -153,3 +153,25 @@ def test_cache_reuse_ignored_without_dev_flag(settings):
                                                 "reuse_cached": "true"}).json()
         assert normal["origin"] == "fresh"  # normal runs are always fresh
         wait_finished(client, normal["run_id"])
+
+
+def test_accepted_means_exported_and_exclusions_are_shown(settings, monkeypatch):
+    # Quality keeps an exclusion in accepted_draft_ids but gives it no requirement ID (de1cc18).
+    original = fake_modules.build_submission_detailed
+
+    def with_exclusion(run_input, draft, report, corpus):
+        result = original(run_input, draft, report, corpus)
+        dropped = report.accepted_draft_ids[-1]
+        result.submission["requirements"] = [r for r in result.submission["requirements"] if r["id"] != result.export_mapping[dropped]]
+        result.export_mapping = {d: rid for d, rid in result.export_mapping.items() if d != dropped}
+        result.excluded = {dropped: "exclusion: removes a case from scope, imposes no requirement"}
+        return result
+
+    monkeypatch.setattr(fake_modules, "build_submission_detailed", with_exclusion)
+    with TestClient(create_app(_real_settings(settings))) as client:
+        run = client.post("/api/runs", data={"package_case": "dev-rear-lamp", "team_id": "team-07"}).json()
+        wait_finished(client, run["run_id"])
+        reqs = {r["draft_id"]: r for r in client.get(f"/api/runs/{run['run_id']}/results").json()["requirements"]}
+        assert reqs["D-6"]["status"] == "excluded" and reqs["D-6"]["requirement_id"] is None
+        assert reqs["D-6"]["exclusion_reason"].startswith("exclusion:")
+        assert reqs["D-1"]["status"] == "accepted" and reqs["D-1"]["requirement_id"]
