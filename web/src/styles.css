@@ -4,8 +4,8 @@
 :root {
   color-scheme: dark;
   --bg: #000000;            /* main background */
-  --sidebar: rgba(17, 20, 19, .82);  /* dark grey, translucent over the line field */
-  --surface: rgba(22, 25, 26, .86);  /* cards and panels: dark grey */
+  --sidebar: rgba(14, 17, 17, .72);  /* dark grey, translucent over the background */
+  --surface: rgba(20, 24, 25, .7);   /* cards and panels: dark grey frosted glass */
   --surface-2: #0f2a22;     /* dark green: table headers, meta boxes, hover */
   --surface-3: #14382d;     /* dark green: selected rows */
   --text: #ffffff;
@@ -94,7 +94,7 @@ input[type="file"] { padding: .35rem; background: var(--bg); border-style: dashe
 label.check { display: flex; gap: .45rem; align-items: center; color: var(--text); }
 
 /* ---- surfaces ---- */
-.card { backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 1rem 1.1rem; min-width: 0; }
+.card { backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 1rem 1.1rem; min-width: 0; }
 .card + .card { margin-top: 1rem; }
 .workspace > .card + .card, .split > .card + .card, .form-grid > .card + .card { margin-top: 0; }
 .empty { display: grid; place-items: center; min-height: 60vh; text-align: center; color: var(--muted); }
@@ -105,7 +105,7 @@ label.check { display: flex; gap: .45rem; align-items: center; color: var(--text
 .crumbs span + span::before { content: "/"; margin: 0 .4rem; color: var(--border-strong); }
 .head { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; margin-bottom: .9rem; }
 .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .75rem; margin-bottom: .9rem; }
-.stat { backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: .7rem .9rem; box-shadow: var(--shadow); }
+.stat { backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: .7rem .9rem; box-shadow: var(--shadow); }
 .stat-label { font-size: .72rem; color: var(--teal); text-transform: uppercase; letter-spacing: .05em; }
 .stat-value { font-size: 1.6rem; font-weight: 650; color: var(--text); font-variant-numeric: tabular-nums; }
 .stat.attention { border-left: 3px solid var(--graphite-edge); background: linear-gradient(90deg, var(--graphite-soft), var(--surface) 70%); }
@@ -270,7 +270,13 @@ ul.plain { margin: 0; padding-left: 1rem; font-size: .83rem; }
 @media (max-width: 860px) { .hero { grid-template-columns: minmax(0, 1fr); } }
 
 /* ---- background line field (fixed to the viewport) ---- */
-.bg-paths { position: fixed; inset: 0; z-index: 0; pointer-events: none; color: #ffffff; overflow: hidden; }
+.bg-paths { position: fixed; inset: 0; z-index: 0; pointer-events: none; color: #ffffff; overflow: hidden;
+  /* deep teal glow left of centre fading to black (from the reference image) */
+  background:
+    radial-gradient(ellipse 40% 36% at 30% 58%, rgba(9, 58, 63, 1) 0%, rgba(6, 42, 46, .75) 38%, rgba(3, 22, 25, 0) 100%),
+    radial-gradient(ellipse 60% 55% at 26% 62%, rgba(4, 30, 33, .85) 0%, rgba(2, 16, 18, .5) 50%, rgba(0, 0, 0, 0) 100%),
+    radial-gradient(ellipse 45% 40% at 8% 88%, rgba(3, 20, 22, .6) 0%, rgba(0, 0, 0, 0) 100%),
+    linear-gradient(115deg, #030a0c 0%, #020607 45%, #010203 100%); }
 .bg-paths-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 
 /* ---- glass "New analysis" button ---- */
