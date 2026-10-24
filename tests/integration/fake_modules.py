@@ -122,6 +122,7 @@ SEEN: dict[str, Any] = {}
 
 def create_llm(*, cache_dir=None, max_calls=None, model_overrides=None, timeout_s=None, max_retries=None):
     SEEN["cache_dir"] = cache_dir
+    SEEN["max_calls"] = max_calls
     return FakeLLM(cache_dir)
 
 
@@ -179,3 +180,10 @@ def build_submission_detailed(run_input, draft, report, corpus):
         req["id"] = f"Q-{draft_id}"
         ids[draft_id] = req["id"]
     return SubmissionResult(submission, ids, [{"draft_id": "D-3", "reason": "duplicate"}], [])
+
+
+@dataclass(frozen=True)
+class RunConfig:
+    max_model_calls: int | None = 400
+    request_timeout_s: float = 120.0
+    max_retries: int = 2

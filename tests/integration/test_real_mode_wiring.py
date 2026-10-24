@@ -31,7 +31,7 @@ def test_real_mode_passes_module_records_between_stages(settings):
         assert status["corpus_snapshot_id"] == "fake-snapshot-1"
         assert fake_modules.CALLS == ["extract", "review", "revise:1", "review"]
         agent_dir = client.app.state.store.module_dir(run["run_id"], "agent")
-        assert fake_modules.SEEN == {"cache_dir": agent_dir / "llm-cache", "artifacts_dir": agent_dir}
+        assert fake_modules.SEEN == {"cache_dir": agent_dir / "llm-cache", "artifacts_dir": agent_dir, "max_calls": None}
         assert status_llm(client, run["run_id"]) == "fake-model"
 
         view = client.get(f"/api/runs/{run['run_id']}/results").json()
@@ -124,3 +124,14 @@ def test_source_pages_need_only_the_corpus_module(settings):
         docs = client.get("/api/documents").json()
         assert isinstance(docs, list) and docs
         assert client.get(f"/api/documents/{docs[0]['document_id']}/pages/0").status_code == 200
+
+
+def test_model_call_budget_reaches_the_adapter(settings):
+    s = _real_settings(settings)
+    s = dataclasses.replace(s, max_model_calls=7, entry_points={
+        **s.entry_points, "run_config_record": "tests.integration.fake_modules:RunConfig"})
+    with TestClient(create_app(s)) as client:
+        run = client.post("/api/runs", data={"package_case": "dev-rear-lamp", "team_id": "team-07"}).json()
+        wait_finished(client, run["run_id"])
+        assert fake_modules.SEEN["max_calls"] == 7
+        assert client.app.state.store.read(run["run_id"])["model_call_budget"] == 7

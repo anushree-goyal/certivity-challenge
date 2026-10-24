@@ -113,18 +113,8 @@ def execute_run(run_id: str, store: RunStore, settings: Settings) -> None:
         snapshot_id = snapshot_id_of(corpus)
         if snapshot_id is None:
             warnings.append("Corpus did not report a snapshot_id.")
-        agent_dir = store.module_dir(run_id, "agent")
-        llm = comps.create_llm(agent_dir)
-        llm_description = describe_llm(llm)
-        store.update(run_id, corpus_snapshot_id=snapshot_id, llm_identity=llm_description.get("model") or "",
-                     llm_description=llm_description)
-        if not llm_configured(llm_description):
-            # The adapter refuses calls without credentials; fail now with the reason, before any work.
-            raise ComponentError("No model credentials are configured, so no requirements can be extracted. "
-                                 "Set the model environment variables (docs/agent/dependencies.md) and restart.")
-
         run_dir = store.run_dir(run_id)
-        run_input = comps.make_run_input({
+        fields = {
             "run_id": run_id,
             "team_id": manifest["team_id"],
             "case_id": manifest["case_id"],
@@ -132,7 +122,28 @@ def execute_run(run_id: str, store: RunStore, settings: Settings) -> None:
             "drawing_paths": [str(run_dir / "input" / n) for n in manifest.get("drawing_files", [])],
             "input_hash": manifest["input_hash"],
             "corpus_snapshot_id": snapshot_id,
-        })
+        }
+        if settings.max_model_calls is not None and comps.make_run_config is not None:
+            fields["config"] = comps.make_run_config(max_model_calls=settings.max_model_calls)
+        run_input = comps.make_run_input(fields)
+
+        # One adapter for extraction and review, bounded by the run's own limits: the call budget is enforced
+        # by the adapter, so it must be passed here or the run has no cap.
+        config = run_input.get("config") if isinstance(run_input, dict) else getattr(run_input, "config", None)
+        limits = {k: v for k, v in {
+            "max_calls": getattr(config, "max_model_calls", settings.max_model_calls),
+            "timeout_s": getattr(config, "request_timeout_s", None),
+            "max_retries": getattr(config, "max_retries", None),
+        }.items() if v is not None}
+        agent_dir = store.module_dir(run_id, "agent")
+        llm = comps.create_llm(agent_dir, **limits)
+        llm_description = describe_llm(llm)
+        store.update(run_id, corpus_snapshot_id=snapshot_id, llm_identity=llm_description.get("model") or "",
+                     llm_description=llm_description, model_call_budget=limits.get("max_calls"))
+        if not llm_configured(llm_description):
+            # The adapter refuses calls without credentials; fail now with the reason, before any work.
+            raise ComponentError("No model credentials are configured, so no requirements can be extracted. "
+                                 "Set the model environment variables (docs/agent/dependencies.md) and restart.")
 
         emit.set_stage("extraction", "Extracting requirements")
         # Modules exchange their own record objects; the app keeps JSON copies for storage and the view.

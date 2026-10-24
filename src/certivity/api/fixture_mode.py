@@ -240,7 +240,8 @@ def components(settings: Settings):
     return Components(
         mode="fixture",
         open_corpus=lambda snapshot_id=None: FixtureCorpus(),
-        create_llm=lambda agent_dir: FixtureLLM(),
+        create_llm=lambda agent_dir, **limits: FixtureLLM(),
+        make_run_config=None,
         run_extraction=run_extraction,
         revise_extraction=revise_extraction,
         review_requirements=review_requirements,

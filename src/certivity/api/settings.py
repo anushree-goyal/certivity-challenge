@@ -44,6 +44,7 @@ class Settings:
     default_team_id: str
     max_revision_rounds: int
     run_time_budget_s: int
+    max_model_calls: int | None  # None: the contracts' RunConfig default
     entry_points: dict[str, str] = field(default_factory=dict)
 
     @property
@@ -68,6 +69,7 @@ DEFAULT_ENTRY_POINTS = {
     "validate_submission": "certivity.quality:validate_submission",
     "evaluate_case": "certivity.evaluation:evaluate_case",
     "make_run_input": "certivity.contracts:make_run_input",
+    "run_config_record": "certivity.contracts:RunConfig",
 }
 
 
@@ -89,5 +91,6 @@ def load_settings() -> Settings:
         default_team_id=os.environ.get("CERTIVITY_TEAM_ID", ""),
         max_revision_rounds=_int("CERTIVITY_MAX_REVISION_ROUNDS", 2),
         run_time_budget_s=_int("CERTIVITY_RUN_TIME_BUDGET_S", 3 * 3600),
+        max_model_calls=int(os.environ["CERTIVITY_MAX_MODEL_CALLS"]) if os.environ.get("CERTIVITY_MAX_MODEL_CALLS") else None,
         entry_points=entry_points,
     )

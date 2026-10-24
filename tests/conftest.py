@@ -28,7 +28,7 @@ def package() -> Path:
 def settings(tmp_path, package) -> Settings:
     return Settings(
         runs_dir=tmp_path / "runs", participant_package=package, corpus_dir=tmp_path / "corpus",
-        pipeline_mode="fixture", default_team_id="team-test", max_revision_rounds=2, run_time_budget_s=600,
+        pipeline_mode="fixture", default_team_id="team-test", max_revision_rounds=2, run_time_budget_s=600, max_model_calls=None,
         entry_points=dict(DEFAULT_ENTRY_POINTS),
     )
 

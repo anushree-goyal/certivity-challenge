@@ -41,7 +41,8 @@ def resolve(entry_point: str) -> Any:
 class Components:
     mode: str
     open_corpus: Callable[..., Any]  # open_corpus(snapshot_id=None): None opens the current snapshot
-    create_llm: Callable[[Path], Any]  # takes the run's agent/ folder for the model-call cache
+    create_llm: Callable[..., Any]  # create_llm(agent_dir, max_calls=, timeout_s=, max_retries=)
+    make_run_config: Callable[..., Any] | None  # contracts.RunConfig, for per-run limits
     run_extraction: Callable[..., Any]
     revise_extraction: Callable[..., Any] | None
     review_requirements: Callable[..., Any]
@@ -54,7 +55,7 @@ class Components:
 
 REQUIRED = ("open_corpus", "create_llm", "run_extraction", "review_requirements",
             "build_submission", "validate_submission", "make_run_input")
-OPTIONAL = ("revise_extraction", "evaluate_case", "build_submission_detailed")
+OPTIONAL = ("revise_extraction", "evaluate_case", "build_submission_detailed", "run_config_record")
 
 
 def _record_factory(factory: Any) -> Callable[[dict[str, Any]], Any]:
@@ -135,7 +136,8 @@ def load_components(settings: Settings, mode: str | None = None) -> Components:
         mode="real",
         open_corpus=lambda snapshot_id=None: (call_accepting(open_corpus, settings.corpus_dir, snapshot_id=snapshot_id)
                                               if snapshot_id else open_corpus(settings.corpus_dir)),
-        create_llm=lambda agent_dir: call_accepting(create_llm, cache_dir=Path(agent_dir) / "llm-cache"),
+        create_llm=lambda agent_dir, **limits: call_accepting(create_llm, cache_dir=Path(agent_dir) / "llm-cache", **limits),
+        make_run_config=loaded["run_config_record"],
         run_extraction=loaded["run_extraction"],
         revise_extraction=loaded["revise_extraction"],
         review_requirements=loaded["review_requirements"],
