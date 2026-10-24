@@ -1,8 +1,13 @@
 # Contract proposal from the corpus component (for Anushree)
 
-> **Superseded for record shapes:** the corpus now produces the records exactly as defined in `certivity.contracts`
-> 1.1.0 (`feature/agent`). The decisions below that are still open are the namespace format, the ID format and the
-> `paragraph_label` form (bare label or citation form); the corpus keeps its current formats until those are settled.
+> **Settled.** Anushree answered every item and published contracts 1.3.0; the corpus now implements it (merged
+> from `feature/agent`). Decisions: machine namespaces via `namespace_for` (`annex:6/part:6`, `annex:5/appendix`,
+> `appendix:2`, `introduction`, `part:i`); label-keyed passage IDs `passage_id_for(doc, namespace, label, ordinal)`;
+> `paragraph_label` in citation form, built by the corpus; printed pages as strings, read from the footer;
+> `get_passages` omits unknown IDs; `read_scope` returns the whole Definitions clause; `table_context` = caption +
+> headers + footnotes (interim rule); `visual_pdf_page_indices` kept; `get_document` and
+> `list_reference_candidates` joined `CorpusReader`, `search` is the optional `CorpusSearch`. The text below is the
+> original proposal, kept for the record.
 
 `src/certivity/contracts.py` did not exist when the corpus was built. To avoid blocking, the corpus imports
 `certivity.contracts` when present and otherwise uses

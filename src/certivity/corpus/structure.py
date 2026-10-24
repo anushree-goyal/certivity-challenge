@@ -139,6 +139,47 @@ def namespace_parts(namespace: str) -> dict[str, str]:
     return out
 
 
+# The corpus keeps namespaces internally in the human form above ("Annex 6 Part 6"), from which citation labels are
+# built. Records and IDs carry the contract's machine form ("annex:6/part:6", see certivity.contracts.namespace_for).
+_DIVISIONS = ("annex", "part", "appendix")
+
+
+def machine_namespace(namespace: str) -> str:
+    """'Annex 6 Part 6' -> 'annex:6/part:6', 'Annex 5 Appendix' -> 'annex:5/appendix', 'Introduction' -> 'introduction'."""
+    from certivity.contracts import namespace_for
+
+    tokens = namespace.split()
+    if len(tokens) == 1 and tokens[0].lower() not in _DIVISIONS:
+        return namespace_for(tokens[0].lower())  # main, introduction
+    segments: list = []
+    i = 0
+    while i < len(tokens):
+        kind = tokens[i].lower()
+        label = tokens[i + 1] if i + 1 < len(tokens) and tokens[i + 1].lower() not in _DIVISIONS else None
+        segments.append((kind, label) if label else kind)
+        i += 2 if label else 1
+    return namespace_for(*segments)
+
+
+def human_namespace(namespace: str) -> str:
+    """Inverse of machine_namespace; also accepts the human form unchanged ('Annex 6, Part 6' -> 'Annex 6 Part 6')."""
+    from certivity.contracts import parse_namespace
+
+    text = namespace.strip()
+    if ":" in text or "/" in text or text.lower() in ("main", "introduction", *_DIVISIONS):
+        parts = parse_namespace(text.lower())
+        if parts == (("main", None),):
+            return MAIN
+        if parts == (("introduction", None),):
+            return INTRODUCTION
+        found = {kind: (label.upper() if label else " ") for kind, label in parts}
+        return namespace_label(found.get("annex"), found.get("part"), found.get("appendix"))
+    found = {k.lower(): v.rstrip(".,").upper() for k, v in re.findall(r"(Annex|Part|Appendix)\s+(\w+)", text, re.IGNORECASE)}
+    if re.search(r"\bAppendix\s*$", text, re.IGNORECASE) and "appendix" not in found:
+        found["appendix"] = " "
+    return namespace_label(found.get("annex"), found.get("part"), found.get("appendix")) if found else (INTRODUCTION if text.lower() == "introduction" else MAIN)
+
+
 # --- definitions --------------------------------------------------------------------------------
 
 _QUOTE = "\"“”„'‘’"

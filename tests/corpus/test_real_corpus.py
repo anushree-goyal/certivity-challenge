@@ -29,7 +29,7 @@ def test_every_page_has_a_verified_printed_label(corpus):
 
 def test_known_paragraph_text_and_page(corpus, docs, by_label):
     p = by_label(docs["UN R48"].document_id, "6.10.4.2")
-    assert p.printed_start_page == "50" and p.pdf_page_indices == (49,) and p.printed_page_span == ("50",)
+    assert p.printed_start_page == "50" and p.pdf_page_indices == (49,) and p.page_span == ("50",)
     assert "not less than 350 mm nor more than 1,500 mm" in p.text
     assert p.heading_ancestry[-2:] == ["6. Individual specifications", "6.10. Rear position lamp"] or "6.10.4. Position" in p.heading_ancestry[-1]
 
@@ -39,8 +39,8 @@ def test_paragraph_spanning_pages_keeps_both_pages(corpus, docs):
     spanning = [p for s in corpus.list_sections(doc) for p in corpus.read_section(s.section_id, False).primary_passages if "spans_pages" in p.parsing_flags and "kind:paragraph" in p.parsing_flags]
     assert spanning, "expected at least one cross-page paragraph in R48"
     p = spanning[0]
-    span = [int(n) for n in p.printed_page_span]
-    assert len(span) == 2 and span[1] == span[0] + 1 and p.printed_start_page == p.printed_page_span[0]
+    span = [int(n) for n in p.page_span]
+    assert len(span) == 2 and span[1] == span[0] + 1 and p.printed_start_page == p.page_span[0]
     assert list(p.pdf_page_indices) == [n - 1 for n in span]
 
 
@@ -55,17 +55,17 @@ def test_repeated_label_across_annex_parts_stays_distinct(corpus, docs):
 
 def test_table_keeps_numeric_values(corpus, docs):
     doc = docs["UN R150"].document_id
-    tables = [p for s in corpus.list_sections(doc) if s.namespace == "Annex 6 Part 6" for p in corpus.read_section(s.section_id, False).primary_passages if "kind:table" in p.parsing_flags]
+    tables = [p for s in corpus.list_sections(doc) if s.namespace == "annex:6/part:6" for p in corpus.read_section(s.section_id, False).primary_passages if "kind:table" in p.parsing_flags]
     text = "\n".join(t.text for t in tables)
     assert "Table A6-1" in text and "0.51 ± 0.02" in text and "50 ± 10" in text
 
 
 def test_section_bundle_separates_primary_and_context(corpus, docs):
     doc = docs["UN R48"].document_id
-    section = next(s for s in corpus.list_sections(doc) if s.number == "6.10" and s.namespace == "main")
+    section = next(s for s in corpus.list_sections(doc) if s.paragraph_label == "6.10" and s.namespace == "main")
     bundle = corpus.read_section(section.section_id)
     primary_ids = {p.passage_id for p in bundle.primary_passages}
-    assert [p.passage_id for p in bundle.primary_passages] == list(section.passage_ids)
+    assert [p.passage_id for p in bundle.primary_passages] == list(section.primary_passage_ids)
     assert primary_ids.isdisjoint(p.passage_id for p in bundle.context_passages)
     roles = {f for p in bundle.context_passages for f in p.parsing_flags if f.startswith("context:")}
     assert roles == {"context:parent", "context:definition"}
@@ -124,7 +124,7 @@ def test_page_asset_renders_exact_physical_page(corpus, docs):
 
 def test_unknown_ids_raise(corpus, docs):
     # get_passages omits unknown IDs (contract); the other lookups raise
-    known = corpus.list_sections(docs["UN R48"].document_id)[3].passage_ids[0]
+    known = corpus.list_sections(docs["UN R48"].document_id)[3].primary_passage_ids[0]
     assert corpus.get_passages(["nope"]) == []
     assert [p.passage_id for p in corpus.get_passages(["nope", known, known])] == [known]
     with pytest.raises(UnknownId):
@@ -136,7 +136,7 @@ def test_unknown_ids_raise(corpus, docs):
 
 def test_get_passages_preserves_order(corpus, docs):
     doc = docs["UN R48"].document_id
-    ids = corpus.list_sections(doc)[5].passage_ids[:3]
+    ids = corpus.list_sections(doc)[5].primary_passage_ids[:3]
     assert [p.passage_id for p in corpus.get_passages(list(reversed(ids)))] == list(reversed(ids))
 
 
@@ -157,7 +157,7 @@ def test_snapshot_is_read_only_and_thread_safe(corpus, docs):
 
 
 def test_contract_shapes(corpus, docs, by_label, paths):
-    from certivity.corpus._contracts import DocumentRole, PageRef, ReferenceStatus
+    from certivity.corpus._contracts import DocumentRole, ReferenceStatus
 
     # documents: role enum, verbatim index entry, index.json order
     listed = corpus.list_documents(DocumentRole.BASE)
@@ -167,12 +167,16 @@ def test_contract_shapes(corpus, docs, by_label, paths):
     assert r48.role is DocumentRole.BASE and r48.index_entry["regulation"] == "UN R48" and r48.index_entry["versions"]
     # tables: is_table + table_context
     doc = docs["UN R150"].document_id
-    table = next(p for s in corpus.list_sections(doc) if s.namespace == "Annex 6 Part 6" for p in corpus.read_section(s.section_id, False).primary_passages if p.is_table)
+    table = next(p for s in corpus.list_sections(doc) if s.namespace == "annex:6/part:6" for p in corpus.read_section(s.section_id, False).primary_passages if p.is_table)
     assert table.table_context.startswith("Table A6-1") and "Columns:" in table.table_context
-    # bundle page refs with reasons
-    section = next(s for s in corpus.list_sections(doc) if s.namespace == "Annex 6 Part 6")
-    refs = corpus.read_section(section.section_id).page_refs
-    assert refs and all(isinstance(r, PageRef) and r.reason and r.printed_page == str(r.pdf_page_index + 1) for r in refs)
+    # bundle visual pages, machine namespace on records, citation label on sections
+    section = next(s for s in corpus.list_sections(doc) if s.namespace == "annex:6/part:6")
+    assert section.paragraph_label == "Annex 6 Part 6" and section.section_id == f"{doc}#annex:6/part:6/root"
+    bundle = corpus.read_section(section.section_id)
+    assert 45 in bundle.visual_pdf_page_indices and all(p.namespace == "annex:6/part:6" for p in bundle.primary_passages)
+    # label-keyed passage IDs: paragraph @001, its table @002
+    para = next(p for p in bundle.primary_passages if p.paragraph_label == "Annex 6 Part 6 3.2" and "kind:paragraph" in p.parsing_flags)
+    assert para.passage_id == f"{doc}#annex:6/part:6/3.2@001" and table.passage_id == f"{doc}#annex:6/part:6/3.2@002"
     # resolution carries its request, enum status and resolved ids
     origin = by_label(r48.document_id, "6.10.5.1")
     req = corpus.list_reference_candidates([origin.passage_id])[0]
@@ -202,3 +206,26 @@ def test_figure_caption_is_not_merged_into_paragraph(corpus, docs, by_label):
     assert "Figure I" not in p.text and p.text.endswith("shown in Annex 7.")
     section = corpus.read_section(p.section_id, False)
     assert any("kind:caption" in q.parsing_flags and q.text == "Figure I" for q in section.primary_passages)
+
+
+def test_document_ids_follow_contract(docs):
+    from certivity.contracts import document_id_for
+
+    r48 = docs["UN R48"]
+    assert r48.document_id == document_id_for("UN R48", "9.3.0", r48.checksum) == "un-r48:9-3-0:sha256-d4b1dde87bf8"
+
+
+def test_table_context_includes_page_footnotes(corpus, docs):
+    found = 0
+    for doc in docs.values():
+        for s in corpus.list_sections(doc.document_id):
+            for p in corpus.read_section(s.section_id, False).primary_passages:
+                if p.is_table and p.table_context and "Footnotes:" in p.table_context:
+                    found += 1
+    assert found > 20  # footnote-like text on a table's page now reaches table_context
+
+
+def test_reader_satisfies_published_protocols(corpus):
+    from certivity.contracts import CorpusReader, CorpusSearch
+
+    assert isinstance(corpus, CorpusReader) and isinstance(corpus, CorpusSearch)
