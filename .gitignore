@@ -218,3 +218,12 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- Certivity application ---
+runs/
+data/participant-package/
+data/cache/
+web/node_modules/
+web/dist/
+*.pdf
+*.tsbuildinfo
