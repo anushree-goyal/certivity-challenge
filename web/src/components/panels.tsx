@@ -103,6 +103,10 @@ export function FindingsView({ view }: { view: RunView }) {
         <Value value={view.remaining_issues} />
         <h3>Unresolved references</h3>
         <Value value={view.unresolved_references} />
+        <h3>Export: blocking issues</h3>
+        <Value value={view.export_blocking_issues} />
+        <h3>Export: excluded drafts</h3>
+        <Value value={view.export_excluded} />
         <h3>Pipeline warnings</h3>
         <Value value={view.pipeline_warnings} />
       </section>

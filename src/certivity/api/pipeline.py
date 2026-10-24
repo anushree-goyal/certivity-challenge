@@ -57,12 +57,24 @@ class RunCancelled(Exception):
     """Raised at the next stage boundary after a user asks to cancel."""
 
 
+REVISION_REQUEST_FIELDS = ("requested_context", "requested_correction")
+
+
 def _needs_revision(report: dict) -> list[int]:
     """Indices of findings asking extraction for more context or a correction."""
     if report.get("needs_revision") is False:
         return []
     return [i for i, f in enumerate(report.get("findings") or [])
-            if isinstance(f, dict) and any(v for k, v in f.items() if k.startswith("requested") and v)]
+            if isinstance(f, dict) and any(f.get(k) for k in REVISION_REQUEST_FIELDS)]
+
+
+def review_incomplete(report: dict) -> bool:
+    """The quality module marks a partial review (no credential, call budget spent) as a review_incomplete issue."""
+    return "review_incomplete" in json.dumps(report.get("remaining_issues") or [])
+
+
+def _part(result: Any, name: str) -> Any:
+    return result.get(name) if isinstance(result, dict) else getattr(result, name, None)
 
 
 def _findings_of(report_obj: Any, indices: list[int]) -> list:
@@ -155,7 +167,14 @@ def execute_run(run_id: str, store: RunStore, settings: Settings) -> None:
         store.write_artifact(run_id, "quality_report.json", report)
 
         emit.set_stage("export", "Building and validating submission")
-        submission = to_jsonable(comps.build_submission(run_input, draft_obj, report_obj, corpus))
+        if comps.build_submission_detailed is not None:
+            result = comps.build_submission_detailed(run_input, draft_obj, report_obj, corpus)
+            submission = to_jsonable(_part(result, "submission"))
+            export = {k: to_jsonable(_part(result, k)) for k in ("export_mapping", "excluded", "blocking_issues")}
+        else:
+            submission = to_jsonable(comps.build_submission(run_input, draft_obj, report_obj, corpus))
+            export = {}
+        store.write_artifact(run_id, "export.json", export)
         emit.check_cancelled()
         validation = to_jsonable(comps.validate_submission(submission, settings.participant_package))
         valid = bool(first(validation, "valid", "is_valid", default=False))
@@ -189,10 +208,16 @@ def execute_run(run_id: str, store: RunStore, settings: Settings) -> None:
         remaining = report.get("remaining_issues") or []
         if remaining:
             warnings.append(f"Review left {len(remaining)} unresolved issue(s).")
+        if review_incomplete(report):
+            warnings.append("Review was incomplete (review_incomplete): requirements are not verified.")
+        blocking = export.get("blocking_issues") or []
+        if blocking:
+            warnings.append(f"Export reported {len(blocking)} blocking issue(s).")
         if not valid:
             warnings.append("Submission did not pass the official validator; no download is offered.")
 
-        state = RunState.COMPLETED if valid and not coverage_open and not remaining and not _needs_revision(report) else RunState.PARTIAL
+        state = (RunState.COMPLETED if valid and not coverage_open and not remaining and not blocking
+                 and not _needs_revision(report) else RunState.PARTIAL)
         if not valid and not submission.get("requirements"):
             state = RunState.FAILED
         store.update(run_id, state=state.value, stage="done", finished_at=now_iso(),
@@ -247,7 +272,8 @@ def build_run_view(store: RunStore, run_id: str) -> dict[str, Any] | None:
     # Link official requirements back to drafts. Prefer an explicit mapping from the quality module.
     view_warnings = []
     official = (submission or {}).get("requirements") or []
-    mapping = first(report, "export_mapping", "requirement_id_by_draft")
+    export = store.read_artifact(source_id, "export.json") or {}
+    mapping = export.get("export_mapping") or first(report, "export_mapping", "requirement_id_by_draft")
     if mapping is None and official and len(official) == len(accepted):
         mapping = {d: r["id"] for d, r in zip(accepted, official)}
         view_warnings.append("Draft-to-requirement mapping inferred from export order; ask quality module for export_mapping.")
@@ -305,6 +331,9 @@ def build_run_view(store: RunStore, run_id: str) -> dict[str, Any] | None:
         "coverage": {"items": coverage, "counts": counts},
         "findings": findings,
         "remaining_issues": report.get("remaining_issues") or [],
+        "review_complete": not review_incomplete(report),
+        "export_excluded": export.get("excluded") or [],
+        "export_blocking_issues": export.get("blocking_issues") or [],
         "unresolved_references": draft.get("unresolved_references") or [],
         "pipeline_warnings": draft.get("warnings") or [],
         "view_warnings": view_warnings,

@@ -95,6 +95,7 @@ class FakeLLM:
 
 
 CREDENTIALS = [True]
+REVIEW_INCOMPLETE = [False]
 SEEN: dict[str, Any] = {}
 
 
@@ -124,8 +125,10 @@ def review_requirements(run_input, draft, corpus, llm, emit_event):
     CALLS.append("review")
     raw = fixture_mode.review_requirements(run_input, asdict(draft), corpus, llm, emit_event)
     findings = [Finding(**f) for f in raw["findings"]]
-    return QualityReport(raw["accepted_draft_ids"], findings, raw["duplicate_mapping"], raw["rejected"],
-                         raw["remaining_issues"], {d: f"R-{i:03d}" for i, d in enumerate(raw["accepted_draft_ids"], 1)})
+    remaining = list(raw["remaining_issues"])
+    if REVIEW_INCOMPLETE[0]:
+        remaining.append({"category": "review_incomplete", "explanation": "no model credential"})
+    return QualityReport(raw["accepted_draft_ids"], findings, raw["duplicate_mapping"], raw["rejected"], remaining)
 
 
 def build_submission(run_input, draft, report, corpus):
@@ -137,3 +140,21 @@ def build_submission(run_input, draft, report, corpus):
 
 def validate_submission(submission, participant_package_path):
     return fixture_mode.validate_submission(submission, participant_package_path)
+
+
+@dataclass
+class SubmissionResult:
+    submission: dict[str, Any]
+    export_mapping: dict[str, str]
+    excluded: list[dict[str, str]]
+    blocking_issues: list[str]
+
+
+def build_submission_detailed(run_input, draft, report, corpus):
+    submission = build_submission(run_input, draft, report, corpus)
+    # Deliberately not export order: proves the app uses export_mapping.
+    ids = {d: f"R-{i:03d}" for i, d in enumerate(report.accepted_draft_ids, 1)}
+    for req, draft_id in zip(submission["requirements"], report.accepted_draft_ids):
+        req["id"] = f"Q-{draft_id}"
+        ids[draft_id] = req["id"]
+    return SubmissionResult(submission, ids, [{"draft_id": "D-3", "reason": "duplicate"}], [])

@@ -15,6 +15,7 @@ PLANNED = {
     "revise_extraction": ["run_input", "draft", "findings", "corpus", "llm", "emit_event"],
     "review_requirements": ["run_input", "draft", "corpus", "llm", "emit_event"],
     "build_submission": ["run_input", "draft", "report", "corpus"],
+    "build_submission_detailed": ["run_input", "draft", "report", "corpus"],
     "validate_submission": ["submission", "participant_package_path"],
     "evaluate_submission": ["submission_path", "expected_path"],
 }

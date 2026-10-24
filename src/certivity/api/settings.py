@@ -63,6 +63,7 @@ DEFAULT_ENTRY_POINTS = {
     "revise_extraction": "certivity.agent:revise_extraction",
     "review_requirements": "certivity.quality:review_requirements",
     "build_submission": "certivity.quality:build_submission",
+    "build_submission_detailed": "certivity.quality:build_submission_detailed",
     "validate_submission": "certivity.quality:validate_submission",
     "evaluate_submission": "certivity.evaluation:evaluate_submission",
     "make_run_input": "certivity.contracts:make_run_input",

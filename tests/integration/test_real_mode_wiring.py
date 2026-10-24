@@ -13,7 +13,8 @@ def _real_settings(settings):
     eps = {name: f"tests.integration.fake_modules:{attr}" for name, attr in {
         "open_corpus": "open_corpus", "create_llm": "create_llm", "run_extraction": "run_extraction",
         "revise_extraction": "revise_extraction", "review_requirements": "review_requirements",
-        "build_submission": "build_submission", "validate_submission": "validate_submission",
+        "build_submission": "build_submission", "build_submission_detailed": "build_submission_detailed",
+        "validate_submission": "validate_submission",
         "make_run_input": "make_run_input"}.items()}
     eps["evaluate_submission"] = "tests.integration.fake_modules:missing"  # optional: absent is fine
     return dataclasses.replace(settings, pipeline_mode="real", entry_points={**settings.entry_points, **eps})
@@ -36,7 +37,9 @@ def test_real_mode_passes_module_records_between_stages(settings):
         view = client.get(f"/api/runs/{run['run_id']}/results").json()
         assert view["view_warnings"] == []  # explicit export_mapping was used, not export order
         assert {r["draft_id"]: r["requirement_id"] for r in view["requirements"] if r["requirement_id"]} == {
-            "D-1": "R-001", "D-2": "R-002", "D-4": "R-003", "D-5": "R-004", "D-6": "R-005"}
+            "D-1": "Q-D-1", "D-2": "Q-D-2", "D-4": "Q-D-4", "D-5": "Q-D-5", "D-6": "Q-D-6"}
+        assert view["review_complete"] is True
+        assert view["export_excluded"] == [{"draft_id": "D-3", "reason": "duplicate"}]
         assert client.get(f"/api/runs/{run['run_id']}/submission").status_code == 200
 
 
@@ -77,3 +80,16 @@ def test_missing_model_credentials_fail_before_any_work(settings):
             assert fake_modules.CALLS == []
     finally:
         fake_modules.CREDENTIALS[0] = True
+
+
+def test_incomplete_review_is_partial_not_verified(settings):
+    fake_modules.REVIEW_INCOMPLETE[0] = True
+    try:
+        with TestClient(create_app(_real_settings(settings))) as client:
+            run = client.post("/api/runs", data={"package_case": "dev-rear-lamp", "team_id": "team-07"}).json()
+            status = wait_finished(client, run["run_id"])
+            assert status["state"] == "partial"
+            assert any("review_incomplete" in w for w in status["warnings"])
+            assert client.get(f"/api/runs/{run['run_id']}/results").json()["review_complete"] is False
+    finally:
+        fake_modules.REVIEW_INCOMPLETE[0] = False

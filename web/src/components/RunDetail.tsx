@@ -72,6 +72,9 @@ export function RunDetail({ runId, onFinished }: { runId: string; onFinished: ()
             )}
           </div>
         )}
+        {view && !view.review_complete && (
+          <p className="banner partial">Review incomplete: requirements were not fully verified (e.g. no model credential or call budget spent).</p>
+        )}
         {status.errors.map((e, i) => <p key={i} className="error">Error in {e.stage}: {e.message}</p>)}
         {status.warnings.map((w, i) => <p key={i} className="warn">{w}</p>)}
         {view?.view_warnings.map((w, i) => <p key={`v${i}`} className="warn">{w}</p>)}

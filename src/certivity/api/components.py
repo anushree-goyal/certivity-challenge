@@ -46,6 +46,7 @@ class Components:
     revise_extraction: Callable[..., Any] | None
     review_requirements: Callable[..., Any]
     build_submission: Callable[..., Any]
+    build_submission_detailed: Callable[..., Any] | None
     validate_submission: Callable[..., Any]
     evaluate_submission: Callable[..., Any] | None
     make_run_input: Callable[[dict[str, Any]], Any]
@@ -53,7 +54,7 @@ class Components:
 
 REQUIRED = ("open_corpus", "create_llm", "run_extraction", "review_requirements",
             "build_submission", "validate_submission", "make_run_input")
-OPTIONAL = ("revise_extraction", "evaluate_submission")
+OPTIONAL = ("revise_extraction", "evaluate_submission", "build_submission_detailed")
 
 
 def _record_factory(factory: Any) -> Callable[[dict[str, Any]], Any]:
@@ -124,6 +125,7 @@ def load_components(settings: Settings, mode: str | None = None) -> Components:
         revise_extraction=loaded["revise_extraction"],
         review_requirements=loaded["review_requirements"],
         build_submission=loaded["build_submission"],
+        build_submission_detailed=loaded["build_submission_detailed"],
         validate_submission=loaded["validate_submission"],
         evaluate_submission=loaded["evaluate_submission"],
         make_run_input=_record_factory(loaded["make_run_input"]),

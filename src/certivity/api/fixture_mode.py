@@ -242,6 +242,7 @@ def components(settings: Settings):
         revise_extraction=revise_extraction,
         review_requirements=review_requirements,
         build_submission=build_submission,
+        build_submission_detailed=None,
         validate_submission=validate_submission,
         evaluate_submission=None,  # fixture output is never scored
         make_run_input=dict,

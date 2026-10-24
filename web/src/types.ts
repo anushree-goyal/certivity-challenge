@@ -82,6 +82,9 @@ export interface RunView {
   coverage: { items: CoverageItem[]; counts: Record<string, number> };
   findings: Finding[];
   remaining_issues: unknown[];
+  review_complete: boolean;
+  export_excluded: unknown[];
+  export_blocking_issues: unknown[];
   unresolved_references: unknown[];
   pipeline_warnings: string[];
   view_warnings: string[];

@@ -84,3 +84,4 @@ th, td { text-align: left; padding: .35rem .4rem; border-bottom: 1px solid var(-
 .finding p { margin: .2rem 0; font-size: .85rem; }
 code { font-size: .8rem; }
 button.secondary { background: transparent; color: var(--bad); border-color: var(--bad); padding: .2rem .6rem; margin-left: .5rem; }
+.banner.partial { background: #fef3c7; color: var(--warn); border: 1px dashed var(--warn); }
