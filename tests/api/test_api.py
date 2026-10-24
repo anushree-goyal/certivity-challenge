@@ -180,6 +180,10 @@ def test_case_id_is_derived_for_own_input_and_still_validated_when_given(setting
 
         assert case_of(files={"spec_file": ("Front Bumper Spec.md", b"# x\n", "text/markdown")}) == "front-bumper-spec"
         assert case_of(data={"spec_text": "# spec: Front Bumper\n\nbody"}) == "front-bumper"
+        assert case_of(data={"spec_text": "Rear lamp module for an M1 passenger car, LED stop lamp\nmore"}) == "rear-lamp-module-for-an-m1"  # first six words
+        assert len(case_of(data={"spec_text": "# " + "very long heading words " * 6})) <= 40
+        custom = case_of(data={"spec_text": "!!! ???"})
+        assert custom.startswith("custom-") and len(custom) == len("custom-") + 6
         assert case_of(files={"drawings": ("Side View.PNG", b"\x89PNG fake", "image/png")}) == "side-view"
         assert case_of(data={"package_case": "dev-rear-lamp"}) == "dev-rear-lamp"
         # API clients that do send a case_id still get the format check.
@@ -196,7 +200,17 @@ def test_team_id_comes_from_configuration_and_missing_blocks_export(settings):
         status = wait_finished(client, run.json()["run_id"])
         assert any("CERTIVITY_TEAM_ID" in w for w in status["warnings"])
         blocked = client.get(f"/api/runs/{run.json()['run_id']}/submission")
-        assert blocked.status_code == 409 and "CERTIVITY_TEAM_ID" in blocked.json()["reason"]
+        assert blocked.status_code == 409 and blocked.json()["code"] == "team_missing"
+        assert blocked.json()["reason"].startswith("Export disabled: team ID not configured")
+
+    # After setting CERTIVITY_TEAM_ID and restarting, the same run exports without re-running.
+    restarted = dataclasses.replace(settings, default_team_id="team-real-7")
+    with TestClient(create_app(restarted)) as client:
+        run_id = run.json()["run_id"]
+        assert client.get(f"/api/runs/{run_id}/export").json()["available"] is True
+        sub = client.get(f"/api/runs/{run_id}/submission")
+        assert sub.status_code == 200 and sub.json()["team_id"] == "team-real-7"
+        assert f'filename="dev-rear-lamp_team-real-7_{run_id}.json"' in sub.headers["content-disposition"]
 
 
 def test_placeholder_team_id_warns_but_exports(settings):

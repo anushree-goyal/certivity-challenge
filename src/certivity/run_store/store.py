@@ -75,9 +75,13 @@ class RunStore:
 
     # --- creation --------------------------------------------------------------------------
 
-    def create(self, manifest: dict[str, Any], files: dict[str, bytes]) -> dict[str, Any]:
+    @staticmethod
+    def new_run_id() -> str:
+        return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + secrets.token_hex(3)
+
+    def create(self, manifest: dict[str, Any], files: dict[str, bytes], run_id: str | None = None) -> dict[str, Any]:
         """Create a run with immutable input files. `files` maps a file name under input/ to bytes."""
-        run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + secrets.token_hex(3)
+        run_id = run_id or self.new_run_id()
         run_dir = self.run_dir(run_id)
         (run_dir / "input").mkdir(parents=True)
         for module in MODULE_DIRS:

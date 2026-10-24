@@ -133,3 +133,8 @@ export interface Health {
   corpus_freshness?: CorpusFreshness;
   corpus_reimport?: ReimportStatus;
 }
+
+export interface ExportStatus {
+  available: boolean; case_id: string; code: "valid" | "running" | "team_missing" | "no_submission" | "invalid" | "validator_error" | null;
+  reason?: string; errors: { path: string; message: string }[]; team_id_placeholder?: boolean;
+}

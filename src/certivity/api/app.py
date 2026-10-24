@@ -41,26 +41,29 @@ DRAWING_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg
 SPEC_TYPES = (".md", ".markdown", ".txt")
 
 
+CASE_ID_MAX = 40
+
+
 def _slug(text: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")[:60].strip("-")
+    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")[:CASE_ID_MAX].strip("-")
 
 
-def derive_case_id(spec_name: str | None, spec_bytes: bytes | None, drawing_names: list[str]) -> str:
-    """Case ID for own input: from the spec file name, else the spec's first heading, else a drawing's name."""
-    if spec_name:
-        if slug := _slug(Path(spec_name).stem):
-            return slug
+def derive_case_id(spec_name: str | None, spec_bytes: bytes | None, drawing_names: list[str]) -> str | None:
+    """Case ID for own input: the spec file's name; for pasted text its first heading, else its first words;
+    for drawings only, the first image's name. None when nothing usable (the caller uses custom-<run>)."""
+    if spec_name and (slug := _slug(Path(spec_name).stem)):
+        return slug
     if spec_bytes:
-        for line in spec_bytes.decode("utf-8", "replace").splitlines():
-            if line.lstrip().startswith("#"):
-                heading = re.sub(r"^(spec(ification)?)\s*:\s*", "", line.strip().lstrip("#").strip(), flags=re.I)
-                if slug := _slug(heading):
-                    return slug
-                break
+        lines = [l.strip() for l in spec_bytes.decode("utf-8", "replace").splitlines() if l.strip()]
+        heading = next((l.lstrip("#").strip() for l in lines if l.startswith("#")), None)
+        text = heading if heading else (" ".join(lines[0].split()[:6]) if lines else "")
+        text = re.sub(r"^(spec(ification)?)\s*:\s*", "", text, flags=re.I)
+        if slug := _slug(text):
+            return slug
     for name in drawing_names:
         if slug := _slug(Path(name).stem):
             return slug
-    return "analysis"
+    return None
 
 
 def _sha256(data: bytes) -> str:
@@ -262,7 +265,8 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
         # Team ID comes from CERTIVITY_TEAM_ID (the form field remains for the CLI and API clients). A missing
         # team ID does not stop the analysis; it blocks the export, which needs it.
         team_id = team_id.strip() or settings.default_team_id.strip()
-        case_id = case_id.strip() or derive_case_id(spec_name, spec_bytes, drawing_names)
+        run_id = store.new_run_id()
+        case_id = case_id.strip() or derive_case_id(spec_name, spec_bytes, drawing_names) or f"custom-{run_id.rsplit('-', 1)[-1]}"
         is_package_folder = settings.cases_dir.is_dir() and (settings.cases_dir / case_id).is_dir() and "/" not in case_id
         if not is_package_folder and not CASE_ID_PATTERN.match(case_id):
             raise HTTPException(422, "case_id may contain only lowercase letters, digits and hyphens")
@@ -285,7 +289,7 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
                 "spec_file": "spec.md" if "spec.md" in files else None, "drawing_files": drawing_files}
 
         if reuse_cached and snapshot_id is not None and (cached := store.find_cached(cache_key)):
-            manifest = store.create({**base, "origin": "cached", "cached_from": cached["run_id"]}, files)
+            manifest = store.create({**base, "origin": "cached", "cached_from": cached["run_id"]}, files, run_id=run_id)
             store.update(manifest["run_id"], state=cached["state"], stage="done", started_at=cached.get("started_at"),
                          finished_at=cached.get("finished_at"), submission_valid=cached.get("submission_valid"),
                          revision_rounds=cached.get("revision_rounds"), llm_identity=cached.get("llm_identity"),
@@ -294,7 +298,7 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
             return {"run_id": manifest["run_id"], "state": cached["state"], "origin": "cached",
                     "cached_from": cached["run_id"]}
 
-        manifest = store.create({**base, "origin": "fixture" if mode == "fixture" else "fresh"}, files)
+        manifest = store.create({**base, "origin": "fixture" if mode == "fixture" else "fresh"}, files, run_id=run_id)
         worker.submit(manifest["run_id"])
         return {"run_id": manifest["run_id"], "state": manifest["state"], "origin": manifest["origin"]}
 
@@ -323,24 +327,50 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
             raise HTTPException(409, "No results yet: extraction has not produced a draft for this run")
         return mask_paths(view)  # e.g. a validator report naming the index file it checked
 
+    def _validator_for(mode: str):
+        if mode == "fixture":
+            from certivity.api import fixture_mode
+            return fixture_mode.validate_submission
+        return resolve(settings.entry_points["validate_submission"])
+
+    def build_export(run_id: str) -> tuple[dict[str, Any], dict[str, Any] | None]:
+        """The submission as it would download now: the stored run's export with the team ID currently set in
+        CERTIVITY_TEAM_ID, validated again by the official validator. Returns (status, submission or None)."""
+        m = get_manifest(run_id)
+        status: dict[str, Any] = {"available": False, "case_id": m.get("case_id"), "errors": [], "code": None}
+        if not RunState(m["state"]).finished:
+            return status | {"code": "running", "reason": f"the run is still {m['state']}"}, None
+        team = settings.default_team_id.strip()
+        if not team:
+            return status | {"code": "team_missing", "reason": "Export disabled: team ID not configured (set CERTIVITY_TEAM_ID in .env and restart)"}, None
+        source = m.get("cached_from") or run_id
+        stored = store.read_artifact(source, "submission.json") or store.read_artifact(source, "submission.invalid.json")
+        if not stored or not isinstance(stored.get("requirements"), list):
+            failed = "; ".join(e.get("message", "") for e in m.get("errors", []))
+            return status | {"code": "no_submission", "reason": f"the run failed: {failed}" if failed else "no submission was built for this run"}, None
+        submission = {**stored, "team_id": team}
+        try:
+            report = to_jsonable(_validator_for(m.get("mode", "real"))(submission, settings.participant_package))
+        except Exception as exc:
+            return status | {"code": "validator_error", "reason": f"the validator could not run: {type(exc).__name__}: {exc}"}, None
+        if not first(report, "valid", "is_valid", default=False):
+            return status | {"code": "invalid", "reason": "the submission did not pass the official validator",
+                             "errors": report.get("errors") or []}, None
+        return status | {"available": True, "code": "valid", "team_id_placeholder": team_id_problem(team) is not None}, submission
+
+    @app.get("/api/runs/{run_id}/export")
+    def run_export_status(run_id: str) -> dict[str, Any]:
+        return mask_paths(build_export(run_id)[0])
+
     @app.get("/api/runs/{run_id}/submission")
     def run_submission(run_id: str):
-        m = get_manifest(run_id)
-        path = store.artifact_path(m.get("cached_from") or run_id, "submission.json")
-        team_problem = None if (m.get("team_id") or "").strip() else team_id_problem("")
-        if team_problem:
-            return JSONResponse({"available": False, "reason": team_problem}, status_code=409)
-        if not path.is_file():
-            if not RunState(m["state"]).finished:
-                reason = f"The run is still {m['state']} (stage: {m.get('stage')})."
-            elif m["state"] == RunState.FAILED.value:
-                reason = "The run failed: " + ("; ".join(e.get("message", "") for e in m.get("errors", [])) or "see run errors.")
-            else:
-                reason = "The submission did not pass the official validator; see validation errors in the results."
-            return JSONResponse({"available": False, "reason": reason}, status_code=409)
+        status, submission = build_export(run_id)
+        if submission is None:
+            return JSONResponse(mask_paths({k: status[k] for k in ("available", "reason", "errors", "code")}), status_code=409)
         safe = lambda v: re.sub(r"[^A-Za-z0-9._-]+", "-", str(v or "")).strip("-") or "unknown"
-        return FileResponse(path, media_type="application/json",
-                            filename=f"{safe(m['case_id'])}_{safe(m['team_id'])}_{run_id}.json")
+        name = f"{safe(submission['case_id'])}_{safe(submission['team_id'])}_{run_id}.json"
+        return Response(json.dumps(submission, indent=2, ensure_ascii=False), media_type="application/json",
+                        headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
     @app.get("/api/runs/{run_id}/input/{name}")
     def run_input_file(run_id: str, name: str):

@@ -350,7 +350,6 @@ body { background:
 @media (prefers-reduced-motion: reduce) { .flow-btn, .flow-arrow, .flow-text, .flow-circle { transition: none; } }
 
 /* ---- run settings form ---- */
-.req { color: var(--error); font-weight: 700; }
 .field-error { color: var(--error); font-size: .78rem; margin: -.2rem 0 .3rem; }
 input.readonly { background: transparent; border-style: dashed; color: var(--teal); cursor: default; font-family: var(--mono); }
 input[aria-invalid="true"] { border-color: var(--error); }
@@ -429,3 +428,14 @@ tr.reg-focus td:first-child { box-shadow: inset 3px 0 0 var(--teal); }
 .form-grid.single { grid-template-columns: minmax(0, 1fr); max-width: 760px; }
 .export-case { font-size: .75rem; color: var(--muted); }
 .export-case code { color: var(--teal); font-size: .8rem; margin-left: .3rem; }
+
+.start-error { color: var(--error); font-size: .85rem; max-width: 34rem; }
+.offline-banner { position: sticky; top: .5rem; z-index: 20; }
+
+/* ---- requirement permalink, citation jump, cited passage fallback ---- */
+.cite-link { background: none; border: none; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; display: block; }
+.cite-link:hover { color: var(--teal); filter: none; text-decoration: underline; text-underline-offset: 2px; }
+.copy-link { padding: .25rem .6rem; font-size: .75rem; }
+.cited-passage { padding: .5rem .7rem; background: var(--surface-2); border-bottom: 1px solid var(--border); border-left: 3px solid var(--teal); }  /* solid: sits on the white page frame */
+.cited-passage p { margin: .2rem 0 0; font-size: .82rem; color: var(--text); }
+.cited-label { font-family: var(--mono); font-size: .68rem; color: var(--teal); text-transform: uppercase; letter-spacing: .05em; }

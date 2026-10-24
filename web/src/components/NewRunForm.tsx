@@ -62,7 +62,9 @@ export function NewRunForm({ health, onCreated }: { health: Health | null; onCre
   const caseHasInputs = !!selectedCase && (!!selectedCase.spec_file || selectedCase.drawings.length > 0);
   const hasInput = (packageCase ? caseHasInputs : false) || !!specFile || !!specText.trim() || drawings.length > 0;
   const missingPdfs = health?.corpus_freshness?.missing_pdfs ?? [];
-  const teamWarning = health?.team_id?.warning ?? null;
+  const teamWarning = !health?.team_id ? null
+    : !health.team_id.configured ? "Exports are disabled until CERTIVITY_TEAM_ID is set in .env — runs still work."
+    : health.team_id.warning;  // e.g. a placeholder team id
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -157,9 +159,9 @@ export function NewRunForm({ health, onCreated }: { health: Health | null; onCre
             </div>
           )}
           {teamWarning && <div className="banner">{teamWarning}</div>}
-          {error && <div className="banner error" role="alert">{error}</div>}
           <div className="form-actions">
-            <button type="submit" disabled={busy}>{busy ? "Starting…" : "Start analysis"}</button>
+            <button type="submit" disabled={busy} aria-busy={busy}>{busy ? "Starting…" : "Start analysis"}</button>
+            {error && <span className="start-error" role="alert">{error}</span>}
           </div>
         </section>
 

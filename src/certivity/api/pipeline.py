@@ -232,7 +232,8 @@ def execute_run(run_id: str, store: RunStore, settings: Settings) -> None:
         if blocking:
             warnings.append(f"Export reported {len(blocking)} blocking issue(s).")
         if not (manifest.get("team_id") or "").strip():
-            warnings.append("CERTIVITY_TEAM_ID is not set, so the export is blocked; set it and run again.")
+            warnings.append("Export disabled: team ID not configured. Set CERTIVITY_TEAM_ID in .env and restart; "
+                            "the existing run then exports without re-running.")
         elif not valid:
             warnings.append("Submission did not pass the official validator; no download is offered.")
 

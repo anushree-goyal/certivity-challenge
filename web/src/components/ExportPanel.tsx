@@ -1,23 +1,21 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
-import type { RunStatus, RunView } from "../types";
+import type { ExportStatus, Health, RunStatus, RunView } from "../types";
 
 type Availability =
   | { kind: "valid" }
   | { kind: "invalid"; errors: { path: string; message: string }[] }
   | { kind: "unavailable"; reason: string };
 
-function availability(status: RunStatus, view: RunView | null): Availability {
-  if (status.finished && !(status.team_id ?? "").trim()) {
-    return { kind: "unavailable", reason: "the team ID is not configured (set CERTIVITY_TEAM_ID and run again)" };
-  }
-  if (view?.submission.available) return { kind: "valid" };
-  if (view?.validation && !view.validation.valid) return { kind: "invalid", errors: view.validation.errors ?? [] };
+/** The server builds the export at download time with the current CERTIVITY_TEAM_ID and validates it; this
+ *  mirrors that answer. A run made before the team ID was set exports once it is set, without re-running. */
+function availability(status: RunStatus, exp: ExportStatus | null): Availability {
   if (!status.finished) return { kind: "unavailable", reason: `the run is still ${status.state}` };
-  if (status.state === "failed") {
-    return { kind: "unavailable", reason: status.errors[0]?.message ? `the run failed: ${status.errors[0].message}` : "the run failed" };
-  }
-  return { kind: "unavailable", reason: "no submission was built for this run" };
+  if (!exp) return { kind: "unavailable", reason: "checking…" };
+  if (exp.available) return { kind: "valid" };
+  if (exp.code === "team_missing") return { kind: "unavailable", reason: "team ID not configured" };
+  if (exp.code === "invalid") return { kind: "invalid", errors: exp.errors };
+  return { kind: "unavailable", reason: exp.reason ?? "no submission was built for this run" };
 }
 
 /** Why a valid download still deserves a second look before uploading. */
@@ -29,9 +27,18 @@ function cautions(status: RunStatus, view: RunView | null): string[] {
   return out;
 }
 
-export function ExportPanel({ runId, status, view }: { runId: string; status: RunStatus; view: RunView | null }) {
+export function ExportPanel({ runId, status, view, health }: {
+  runId: string; status: RunStatus; view: RunView | null; health: Health | null;
+}) {
   const [dialog, setDialog] = useState<"confirm" | "errors" | null>(null);
-  const state = availability(status, view);
+  const [exp, setExp] = useState<ExportStatus | null>(null);
+  const teamConfigured = health?.team_id?.configured;
+  useEffect(() => {
+    if (!status.finished) return;
+    api.exportStatus(runId).then(setExp).catch((e) => setExp({ available: false, case_id: status.case_id, code: null,
+      reason: String((e as Error).message), errors: [] }));
+  }, [runId, status.finished, status.case_id, teamConfigured]);
+  const state = availability(status, exp);
   const notes = state.kind === "valid" ? cautions(status, view) : [];
 
   const download = () => {
@@ -56,7 +63,10 @@ export function ExportPanel({ runId, status, view }: { runId: string; status: Ru
       <div className="export-row">
         {state.kind === "valid" && <span className="chip green" title="Passed the official participant validator">Valid · official validator</span>}
         {state.kind === "invalid" && <span className="chip error">Invalid · {state.errors.length} validator error{state.errors.length === 1 ? "" : "s"}</span>}
-        {state.kind === "unavailable" && <span className="chip outline" title={state.reason}>Not available: {state.reason}</span>}
+        {state.kind === "unavailable" && exp?.code === "team_missing"
+          && <span className="chip attention" title="Set CERTIVITY_TEAM_ID in .env and restart; no need to re-run">Export disabled: team ID not configured</span>}
+        {state.kind === "unavailable" && exp?.code !== "team_missing"
+          && <span className="chip outline" title={state.reason}>Not available: {state.reason}</span>}
         <button type="button" onClick={onExport} disabled={state.kind === "unavailable"}>
           {state.kind === "invalid" ? "Show validator errors" : "Export requirements JSON"}
         </button>
