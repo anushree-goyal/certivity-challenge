@@ -18,7 +18,7 @@ import pymupdf
 
 from . import structure as st
 
-PARSER_VERSION = "corpus-parse-10"
+PARSER_VERSION = "corpus-parse-13"
 
 FOOTER = re.compile(r"^(?P<reg>.+?),\s*version\s+(?P<ver>\S+)\s*\|\s*page\s+(?P<page>\d+)\s+of\s+(?P<total>\d+)$")
 BANNER = re.compile(r"^(Consolidated text of this version, rendered by Certivity|Role in the hackathon:|the bottom of every page)", re.IGNORECASE)
@@ -232,6 +232,7 @@ class _Builder:
         self.last_caption: tuple[str, int, float] | None = None  # (caption text, page, y)
         self.last_caption_passage: ParsedPassage | None = None
         self.flow_after_table = False
+        self.in_rationale = False  # inside a GTR "Statement of technical rationale" (not any namespace named "Part I")
 
     # passage lifecycle
     def _key(self, base: str) -> str:
@@ -277,6 +278,7 @@ class _Builder:
     def set_namespace(self, namespace: str, heading: str, page: int) -> None:
         self.flush()
         self.namespace = namespace
+        self.in_rationale = False
         self.enclosing_label = None
         if namespace in self.namespace_headings and namespace != st.MAIN:
             self.diagnostics.append(Diagnostic("warning", "namespace_repeated", f"{namespace} heading seen again: {heading!r}", page))
@@ -464,12 +466,13 @@ def _heading(builder: _Builder, text: str, page: int, *, major: bool, y: float =
     """Handle a bold heading. Returns False when a minor bold line is just emphasised body text."""
     if major and st.GTR_RATIONALE.match(text):
         builder.set_namespace(st.RATIONALE, text, page)
+        builder.in_rationale = True
         return True
     if major and st.GTR_TEXT.match(text):
         builder.set_namespace(st.MAIN, text, page)
         builder.last_label.pop(st.MAIN, None)
         return True
-    if builder.namespace == st.RATIONALE and major and not st.ANNEX_HEADING.match(text):
+    if builder.in_rationale and major and not st.ANNEX_HEADING.match(text):
         # two numbering systems interleave in a GTR rationale; its headings are not paragraph labels
         builder.start("heading", None, page)
         builder.current_lines.append(text)
@@ -508,6 +511,14 @@ def _heading(builder: _Builder, text: str, page: int, *, major: bool, y: float =
     part = st.PART_HEADING.match(text)
     if part and (major or len(text) < 160):
         parent = st.namespace_parts(builder.namespace)
+        if not parent.get("annex"):
+            # A main-body Part (R89 "PART II ...", R67, R163) is a heading, not a numbering division: paragraph
+            # numbers run on across Parts (Part I 3-10, Part II 11-18), so they stay in their namespace and cite as
+            # "13.1". A document whose main-body Parts restarted numbering would show up as duplicate_label.
+            builder.start("heading", None, page, ["part_heading"])
+            builder.current_lines.append(text)
+            builder.previous_line = ""
+            return True
         namespace = st.namespace_label(parent.get("annex"), part.group("part"), None)
         builder.set_namespace(namespace, text, page)
         return True

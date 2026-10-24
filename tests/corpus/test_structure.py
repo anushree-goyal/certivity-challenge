@@ -79,3 +79,17 @@ def test_regulation_hint():
     assert st.regulation_number_from_hint("UN R48") == "48"
     assert st.regulation_number_from_hint("Regulation No. 13H") == "13H"
     assert st.regulation_number_from_hint("UN GTR 9") is None
+
+
+def test_sub_items_tables_and_figures_are_detected():
+    refs = st.find_references("(Par. 4.8.3.1. (a)) and Tables 3 and 4 of Annex 2, see Figure A3-I")
+    assert [(r.target_paragraph, r.target_annex) for r in refs] == [
+        ("4.8.3.1 (a)", None), ("Table 3", "Annex 2"), ("Table 4", "Annex 2"), ("Figure A3-I", None)]
+    refs = st.find_references("paragraph 6.22.7.4.5.(i) of Regulation No. 48")
+    assert (refs[0].target_paragraph, refs[0].target_regulation_number) == ("6.22.7.4.5 (i)", "48")
+
+
+def test_caption_names_and_labels_before_a_parenthesis():
+    assert [st.CAPTION.match(t)["name"] for t in ("Figure A3-I Examples", "Table A6-1 x", "Figure I", "Figure 3a")] == ["A3-I", "A6-1", "I", "3a"]
+    assert st.CAPTION.match("Figure in the") is None
+    assert st.LABEL_LINE.match("3.1.(A) For all states")["label"] == "3.1."

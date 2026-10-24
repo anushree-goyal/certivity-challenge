@@ -224,6 +224,7 @@ def default_script() -> dict[str, Any | Responder]:
                     "supporting_passage_ids": [A_SPEC_COLOUR["passage_id"]],
                     "primary_passage_id": A_SPEC_COLOUR["passage_id"],
                     "obligation_kind": "mandatory",
+                    "product_applicability": "applies",
                     "applicability_condition": (
                         "device is a category SX signalling device on an M1 vehicle"
                     ),
@@ -258,6 +259,7 @@ def default_script() -> dict[str, Any | Responder]:
                     ],
                     "primary_passage_id": intensity["passage_id"],
                     "obligation_kind": "mandatory",
+                    "product_applicability": "applies",
                     "applicability_condition": (
                         "device is a category SX signalling device on an M1 vehicle"
                     ),
@@ -324,6 +326,7 @@ def default_script() -> dict[str, Any | Responder]:
                         ],
                         "primary_passage_id": ref["passage_id"],
                         "obligation_kind": "mandatory",
+                        "product_applicability": "applies",
                         "applicability_condition": (
                             "device is a category SX signalling device on an M1 vehicle"
                         ),
@@ -351,6 +354,7 @@ def default_script() -> dict[str, Any | Responder]:
                     "supporting_passage_ids": [annex_table["passage_id"]],
                     "primary_passage_id": annex_table["passage_id"],
                     "obligation_kind": "mandatory",
+                    "product_applicability": "applies",
                     "applicability_condition": "device category SX-1",
                     "applicability_reason": "The product may be of category SX-1.",
                     "exceptions": [],
@@ -384,6 +388,7 @@ def default_script() -> dict[str, Any | Responder]:
                     "supporting_passage_ids": [definition["passage_id"]],
                     "primary_passage_id": definition["passage_id"],
                     "obligation_kind": "definition_rule",
+                    "product_applicability": "applies",
                     "applicability_condition": None,
                     "applicability_reason": "The definition imposes a measurable limit.",
                     "exceptions": [],

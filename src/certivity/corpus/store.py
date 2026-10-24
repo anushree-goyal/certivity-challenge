@@ -22,6 +22,12 @@ from pathlib import Path
 from .assemble import AssembledDocument, assemble
 from .config import CorpusPaths
 from .parse import PARSER_VERSION, ParsedDocument, parse_pdf
+
+import pymupdf
+
+# The text extraction library shapes every passage, so its version is part of the parse-cache key and of the
+# snapshot ID: two machines with different PyMuPDF/MuPDF builds must not produce the same ID for different content.
+EXTRACTOR_VERSION = f"pymupdf-{pymupdf.VersionBind}-mupdf-{pymupdf.VersionFitz}"
 from .registry import DocumentSpec, file_sha256, index_sha256, load_index
 
 SCHEMA_VERSION = "corpus-schema-3"
@@ -89,7 +95,7 @@ class BuildReport:
 def _parse_cached(args: tuple[str, str, str]) -> tuple[str, dict, bool]:
     """Worker: (sha256, pdf path, cache dir) -> (sha, parsed json, from_cache)."""
     sha, pdf_path, cache_dir = args
-    cache_file = Path(cache_dir) / f"{sha}.{PARSER_VERSION}.json.gz"
+    cache_file = Path(cache_dir) / f"{sha}.{PARSER_VERSION}.{EXTRACTOR_VERSION}.json.gz"
     if cache_file.is_file():
         with gzip.open(cache_file, "rt", encoding="utf-8") as handle:
             return sha, json.load(handle), True
@@ -117,6 +123,7 @@ def code_fingerprint() -> str:
     for name in ("parse.py", "structure.py", "assemble.py", "store.py", "registry.py"):
         digest.update((Path(__file__).parent / name).read_bytes())
     digest.update((Path(__file__).parent.parent / "contracts.py").read_bytes())  # ID and namespace helpers live there
+    digest.update(EXTRACTOR_VERSION.encode())
     return digest.hexdigest()[:12]
 
 
@@ -176,6 +183,7 @@ def build_snapshot(paths: CorpusPaths, roles: tuple[str, ...] = ("base",), *, wo
             "schema_version": SCHEMA_VERSION,
             "parser_version": PARSER_VERSION,
             "code_fingerprint": code_fingerprint(),
+            "extractor_version": EXTRACTOR_VERSION,
             "index_sha256": index_hash,
             "package_root": str(paths.package_root),
             "package_commit": _package_commit(paths.package_root),
