@@ -280,14 +280,23 @@ def test_runtime_code_never_reads_the_golden_answer():
     It walks the AST and ignores docstrings and comments, so a module may state
     the rule in prose (as ``agent/pipeline.py`` does) while still being checked
     for any string literal or attribute that could actually open the file.
+
+    ``certivity/evaluation/`` is exempt. The plan permits exactly one reader:
+    "Only the evaluation module may read expected.json." Scoring a run against
+    the golden answer is its entire purpose, so the point of this test is that
+    nothing *else* reads it - the exemption is the rule being enforced, not a
+    hole in it.
     """
     import ast
     from pathlib import Path
 
     root = Path(c.__file__).resolve().parent
+    permitted = {"evaluation"}
     offenders: list[str] = []
 
     for path in sorted(root.rglob("*.py")):
+        if permitted & set(path.relative_to(root).parts):
+            continue
         tree = ast.parse(path.read_text(encoding="utf-8"))
         # Identify docstring nodes themselves; ast.get_docstring() re-indents the
         # text, so comparing values would not match the raw literal.
