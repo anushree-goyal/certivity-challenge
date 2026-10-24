@@ -249,7 +249,51 @@ def _export(args) -> int:
         for err in errors[:10]:
             print(f"  validation: {err}", file=sys.stderr)
         return 1
+    if not result.requirements:
+        # An empty submission is valid JSON and worth nothing. Reporting success
+        # here invites somebody to upload it believing it is good, so this exits
+        # non-zero and says where work that is not empty might be.
+        print(
+            "WARNING: this export contains no requirements. It is well-formed but "
+            "scores nothing; do not upload it in place of a run that found something.",
+            file=sys.stderr,
+        )
+        _report_other_checkpoints(settings, checkpoint_dir)
+        return 1
     return 0
+
+
+def _report_other_checkpoints(settings, chosen) -> None:
+    """List checkpoint directories that do hold finished sections.
+
+    `--latest` picks the newest run, which is not always the one that got
+    furthest - a quick re-run with --fresh is newer than the long run that
+    actually read the corpus.
+    """
+    from pathlib import Path
+
+    from certivity.agent.checkpoint import DEFAULT_CHECKPOINT_BASE, CheckpointStore
+    from certivity.api.settings import REPO_ROOT
+
+    base = Path(DEFAULT_CHECKPOINT_BASE)
+    if not base.is_absolute():
+        base = REPO_ROOT / base
+    found = []
+    for candidate in sorted(base.glob("*")) if base.is_dir() else []:
+        if not candidate.is_dir() or candidate == Path(chosen):
+            continue
+        load = CheckpointStore(candidate).load()
+        if load.completed_ids:
+            found.append((candidate, len(load.completed_ids), len(load.drafts())))
+    if not found:
+        print("  no other checkpoint directory holds finished sections either.",
+              file=sys.stderr)
+        return
+    print("  checkpoints that do hold work (pass one with --checkpoint-dir):",
+          file=sys.stderr)
+    for candidate, sections, drafts in found:
+        print(f"    {candidate}  ({sections} section(s), {drafts} draft(s))",
+              file=sys.stderr)
 
 
 def _apistats(args) -> int:

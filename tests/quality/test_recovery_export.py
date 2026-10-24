@@ -244,3 +244,24 @@ def test_importing_the_same_artifact_twice_adds_nothing(tmp_path):
     assert import_artifact_into_checkpoints(path, store) == 1
     assert import_artifact_into_checkpoints(path, store) == 0
     assert len(store.load().drafts()) == 1
+
+
+def test_an_empty_export_is_valid_json_but_not_a_success(real_corpus, package, tmp_path):
+    """Nobody should upload an empty file believing the export worked.
+
+    An export with no requirements passes the official validator - it is
+    well-formed - so validity alone must not be read as success.
+    """
+    out = tmp_path / "empty.json"
+    result = export_from_checkpoints(
+        _run_input(real_corpus), real_corpus,
+        checkpoint_dir=tmp_path / "nothing-here", output_path=out,
+        participant_package=package,
+    )
+    assert result.requirements == 0
+    assert result.valid, "an empty submission is still well-formed"
+    body = json.loads(out.read_text(encoding="utf-8"))
+    assert body["requirements"] == []
+    # The CLI is what turns this into a non-zero exit and a warning; see
+    # cli._export. The record itself must simply not claim any requirement.
+    assert result.drafts_recovered == 0
