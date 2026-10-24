@@ -18,6 +18,11 @@ def _serve(args) -> int:
 
     from certivity.api.settings import REPO_ROOT
 
+    if not args.no_bootstrap:
+        # Builds the corpus snapshot if needed; reuses it in about a second when nothing changed. No network.
+        args.fetch = False
+        if _bootstrap(args) != 0:
+            print("Corpus is not ready; the server starts anyway and /api/health shows why.", file=sys.stderr)
     if not (REPO_ROOT / "web" / "dist").is_dir():
         print("Note: the UI is not built, so only /api is served. Build it with: cd web && npm install && npm run build",
               file=sys.stderr)
@@ -53,8 +58,20 @@ def _bootstrap(args) -> int:
               f"  python {settings.participant_package / 'tools' / 'fetch_regulations.py'} --role base",
               file=sys.stderr)
         return 1
-    bootstrap(settings.participant_package, settings.corpus_dir)
-    return 0
+    from certivity.api.components import call_accepting
+    from certivity.api.serialization import to_jsonable
+
+    try:
+        status = to_jsonable(call_accepting(bootstrap, settings.participant_package, settings.corpus_dir,
+                                            **({"fetch_missing": True} if args.fetch else {})))
+    except Exception as exc:
+        print(f"Corpus bootstrap failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+        return 1
+    print(json.dumps(status, indent=2))
+    if status.get("not_downloaded"):
+        print(f"{len(status['not_downloaded'])} file(s) not downloaded; run `certivity bootstrap --fetch` to download them.",
+              file=sys.stderr)
+    return 0 if status.get("ready") else 1
 
 
 def _run(args) -> int:
@@ -97,13 +114,16 @@ def main(argv: list[str] | None = None) -> int:
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8000)
     serve.add_argument("--reload", action="store_true")
+    serve.add_argument("--no-bootstrap", action="store_true", help="skip the corpus check/build at startup")
     serve.set_defaults(func=_serve)
 
     health = sub.add_parser("health", help="report component, corpus and model readiness")
     health.add_argument("--allow-fixture", action="store_true", help="exit 0 even if only fixture mode is ready")
     health.set_defaults(func=_health)
 
-    sub.add_parser("bootstrap", help="download and import the base corpus").set_defaults(func=_bootstrap)
+    boot = sub.add_parser("bootstrap", help="build or reuse the base corpus snapshot")
+    boot.add_argument("--fetch", action="store_true", help="also download missing PDFs (needs network)")
+    boot.set_defaults(func=_bootstrap)
 
     run = sub.add_parser("run", help="run one participant-package case without the server")
     run.add_argument("--case", required=True, help="folder name under cases/, e.g. dev-rear-lamp")

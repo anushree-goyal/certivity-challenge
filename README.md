@@ -19,10 +19,10 @@ Requirements: Python 3.12+ and Node 20+ (for building the UI only).
 git clone https://github.com/Certivity/industrial-ai-hackathon data/participant-package
 python3 -m venv .venv && .venv/bin/pip install -e '.[dev]'
 cp .env.example .env                # set CERTIVITY_TEAM_ID and model credentials
-.venv/bin/certivity bootstrap       # download + import the base corpus (corpus module)
+.venv/bin/certivity bootstrap --fetch   # first time: download base PDFs and build the corpus snapshot
 (cd web && npm install && npm run build)
 .venv/bin/certivity health          # shows what is ready; never prints secrets
-.venv/bin/certivity serve           # http://127.0.0.1:8000 (API + built UI)
+.venv/bin/certivity serve           # rebuilds/reuses the snapshot, then http://127.0.0.1:8000 (API + UI)
 ```
 
 If you keep the participant package somewhere else, set `CERTIVITY_PARTICIPANT_PACKAGE`. On macOS, if downloads fail with `CERTIFICATE_VERIFY_FAILED`, see the package README (`export SSL_CERT_FILE="$(python3 -m certifi)"`).
@@ -68,7 +68,7 @@ Per-run folders: `agent/` (Anushree), `quality/` (Teammate 3), `app/` (app). The
 
 Entry points are configurable (`CERTIVITY_EP_*` in `.env.example`). Defaults:
 
-- **Corpus:** `certivity.corpus:open_corpus(corpus_dir) -> CorpusReader`, which exposes a `snapshot_id` attribute and the planned methods. For the PDF route, provide `get_document_path(document_id) -> Path`. A `PageAsset` provides `content` bytes, or a local file path in `asset_path`. Optional: `certivity.corpus:bootstrap(package_dir, corpus_dir)`.
+- **Corpus (confirmed by Teammate 2):** `bootstrap(package_dir, corpus_dir)` runs at `certivity serve` startup (no network; `certivity bootstrap --fetch` downloads missing PDFs). `open_corpus(corpus_dir)` opens the current snapshot for each run. Source pages open the run's own snapshot with `open_corpus(corpus_dir, snapshot_id=…)`, so they stay viewable after a re-import. `get_document_path`: `UnknownId` → 404, `FileNotFoundError` → 500. `PageAsset.asset_ref` is a local PNG. `/api/health` uses `corpus_status(corpus_dir)`.
 - **LLM (confirmed, contracts 1.0.0):** `certivity.llm:create_llm(cache_dir=run/agent/llm-cache)`. `/api/health` shows `llm.describe()` as-is (secret-free). If `credentials_configured` is false, a real run fails at the loading stage with that reason, before any work.
 - **Agent (confirmed):** `run_extraction(run_input, corpus, llm, emit_event, artifacts_dir=run/agent)`. The app builds the record with `contracts.make_run_input(run_id=, team_id=, case_id=, corpus_snapshot_id=, specification_text=, drawing_paths=, input_hash=)`, which is keyword-only and turns paths into `DrawingRef`s. Empty input is refused at upload, because `RunInput` rejects it.
 - **Quality (confirmed by Teammate 3):** `review_requirements`, then `build_submission_detailed` (preferred; its `.submission`, `.export_mapping`, `.excluded`, `.blocking_issues` are stored in `app/export.json`), then `validate_submission(submission, participant_package)`. Drafts link to requirements through `export_mapping` only. A finding goes to revision when `requested_context` or `requested_correction` is set. A `review_incomplete` remaining issue makes the run `partial` and shows "not verified" in the UI. `SubmissionBuildError` (over 5,000 requirements or 5 MB) fails the run with that message. The quality module writes to `runs/<id>/quality/` and to `evaluation/` for candidate submissions.

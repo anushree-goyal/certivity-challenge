@@ -58,6 +58,7 @@ class Settings:
 DEFAULT_ENTRY_POINTS = {
     "open_corpus": "certivity.corpus:open_corpus",
     "bootstrap_corpus": "certivity.corpus:bootstrap",
+    "corpus_status": "certivity.corpus:corpus_status",
     "create_llm": "certivity.llm:create_llm",
     "run_extraction": "certivity.agent:run_extraction",
     "revise_extraction": "certivity.agent:revise_extraction",

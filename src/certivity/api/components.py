@@ -40,7 +40,7 @@ def resolve(entry_point: str) -> Any:
 @dataclass
 class Components:
     mode: str
-    open_corpus: Callable[[], Any]
+    open_corpus: Callable[..., Any]  # open_corpus(snapshot_id=None): None opens the current snapshot
     create_llm: Callable[[Path], Any]  # takes the run's agent/ folder for the model-call cache
     run_extraction: Callable[..., Any]
     revise_extraction: Callable[..., Any] | None
@@ -119,7 +119,8 @@ def load_components(settings: Settings, mode: str | None = None) -> Components:
     open_corpus, create_llm = loaded["open_corpus"], loaded["create_llm"]
     return Components(
         mode="real",
-        open_corpus=lambda: open_corpus(settings.corpus_dir),
+        open_corpus=lambda snapshot_id=None: (call_accepting(open_corpus, settings.corpus_dir, snapshot_id=snapshot_id)
+                                              if snapshot_id else open_corpus(settings.corpus_dir)),
         create_llm=lambda agent_dir: call_accepting(create_llm, cache_dir=Path(agent_dir) / "llm-cache"),
         run_extraction=loaded["run_extraction"],
         revise_extraction=loaded["revise_extraction"],
@@ -199,7 +200,15 @@ def readiness(settings: Settings) -> dict[str, Any]:
     report["modules"] = modules
 
     corpus_report: dict[str, Any] = {"ready": False, "path": str(settings.corpus_dir)}
-    if modules["open_corpus"]["ready"]:
+    try:
+        corpus_status = resolve(settings.entry_points["corpus_status"])
+    except ComponentError:
+        corpus_status = None
+    if corpus_status is not None:
+        # The corpus module's own status: never raises, no network.
+        status = to_jsonable(corpus_status(settings.corpus_dir)) or {}
+        corpus_report.update(status, ready=bool(status.get("ready")), base_documents=status.get("documents"))
+    elif modules["open_corpus"]["ready"]:
         try:
             corpus = resolve(settings.entry_points["open_corpus"])(settings.corpus_dir)
             docs = corpus.list_documents(role="base")

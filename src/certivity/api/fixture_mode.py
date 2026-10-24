@@ -236,7 +236,7 @@ def components(settings: Settings):
 
     return Components(
         mode="fixture",
-        open_corpus=FixtureCorpus,
+        open_corpus=lambda snapshot_id=None: FixtureCorpus(),
         create_llm=lambda agent_dir: FixtureLLM(),
         run_extraction=run_extraction,
         revise_extraction=revise_extraction,

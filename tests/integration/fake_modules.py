@@ -79,10 +79,31 @@ class QualityReport:
 CALLS: list[str] = []
 
 
-def open_corpus(corpus_dir):
-    corpus = fixture_mode.FixtureCorpus()
-    corpus.snapshot_id = "fake-snapshot-1"
-    return corpus
+class UnknownId(KeyError):
+    pass
+
+
+class FakeCorpus(fixture_mode.FixtureCorpus):
+    """Behaves like Teammate 2's CorpusReader: pinned snapshots, UnknownId, PNG asset_ref paths."""
+
+    def __init__(self, snapshot_id):
+        self.snapshot_id = snapshot_id
+
+    def get_document_path(self, document_id):
+        if not document_id.startswith("fixture:"):
+            raise UnknownId(document_id)
+        raise FileNotFoundError(f"{document_id}.pdf")
+
+
+CURRENT_SNAPSHOT = ["fake-snapshot-1"]
+
+
+def open_corpus(corpus_dir, snapshot_id=None):
+    return FakeCorpus(snapshot_id or CURRENT_SNAPSHOT[0])
+
+
+def corpus_status(corpus_dir=None):
+    return {"ready": True, "snapshot_id": CURRENT_SNAPSHOT[0], "documents": 2, "counts": {}, "not_downloaded": []}
 
 
 class FakeLLM:

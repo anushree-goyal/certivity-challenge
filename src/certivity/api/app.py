@@ -69,23 +69,21 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
     def corpus_for(mode: str, snapshot_id: str | None = None):
         """Read-only corpus, one per HTTP thread and mode (SQLite connections are thread-bound).
 
-        Reopened when a different snapshot is requested, so a new import is picked up without a restart.
+        With snapshot_id, opens that pinned snapshot, so a run's sources stay viewable after a re-import.
+        Without it, opens the current snapshot.
         """
         cache = getattr(local, "corpora", None)
         if cache is None:
             cache = local.corpora = {}
-        if mode in cache and snapshot_id and snapshot_id_of(cache[mode]) not in (None, snapshot_id):
-            close = getattr(cache.pop(mode), "close", None)
-            if callable(close):
-                close()
-        if mode not in cache:
+        key = (mode, snapshot_id)
+        if key not in cache:
             try:
-                cache[mode] = load_components(settings, mode).open_corpus()
+                cache[key] = load_components(settings, mode).open_corpus(snapshot_id=snapshot_id)
             except ComponentError as exc:
                 raise HTTPException(503, f"Corpus unavailable in {mode} mode: {exc}") from exc
             except Exception as exc:
                 raise HTTPException(503, f"Corpus failed to open: {type(exc).__name__}: {exc}") from exc
-        return cache[mode]
+        return cache[key]
 
     def get_manifest(run_id: str) -> dict[str, Any]:
         try:
@@ -338,7 +336,12 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
         check_snapshot(corpus, snapshot_id)
         path = None
         if hasattr(corpus, "get_document_path"):
-            path = corpus.get_document_path(document_id)
+            try:
+                path = corpus.get_document_path(document_id)
+            except KeyError:  # corpus UnknownId
+                raise HTTPException(404, f"Unknown document {document_id!r} in this snapshot") from None
+            except FileNotFoundError as exc:
+                raise HTTPException(500, f"Source PDF for {document_id!r} is missing or changed on disk: {exc}") from None
         else:
             doc = next((d for d in corpus.list_documents(role="base") if _field(d, "document_id") == document_id), None)
             path = _field(doc, "file_path", "path", "local_path") if doc is not None else None

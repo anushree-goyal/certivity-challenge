@@ -15,7 +15,7 @@ def _real_settings(settings):
         "revise_extraction": "revise_extraction", "review_requirements": "review_requirements",
         "build_submission": "build_submission", "build_submission_detailed": "build_submission_detailed",
         "validate_submission": "validate_submission",
-        "make_run_input": "make_run_input"}.items()}
+        "make_run_input": "make_run_input", "corpus_status": "corpus_status"}.items()}
     eps["evaluate_submission"] = "tests.integration.fake_modules:missing"  # optional: absent is fine
     return dataclasses.replace(settings, pipeline_mode="real", entry_points={**settings.entry_points, **eps})
 
@@ -93,3 +93,24 @@ def test_incomplete_review_is_partial_not_verified(settings):
             assert client.get(f"/api/runs/{run['run_id']}/results").json()["review_complete"] is False
     finally:
         fake_modules.REVIEW_INCOMPLETE[0] = False
+
+
+def test_sources_stay_viewable_after_reimport_and_corpus_errors_map_to_http(settings):
+    with TestClient(create_app(_real_settings(settings))) as client:
+        health = client.get("/api/health").json()["corpus"]
+        assert health["ready"] is True and health["snapshot_id"] == "fake-snapshot-1" and health["base_documents"] == 2
+
+        run = client.post("/api/runs", data={"package_case": "dev-rear-lamp", "team_id": "team-07"}).json()
+        wait_finished(client, run["run_id"])
+        link = next(r for r in client.get(f"/api/runs/{run['run_id']}/results").json()["requirements"] if r["source_link"])["source_link"]
+
+        fake_modules.CURRENT_SNAPSHOT[0] = "fake-snapshot-2"  # a new import happened
+        try:
+            page = client.get(f"/api/documents/{link['document_id']}/pages/{link['pdf_page_index']}",
+                              params={"snapshot_id": "fake-snapshot-1"})
+            assert page.status_code == 200  # served from the run's pinned snapshot
+            assert client.get("/api/documents/UN_R48/pdf").status_code == 404           # UnknownId
+            missing = client.get(f"/api/documents/{link['document_id']}/pdf")           # FileNotFoundError
+            assert missing.status_code == 500 and "missing or changed" in missing.json()["detail"]
+        finally:
+            fake_modules.CURRENT_SNAPSHOT[0] = "fake-snapshot-1"
