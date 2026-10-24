@@ -89,3 +89,8 @@ Entry points are configurable (`CERTIVITY_EP_*` in `.env.example`). Defaults:
 - Held-out case: `git -C data/participant-package pull`, run `certivity bootstrap` again, then start a run with the new case from the dropdown. Set team ID and case ID (= the case folder name).
 - Download the validated JSON from the run and upload it on the platform. For the held-out case the **last valid upload counts**, so keep the chosen file. Teammate 3 coordinates scoring uploads.
 - Repository/demo: this repository plus `certivity serve`. No hosted services are required.
+
+## Third-party licences
+
+- **PyMuPDF** (PDF parsing and page rendering, corpus module) is **AGPL-3.0** (or a commercial Artifex licence). The team accepted it for the hackathon on 2026-10-24: the repository is private and organizers do not run our code. If this application is later distributed or offered to other people over a network, its complete source must be made available under the AGPL, or PyMuPDF replaced or commercially licensed.
+- The participant package's tools and schemas are MIT; its data is for use in this hackathon only (`data/participant-package/LICENSE-DATA.md`). The package and downloaded PDFs are not committed.
