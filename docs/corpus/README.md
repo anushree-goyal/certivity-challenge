@@ -174,18 +174,23 @@ CURRENT                      id of the snapshot new runs should open
 snapshots/<id>/corpus.sqlite tables: documents, pages, sections, passages, definitions, reference_candidates,
                              import_diagnostics, meta, passages_fts
 snapshots/<id>/manifest.json identity: index sha256, package commit, parser version, code fingerprint, file lists, counts
-parsed/<pdf sha256>.<parser version>.json.gz   per-PDF parse cache
+parsed/<pdf sha256>.<parser version>.<extractor version>.json.gz   per-PDF parse cache
 renders/<pdf sha256>/<page>@<dpi>.png          page images
 ```
 
-- The snapshot id is a hash of the schema version, parser version, corpus code fingerprint, index hash, roles and
-  the imported document ids. An identical build reuses the snapshot.
+- The snapshot id is a hash of the schema version, parser version, corpus code fingerprint (the corpus modules and
+  `contracts.py`), the PyMuPDF/MuPDF version, the index hash, the roles and the imported document ids. Same ID means
+  same content; an identical build reuses the snapshot. Builds are deterministic: two cold builds of one commit give
+  the same ID and counts.
+- **Comparing builds across machines:** compare `status` output (`snapshot_id`, `extractor_version`,
+  `code_fingerprint`, `counts`). A different ID with the same commit usually means a different `contracts.py` (for
+  example a tree merged with a newer `main`) or a different PyMuPDF build.
 - Snapshots are built in a temporary directory and renamed into place when complete, so a running job never sees a
   partial or changed snapshot.
 - New files or code produce a new id. The old snapshot stays readable until it is pruned manually.
 - Bump `PARSER_VERSION` in `parse.py` when parse output changes; the parse cache is keyed by it.
 
-## Verified on the real base corpus (snapshot `snap-e31747586003`)
+## Verified on the real base corpus (snapshot `snap-990672ca4853`, `pymupdf-2.0-mupdf-1.28.5`)
 
 - **Acquisition:** 56 of 56 base PDFs downloaded and checksum-verified, with no failures. The `latest` versions and
   the sub-goal old/new PDFs have **not** been downloaded yet, and the links expire after the event.
@@ -210,7 +215,7 @@ renders/<pdf sha256>/<page>@<dpi>.png          page images
   migration (same status, same target passages, compared by citation rather than ID). Anushree's model-free agent
   paths run on the real corpus: the inspection plan covers 668 sections of R48/R148/R150/R10, and following
   corpus-detected references from 400 of them resolves 94% (572 of 607).
-- **Tests:** `tests/corpus` has 44 tests; merged with current `main` the branch runs 131 passed, 3 skipped (billed
+- **Tests:** `tests/corpus` has 45 tests; merged with current `main` the branch runs 131 passed, 3 skipped (billed
   real-model tests). Corpus tests cover structure rules, snapshot behaviour (missing file, checksum mismatch, reuse,
   refresh keeps the old snapshot) and the real corpus:
   - metadata, footer verification and contract-shaped records (IDs, namespaces, enums, index order);

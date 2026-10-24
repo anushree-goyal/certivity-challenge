@@ -465,6 +465,8 @@ class SqliteCorpusReader:
             "parse_failed": self.manifest.get("parse_failed", {}),
             "counts": counts,
             "parser_version": self.manifest.get("parser_version"),
+            "extractor_version": self.manifest.get("extractor_version"),
+            "code_fingerprint": self.manifest.get("code_fingerprint"),
             "package_commit": self.manifest.get("package_commit"),
         }
 
