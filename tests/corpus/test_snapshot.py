@@ -101,3 +101,15 @@ def test_bootstrap_and_open_by_corpus_dir(tiny_package):
     single = open_corpus(tiny_package.snapshots / status["snapshot_id"])  # a snapshot directory also works
     assert single.snapshot_id == status["snapshot_id"]
     single.close()
+
+
+def test_snapshot_identity_includes_the_extractor_version(tiny_package):
+    """Same ID must mean same content: the PDF text library's version is part of the ID and visible in status."""
+    import pymupdf
+
+    from certivity.corpus.store import EXTRACTOR_VERSION, code_fingerprint
+
+    report = build_snapshot(tiny_package, workers=1)
+    status = corpus_status(tiny_package)
+    assert status["extractor_version"] == EXTRACTOR_VERSION and pymupdf.VersionFitz in EXTRACTOR_VERSION
+    assert status["code_fingerprint"] == code_fingerprint() and status["snapshot_id"] == report.snapshot_id
