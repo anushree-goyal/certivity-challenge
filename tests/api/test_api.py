@@ -1,5 +1,6 @@
-from urllib.parse import quote
+import dataclasses
 import json
+from urllib.parse import quote
 
 from fastapi.testclient import TestClient
 
@@ -42,6 +43,10 @@ def test_input_validation(settings):
 
 
 def test_real_mode_without_modules_fails_honestly(settings):
+    # Point the pipeline at modules that do not exist, independent of which branches are merged.
+    missing = {name: f"certivity.not_merged_{name}:{name}" for name in
+               ("run_extraction", "review_requirements", "build_submission", "validate_submission", "create_llm")}
+    settings = dataclasses.replace(settings, entry_points={**settings.entry_points, **missing})
     with TestClient(create_app(settings)) as client:
         run = client.post("/api/runs", data={"package_case": "dev-rear-lamp", "mode": "real"}).json()
         status = wait_finished(client, run["run_id"])
