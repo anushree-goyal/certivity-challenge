@@ -305,7 +305,7 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
     @app.get("/api/runs")
     def list_runs() -> list[dict[str, Any]]:
         keys = ("run_id", "state", "stage", "origin", "mode", "team_id", "case_id", "created_at", "finished_at",
-                "submission_valid", "cached_from", "interrupted")
+                "submission_valid", "cached_from", "interrupted", "extraction_mode")
         return [{k: m.get(k) for k in keys} for m in store.list_runs()]
 
     @app.get("/api/runs/{run_id}")
@@ -314,7 +314,10 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
         return {k: m.get(k) for k in (
             "run_id", "state", "stage", "origin", "mode", "cached_from", "team_id", "case_id", "progress",
             "warnings", "errors", "interrupted", "created_at", "started_at", "finished_at", "revision_rounds",
-            "submission_valid", "corpus_snapshot_id", "cancel_requested", "cancelled")} | {
+            "submission_valid", "corpus_snapshot_id", "cancel_requested", "cancelled",
+            # Which extraction mode and limits produced this run, so a result can
+            # be compared against another run rather than taken on trust.
+            "extraction_mode", "run_config")} | {
             "finished": RunState(m["state"]).finished,
             "events": mask_paths(store.read_events(m.get("cached_from") or run_id, limit=100))} | {
             "warnings": mask_paths(m.get("warnings")), "errors": mask_paths(m.get("errors"))}

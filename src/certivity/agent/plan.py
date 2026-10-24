@@ -235,6 +235,9 @@ def build_inspection_plan(
             )
 
     plan = _prioritise(ctx, plan, profile)
+    total_limit = getattr(ctx.config, "max_sections_total", None)
+    if total_limit is not None and len(plan) > total_limit:
+        plan, coverage = _apply_total_limit(ctx, plan, coverage, int(total_limit))
     ctx.event(
         "plan",
         f"Inspection plan: {len(plan)} section(s) across "
@@ -361,3 +364,49 @@ def _apply_section_limit(
         for entry in coverage
     ]
     return kept_plan, updated
+
+
+def _apply_total_limit(
+    ctx: RunContext,
+    plan: list[PlanItem],
+    coverage: list[CoverageItem],
+    limit: int,
+) -> tuple[list[PlanItem], list[CoverageItem]]:
+    """Keep the ``limit`` highest-priority sections, recording the rest as unread.
+
+    Applied after prioritisation, so the sections kept are the ones most likely
+    to carry a requirement rather than whichever happened to come first in the
+    documents. The dropped ones stay in the ledger: a bounded run must say what
+    it did not read, or its coverage claim is not honest.
+    """
+    kept, dropped_items = plan[:limit], plan[limit:]
+    dropped = {item.section_id for item in dropped_items}
+    by_document: dict[str, int] = {}
+    for item in dropped_items:
+        by_document[item.document.regulation] = (
+            by_document.get(item.document.regulation, 0) + 1
+        )
+    detail = ", ".join(f"{reg}: {n}" for reg, n in sorted(by_document.items()))
+    ctx.warn(
+        f"RunConfig.max_sections_total={limit} left {len(dropped)} lower-priority "
+        f"section(s) unread ({detail}); coverage is partial",
+        stage="plan",
+    )
+    updated = [
+        CoverageItem(
+            target_kind=entry.target_kind,
+            target_id=entry.target_id,
+            status=entry.status,
+            explanation=(
+                "Not read: RunConfig.max_sections_total was reached; this section "
+                "ranked below the cap on expected requirement density."
+                if entry.target_id in dropped
+                else entry.explanation
+            ),
+            inspected_passage_ids=entry.inspected_passage_ids,
+            draft_ids=entry.draft_ids,
+            document_id=entry.document_id,
+        )
+        for entry in coverage
+    ]
+    return kept, updated

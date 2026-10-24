@@ -59,6 +59,34 @@ REQUIRED = ("open_corpus", "create_llm", "run_extraction", "review_requirements"
 OPTIONAL = ("revise_extraction", "evaluate_case", "build_submission_detailed", "run_config_record")
 
 
+LLM_CACHE_ENV = "CERTIVITY_LLM_CACHE"
+DEFAULT_LLM_CACHE = "data/cache/llm"
+
+
+def llm_cache_dir(module_dir: str | os.PathLike[str]) -> Path:
+    """Where model answers are cached for this run.
+
+    Shared across runs by default. The cache key already covers everything that
+    can change an answer - task, prompt text and version, payload, schema,
+    images, model and provider configuration - so a shared directory can only
+    return a result that the current call would have produced anyway.
+
+    Keeping it per run was what made an interrupted run unrecoverable: the
+    answers were on disk but under the dead run's id, so the next attempt paid
+    for all of them again. Set ``CERTIVITY_LLM_CACHE=off`` to go back to a
+    per-run cache.
+    """
+    configured = os.environ.get(LLM_CACHE_ENV, "").strip()
+    if configured.lower() in ("off", "none", "0", "false"):
+        return Path(module_dir) / "llm-cache"
+    base = Path(configured) if configured else Path(DEFAULT_LLM_CACHE)
+    if not base.is_absolute():
+        base = Path(__file__).resolve().parents[3] / base
+    # One sub-directory per module dir name (agent, quality) so a review answer
+    # and an extraction answer are never confused, even though the key differs.
+    return base / Path(module_dir).name
+
+
 def _record_factory(factory: Any) -> Callable[[dict[str, Any]], Any]:
     """Wraps contracts.make_run_input (keyword-only)."""
     def make(fields: dict[str, Any]) -> Any:
@@ -137,7 +165,7 @@ def load_components(settings: Settings, mode: str | None = None) -> Components:
         mode="real",
         open_corpus=lambda snapshot_id=None: (call_accepting(open_corpus, settings.corpus_dir, snapshot_id=snapshot_id)
                                               if snapshot_id else open_corpus(settings.corpus_dir)),
-        create_llm=lambda agent_dir, **limits: call_accepting(create_llm, cache_dir=Path(agent_dir) / "llm-cache", **limits),
+        create_llm=lambda agent_dir, **limits: call_accepting(create_llm, cache_dir=llm_cache_dir(agent_dir), **limits),
         make_run_config=loaded["run_config_record"],
         run_extraction=loaded["run_extraction"],
         revise_extraction=loaded["revise_extraction"],

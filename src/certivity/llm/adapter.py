@@ -28,6 +28,7 @@ import json
 import logging
 import mimetypes
 import os
+import random
 import threading
 import time
 from dataclasses import dataclass, field, replace
@@ -44,7 +45,9 @@ from certivity.contracts import (
     content_hash,
 )
 from certivity.llm.cache import CacheBackend, CallCache, NullCache
+from certivity.llm.limiter import RateLimiter, limiter_from_env
 from certivity.llm.schema_check import schema_errors
+from certivity.llm.telemetry import ApiTelemetry, _retry_after_seconds
 
 logger = logging.getLogger(__name__)
 
@@ -72,9 +75,34 @@ class ProviderConfig:
     max_output_tokens: int = 16000
     effort: Optional[str] = "high"
     """``low`` | ``medium`` | ``high`` | ``xhigh`` | ``max``, or None to omit."""
-    timeout_s: float = 120.0
+    timeout_s: float = 600.0
+    """Per-request deadline.
+
+    Raised from 120 s after measuring a real run. High-effort extraction over a
+    16-passage batch regularly took longer than 120 s, so the deadline - not
+    the provider - was ending those calls, and the SDK then retried them
+    invisibly. A section cost three timed-out attempts and produced nothing.
+    Streaming keeps the connection alive, so a generous deadline costs nothing
+    on a healthy call and stops a slow-but-working one from being thrown away."""
     max_retries: int = 2
-    """Transport retries, handled by the SDK. Schema reasks are counted separately."""
+    """Retry attempts after the first. Handled in this module when
+    ``explicit_retries`` is set, so every attempt is counted and every
+    ``retry-after`` is obeyed and recorded."""
+    explicit_retries: bool = True
+    """Retry here instead of inside the SDK.
+
+    The SDK's own retries are invisible to the caller: a call that returns
+    successfully may have been three round trips, and a run cannot report what
+    it cannot see. Retrying here makes attempts, 429s and backoff measurable.
+    The transport hook counts SDK-internal retries as well, so turning this off
+    degrades the detail of the measurement rather than losing it."""
+    stream: bool = True
+    """Read responses as a stream.
+
+    A non-streaming request returns nothing until the whole answer is ready, so
+    a long generation looks identical to a hung socket and dies on the client
+    deadline. Streaming makes progress observable and is what the provider
+    recommends for long outputs."""
     max_schema_reasks: int = 1
     use_refusal_fallbacks: bool = True
     cache_prompt_prefix: bool = True
@@ -83,7 +111,12 @@ class ProviderConfig:
     base_url: Optional[str] = None
 
     def identity(self) -> dict[str, Any]:
-        """Fields that affect the answer, for the cache key and the run record."""
+        """Fields that affect the answer, for the cache key and the run record.
+
+        Transport settings - timeout, retries, streaming - are deliberately
+        absent. They change how an answer is fetched, never what it is, so
+        including them would discard a whole cache for a timeout change.
+        """
         return {
             "provider": self.provider,
             "model": self.model,
@@ -137,6 +170,8 @@ class StructuredLLMAdapter:
         max_calls: Optional[int] = None,
         model_overrides: dict[str, str] | None = None,
         client: Any | None = None,
+        telemetry: ApiTelemetry | None = None,
+        limiter: RateLimiter | None = None,
     ) -> None:
         self.config = config or ProviderConfig()
         self.cache: CacheBackend = cache or NullCache()
@@ -145,6 +180,11 @@ class StructuredLLMAdapter:
         self._client = client
         self._client_lock = threading.Lock()
         self._fallbacks_available = self.config.use_refusal_fallbacks
+        self.telemetry = telemetry if telemetry is not None else ApiTelemetry()
+        # One limiter instance per adapter, and one adapter per run, so every
+        # worker thread passes through the same gate. A default limiter is a
+        # pass-through: concurrency is not throttled until it is configured.
+        self.limiter = limiter if limiter is not None else RateLimiter()
 
     # -- configuration ---------------------------------------------------- #
 
@@ -161,6 +201,19 @@ class StructuredLLMAdapter:
             "calls_used": self._budget.calls,
             "max_calls": self._budget.max_calls,
             "model_overrides": self.model_overrides,
+            "timeout_s": self.config.timeout_s,
+            "max_retries": self.config.max_retries,
+            "explicit_retries": self.config.explicit_retries,
+            "stream": self.config.stream,
+            "rate_limiter": self.limiter.describe(),
+        }
+
+    def usage_report(self) -> dict[str, Any]:
+        """Measured provider traffic, for a run record or a diagnosis."""
+        return {
+            "telemetry": self.telemetry.snapshot(),
+            "diagnosis": self.telemetry.diagnosis(),
+            "rate_limiter": self.limiter.describe(),
         }
 
     def credentials_available(self) -> bool:
@@ -203,12 +256,47 @@ class StructuredLLMAdapter:
                 )
             kwargs: dict[str, Any] = {
                 "timeout": self.config.timeout_s,
-                "max_retries": self.config.max_retries,
+                # With explicit retries the SDK must not also retry, or one
+                # logical attempt becomes three and neither layer knows the
+                # real count. The transport hook still sees every round trip.
+                "max_retries": 0 if self.config.explicit_retries else self.config.max_retries,
             }
             if self.config.base_url:
                 kwargs["base_url"] = self.config.base_url
+            http_client = self._build_http_client(anthropic)
+            if http_client is not None:
+                kwargs["http_client"] = http_client
             self._client = anthropic.Anthropic(**kwargs)
             return self._client
+
+    def _build_http_client(self, anthropic: Any) -> Any:
+        """An httpx client whose response hook feeds telemetry.
+
+        This is the only place that sees retries the SDK makes on its own: the
+        returned message object carries no record of them, but every round trip
+        produces a response here. A failure to build the hooked client is not
+        worth failing a run over, so it falls back to the SDK's own client and
+        the run simply reports less detail.
+        """
+        try:
+            import httpx2 as httpx  # the SDK's vendored httpx
+        except ImportError:  # pragma: no cover - depends on the installed SDK
+            try:
+                import httpx  # type: ignore[no-redef]
+            except ImportError:
+                return None
+        try:
+            limits = httpx.Limits(
+                max_connections=64, max_keepalive_connections=32
+            )
+            return httpx.Client(
+                timeout=self.config.timeout_s,
+                limits=limits,
+                event_hooks={"response": [self.telemetry.on_response]},
+            )
+        except Exception:  # pragma: no cover - never fail a run over telemetry
+            logger.debug("could not build a hooked http client", exc_info=True)
+            return None
 
     def model_for(self, task: str) -> str:
         return self.model_overrides.get(task, self.config.model)
@@ -252,6 +340,7 @@ class StructuredLLMAdapter:
 
         cached = self.cache.get(key)
         if cached is not None:
+            self.telemetry.cache_hit()
             return LLMResponse(
                 data=cached["data"],
                 provider=cached.get("provider", config.provider),
@@ -346,6 +435,7 @@ class StructuredLLMAdapter:
                         finish_reason=meta.get("finish_reason"),
                     )
 
+            self.telemetry.schema_reask()
             warnings.append(
                 f"attempt {attempt + 1} violated the schema: {'; '.join(last_errors[:5])}"
             )
@@ -424,10 +514,16 @@ class StructuredLLMAdapter:
         }
 
         warnings: list[str] = []
+        estimated_input_tokens = _estimate_input_tokens(request, encoded_images)
+        self.telemetry.call_started(task, model)
         started = time.monotonic()
         use_fallbacks = self._fallbacks_available
+        attempts = 1
         try:
-            response = self._send(client, request, use_fallbacks)
+            with self.limiter.slot(estimated_input_tokens):
+                response, attempts = self._send_with_retries(
+                    client, request, use_fallbacks, task
+                )
         except anthropic.BadRequestError as exc:
             message = str(exc)
             if _is_account_configuration_error(message):
@@ -436,6 +532,7 @@ class StructuredLLMAdapter:
                 # belong in the same class as a missing credential so the caller
                 # reports "the model is not usable" rather than burying it as a
                 # per-call failure and returning an empty draft.
+                self.telemetry.call_failed("account_configuration", message)
                 raise LLMConfigurationError(
                     f"the model is not usable with this account's configuration: "
                     f"{message}"
@@ -448,16 +545,46 @@ class StructuredLLMAdapter:
                     "server-side refusal fallbacks rejected by this deployment; "
                     "retried without them"
                 )
-                response = self._send(client, request, False)
+                with self.limiter.slot(estimated_input_tokens):
+                    response, attempts = self._send_with_retries(
+                        client, request, False, task
+                    )
             else:
+                self.telemetry.call_failed("bad_request", message)
                 raise LLMCallError(f"task {task!r}: request rejected: {message}") from exc
+        except anthropic.APITimeoutError as exc:
+            self.telemetry.call_failed("timeout", str(exc))
+            raise LLMCallError(
+                f"task {task!r}: timed out after {config.timeout_s:.0f}s: {exc}"
+            ) from exc
+        except anthropic.RateLimitError as exc:
+            self.telemetry.call_failed("rate_limited", str(exc))
+            raise LLMCallError(
+                f"task {task!r}: rate limited by the provider after "
+                f"{self.config.max_retries + 1} attempt(s): {exc}"
+            ) from exc
         except anthropic.APIStatusError as exc:
+            self.telemetry.call_failed(f"http_{exc.status_code}", str(exc))
             raise LLMCallError(
                 f"task {task!r}: provider returned {exc.status_code}: {exc}"
             ) from exc
         except anthropic.APIConnectionError as exc:
+            self.telemetry.call_failed("connection", str(exc))
             raise LLMCallError(f"task {task!r}: could not reach the provider: {exc}") from exc
+        except BaseException as exc:
+            self.telemetry.call_failed(type(exc).__name__, str(exc))
+            raise
         latency_ms = (time.monotonic() - started) * 1000.0
+        _raw_usage = getattr(response, "usage", None)
+        self.telemetry.call_finished(
+            model=getattr(response, "model", model) or model,
+            latency_s=latency_ms / 1000.0,
+            input_tokens=getattr(_raw_usage, "input_tokens", None),
+            output_tokens=getattr(_raw_usage, "output_tokens", None),
+            cache_creation=getattr(_raw_usage, "cache_creation_input_tokens", None),
+            cache_read=getattr(_raw_usage, "cache_read_input_tokens", None),
+            attempts=attempts,
+        )
 
         stop_reason = getattr(response, "stop_reason", None)
         if stop_reason == "refusal":
@@ -492,11 +619,100 @@ class StructuredLLMAdapter:
         }
 
     def _send(self, client: Any, request: dict[str, Any], use_fallbacks: bool) -> Any:
-        if use_fallbacks:
-            return client.beta.messages.create(
-                **request, betas=[FALLBACK_BETA], fallbacks="default"
-            )
-        return client.messages.create(**request)
+        """One attempt. Streaming when configured, otherwise a plain create.
+
+        Streaming is not a style choice. A non-streaming request sends nothing
+        back until the whole answer exists, so a 400-second generation is
+        indistinguishable from a dead socket and gets killed by the client
+        deadline; a measured run lost whole sections that way. A stream keeps
+        the connection active and returns the same final message.
+        """
+        messages = client.beta.messages if use_fallbacks else client.messages
+        extra = (
+            {"betas": [FALLBACK_BETA], "fallbacks": "default"} if use_fallbacks else {}
+        )
+        # An injected client - a test double, or a provider wrapper - need not
+        # support streaming. Falling back to create() keeps such a client
+        # working instead of making streaming a requirement of the interface.
+        if not self.config.stream or not hasattr(messages, "stream"):
+            return messages.create(**request, **extra)
+        with messages.stream(**request, **extra) as stream:
+            return stream.get_final_message()
+
+    def _send_with_retries(
+        self, client: Any, request: dict[str, Any], use_fallbacks: bool, task: str
+    ) -> tuple[Any, int]:
+        """Send, retrying the failures that are worth retrying. Returns attempts.
+
+        What is retried and what is not:
+
+        * 429, 529 and 5xx are the provider asking for a later attempt.
+        * A timeout or a connection error is worth one more try, because a
+          dropped socket is not a bad request.
+        * Anything else - a malformed body, a refusal, an auth problem - is
+          not retried, because repeating it produces the same answer more
+          slowly.
+
+        The provider's own ``retry-after`` wins over our backoff whenever it is
+        present; guessing a delay when the server has stated one is how a
+        client turns a short pause into a long one. Otherwise the wait is
+        bounded exponential with jitter, so eight workers that were throttled
+        together do not all come back at the same instant.
+        """
+        import anthropic
+
+        attempts = 0
+        last_exc: BaseException | None = None
+        for attempt in range(self.config.max_retries + 1):
+            attempts = attempt + 1
+            try:
+                return self._send(client, request, use_fallbacks), attempts
+            except (
+                anthropic.RateLimitError,
+                anthropic.InternalServerError,
+                anthropic.APITimeoutError,
+                anthropic.APIConnectionError,
+            ) as exc:
+                last_exc = exc
+                if not self.config.explicit_retries or attempt >= self.config.max_retries:
+                    raise
+                delay = self._retry_delay(exc, attempt)
+                logger.info(
+                    "task %s: %s on attempt %d/%d, retrying in %.1fs",
+                    task,
+                    type(exc).__name__,
+                    attempts,
+                    self.config.max_retries + 1,
+                    delay,
+                )
+                self.telemetry.slept(delay)
+                time.sleep(delay)
+            except anthropic.APIStatusError as exc:
+                # 529 "overloaded" is a retryable status the SDK does not give
+                # its own exception class, so it is matched by code.
+                if exc.status_code not in (529,) or not self.config.explicit_retries:
+                    raise
+                last_exc = exc
+                if attempt >= self.config.max_retries:
+                    raise
+                delay = self._retry_delay(exc, attempt)
+                self.telemetry.slept(delay)
+                time.sleep(delay)
+        assert last_exc is not None  # the loop either returns or raises
+        raise last_exc
+
+    def _retry_delay(self, exc: BaseException, attempt: int) -> float:
+        """The provider's requested wait, else bounded exponential with jitter."""
+        response = getattr(exc, "response", None)
+        headers = getattr(response, "headers", None)
+        if headers is not None:
+            requested = _retry_after_seconds(headers)
+            if requested is not None:
+                # Capped so a pathological header cannot park a worker for an
+                # hour, and floored at a second so a 0 does not become a spin.
+                return max(1.0, min(float(requested), 60.0))
+        base = min(2.0 * (2 ** attempt), 30.0)
+        return base * (0.5 + random.random() * 0.5)
 
 
 _ACCOUNT_CONFIGURATION_MARKERS = (
@@ -519,6 +735,23 @@ available."""
 def _is_account_configuration_error(message: str) -> bool:
     lowered = message.lower()
     return any(marker in lowered for marker in _ACCOUNT_CONFIGURATION_MARKERS)
+
+
+def _estimate_input_tokens(request: dict[str, Any], encoded_images: list) -> int:
+    """A rough input-token count, for the limiter's token bucket only.
+
+    The real count arrives with the response, which is too late to pace a
+    request on, so this estimates from the serialised body at roughly four
+    characters per token and adds a flat allowance per image. It is used to
+    decide whether to wait, never reported as measured usage: the telemetry's
+    token totals all come from the provider.
+    """
+    try:
+        text_chars = len(json.dumps(request, default=str))
+    except (TypeError, ValueError):  # pragma: no cover
+        return 0
+    images = sum(len(data) // 750 for _, data in encoded_images)
+    return text_chars // 4 + images
 
 
 def _usage_from_response(response: Any, model: str) -> ModelUsage:
@@ -580,12 +813,26 @@ def adapter_from_env(
     # An explicit argument always beats the environment.
     merged_overrides = {**env_overrides, **(model_overrides or {})}
 
+    defaults = ProviderConfig()
     config = ProviderConfig(
         model=os.environ.get("CERTIVITY_MODEL", DEFAULT_MODEL),
         effort=os.environ.get("CERTIVITY_MODEL_EFFORT", "high") or None,
         max_output_tokens=int(os.environ.get("CERTIVITY_MAX_OUTPUT_TOKENS", "16000")),
-        timeout_s=timeout_s if timeout_s is not None else 120.0,
-        max_retries=max_retries if max_retries is not None else 2,
+        timeout_s=(
+            timeout_s
+            if timeout_s is not None
+            else float(os.environ.get("CERTIVITY_REQUEST_TIMEOUT_S", defaults.timeout_s))
+        ),
+        max_retries=(
+            max_retries
+            if max_retries is not None
+            else int(os.environ.get("CERTIVITY_MAX_RETRIES", defaults.max_retries))
+        ),
+        # Off only on request, and only for a controlled diagnostic: with the
+        # SDK's retries disabled here too, a 429 surfaces to the caller instead
+        # of being absorbed, which is what makes a rate-limit probe meaningful.
+        explicit_retries=not _env_flag("CERTIVITY_SDK_RETRIES"),
+        stream=not _env_flag("CERTIVITY_DISABLE_STREAMING"),
         use_refusal_fallbacks=not os.environ.get("CERTIVITY_DISABLE_REFUSAL_FALLBACKS"),
         base_url=os.environ.get("ANTHROPIC_BASE_URL") or None,
     )
@@ -595,7 +842,12 @@ def adapter_from_env(
         cache=cache,
         max_calls=max_calls,
         model_overrides=merged_overrides,
+        limiter=limiter_from_env(),
     )
+
+
+def _env_flag(name: str) -> bool:
+    return str(os.environ.get(name, "")).strip().lower() in ("1", "true", "yes", "on")
 
 
 def describe_configuration(adapter: StructuredLLMAdapter | None = None) -> dict[str, Any]:

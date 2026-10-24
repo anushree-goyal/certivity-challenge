@@ -34,10 +34,17 @@ def test_real_mode_passes_module_records_between_stages(settings):
         agent_dir = client.app.state.store.module_dir(run["run_id"], "agent")
         quality_dir = client.app.state.store.module_dir(run["run_id"], "quality")
         assert fake_modules.SEEN["artifacts_dir"] == agent_dir
-        # Extraction and review each get their own adapter (and so their own call budget).
+        # Extraction and review each get their own adapter (and so their own call budget),
+        # and their own model-answer cache. The cache now lives outside the run folder,
+        # so an interrupted run's answers are still available to the next attempt; what
+        # this asserts is that the two stages still do not share one cache.
         run_adapters = [a for a in fake_modules.SEEN["adapters"] if a["cache_dir"]]  # health checks pass no cache dir
-        assert run_adapters == [{"cache_dir": agent_dir / "llm-cache", "max_calls": None},
-                                                 {"cache_dir": quality_dir / "llm-cache", "max_calls": None}]
+        assert [a["max_calls"] for a in run_adapters] == [None, None]
+        agent_cache, quality_cache = (a["cache_dir"] for a in run_adapters)
+        assert agent_cache != quality_cache
+        assert (agent_cache.name, quality_cache.name) == ("agent", "quality")
+        assert agent_dir not in agent_cache.parents, "a per-run cache cannot outlive the run"
+        assert quality_dir not in quality_cache.parents
         assert status_llm(client, run["run_id"]) == "fake-model"
 
         view = client.get(f"/api/runs/{run['run_id']}/results").json()
@@ -175,3 +182,24 @@ def test_accepted_means_exported_and_exclusions_are_shown(settings, monkeypatch)
         assert reqs["D-6"]["status"] == "excluded" and reqs["D-6"]["requirement_id"] is None
         assert reqs["D-6"]["exclusion_reason"].startswith("exclusion:")
         assert reqs["D-1"]["status"] == "accepted" and reqs["D-1"]["requirement_id"]
+
+
+def test_llm_cache_can_be_confined_to_the_run_folder(settings, monkeypatch):
+    """``CERTIVITY_LLM_CACHE=off`` restores the per-run cache.
+
+    Sharing the cache across runs is what makes a resumed run cheap, but a
+    measurement that must not be served a previous run's answers needs a way
+    back to an isolated one.
+    """
+    monkeypatch.setenv("CERTIVITY_LLM_CACHE", "off")
+    fake_modules.SEEN.clear()
+    with TestClient(create_app(_real_settings(settings))) as client:
+        run = client.post("/api/runs", data={"package_case": "dev-rear-lamp", "team_id": "team-07"}).json()
+        wait_finished(client, run["run_id"])
+        agent_dir = client.app.state.store.module_dir(run["run_id"], "agent")
+        quality_dir = client.app.state.store.module_dir(run["run_id"], "quality")
+        run_adapters = [a for a in fake_modules.SEEN["adapters"] if a["cache_dir"]]
+        assert [a["cache_dir"] for a in run_adapters] == [
+            agent_dir / "llm-cache",
+            quality_dir / "llm-cache",
+        ]

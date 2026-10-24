@@ -256,6 +256,18 @@ class RunConfig:
     max_documents: Optional[int] = None
     """None means "no cap": inspect every applicable document."""
     max_sections_per_document: Optional[int] = None
+    max_sections_total: Optional[int] = None
+    """Global ceiling on sections read, applied after prioritisation.
+
+    Differs from ``max_sections_per_document`` in which sections survive. The
+    per-document cap trims in reading order, so it keeps a document's opening
+    paragraphs and discards its annexes - and on the worked example the annexes
+    are where the photometric and marking requirements live. This cap is
+    applied to the priority-ordered plan, so what survives is the sections most
+    likely to state a requirement about this product, wherever they sit.
+
+    The sections it drops stay in the coverage ledger as PENDING with a reason,
+    so a bounded run still reports what it did not read."""
     max_model_calls: Optional[int] = 400
     max_reference_depth: int = 1
     """How many times a section is re-read with newly resolved references.

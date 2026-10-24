@@ -60,6 +60,34 @@ class RunCancelled(Exception):
 REVISION_REQUEST_FIELDS = ("requested_context", "requested_correction")
 
 
+
+def _record_api_usage(store, run_id: str, *adapters) -> None:
+    """Persist measured provider traffic, so a run can be asked what it cost.
+
+    Written repeatedly during a run and overwritten each time: the point is that
+    the file is current if the process dies, which is exactly when the numbers
+    are wanted. A telemetry problem must not fail a run, so everything here is
+    best effort.
+    """
+    merged: dict[str, Any] = {"stages": {}, "diagnosis": []}
+    names = ("extraction", "review")
+    for name, adapter in zip(names, adapters):
+        report = getattr(adapter, "usage_report", None)
+        if not callable(report):
+            continue
+        try:
+            stage = to_jsonable(report())
+        except Exception:
+            continue
+        merged["stages"][name] = stage
+        merged["diagnosis"].extend(f"{name}: {line}" for line in stage.get("diagnosis") or [])
+    if not merged["stages"]:
+        return
+    try:
+        store.write_artifact(run_id, "api_usage.json", merged)
+    except Exception:
+        pass
+
 def _needs_revision(report: dict) -> list[int]:
     """Indices of findings asking extraction for more context or a correction."""
     if report.get("needs_revision") is False:
@@ -123,8 +151,31 @@ def execute_run(run_id: str, store: RunStore, settings: Settings) -> None:
             "input_hash": manifest["input_hash"],
             "corpus_snapshot_id": snapshot_id,
         }
-        if settings.max_model_calls is not None and comps.make_run_config is not None:
-            fields["config"] = comps.make_run_config(max_model_calls=settings.max_model_calls)
+        # Per-run limits: the extraction mode's profile plus any explicit
+        # environment override. Built in one place so the adapter's call budget
+        # below and the RunConfig the agent obeys cannot disagree.
+        config_fields = dict(settings.run_config_overrides)
+        if settings.max_model_calls is not None:
+            config_fields["max_model_calls"] = settings.max_model_calls
+        if config_fields and comps.make_run_config is not None:
+            try:
+                fields["config"] = comps.make_run_config(**config_fields)
+            except TypeError as exc:
+                # A profile naming a field this RunConfig does not have must not
+                # silently run with default limits: say which field, and drop
+                # only the unknown ones.
+                known = {
+                    k: v for k, v in config_fields.items()
+                    if k in getattr(comps.make_run_config, "__dataclass_fields__", {})
+                }
+                dropped = sorted(set(config_fields) - set(known))
+                warnings.append(
+                    f"RunConfig does not accept {dropped}: {exc}. The run used the "
+                    "remaining limits."
+                )
+                fields["config"] = comps.make_run_config(**known)
+        if settings.extraction_mode != "full":
+            emit.set_stage("loading", f"Extraction mode: {settings.extraction_mode}")
         run_input = comps.make_run_input(fields)
 
         # One adapter for extraction and review, bounded by the run's own limits: the call budget is enforced
@@ -145,7 +196,9 @@ def execute_run(run_id: str, store: RunStore, settings: Settings) -> None:
         llm_description = describe_llm(llm)
         store.update(run_id, corpus_snapshot_id=snapshot_id, llm_identity=llm_description.get("model") or "",
                      llm_description=llm_description, model_call_budget=limits.get("max_calls"),
-                     review_call_budget=review_limits.get("max_calls"))
+                     review_call_budget=review_limits.get("max_calls"),
+                     extraction_mode=settings.extraction_mode,
+                     run_config=to_jsonable(config_fields))
         if not llm_configured(llm_description):
             # The adapter refuses calls without credentials; fail now with the reason, before any work.
             raise ComponentError("No model credentials are configured, so no requirements can be extracted. "
@@ -156,6 +209,7 @@ def execute_run(run_id: str, store: RunStore, settings: Settings) -> None:
         draft_obj = call_accepting(comps.run_extraction, run_input, corpus, llm, emit, artifacts_dir=agent_dir)
         draft = to_jsonable(draft_obj)
         store.write_artifact(run_id, "pipeline_draft.json", draft)
+        _record_api_usage(store, run_id, llm, llm_review)
 
         emit.set_stage("review", "Reviewing drafts")
         report_obj = comps.review_requirements(run_input, draft_obj, corpus, llm_review, emit)
@@ -241,6 +295,7 @@ def execute_run(run_id: str, store: RunStore, settings: Settings) -> None:
                  and not _needs_revision(report) else RunState.PARTIAL)
         if not valid and not submission.get("requirements"):
             state = RunState.FAILED
+        _record_api_usage(store, run_id, llm, llm_review)
         store.update(run_id, state=state.value, stage="done", finished_at=now_iso(),
                      revision_rounds=rounds, submission_valid=valid,
                      warnings=[*store.read(run_id).get("warnings", []), *warnings])

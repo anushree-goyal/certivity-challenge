@@ -45,8 +45,9 @@ from certivity.contracts import (
 )
 from certivity.agent.applicability import assess_applicability
 from certivity.agent.artifacts import AgentArtifacts
+from certivity.agent.checkpoint import CheckpointStore, checkpoint_dir_for
 from certivity.agent.context import RunContext
-from certivity.agent.extract import extract_section
+from certivity.agent.extract import SectionResult, extract_section
 from certivity.agent.plan import build_inspection_plan
 from certivity.agent.profile import build_product_profile, profile_payload
 from certivity.agent.prompts import PROMPT_VERSIONS
@@ -63,12 +64,25 @@ def run_extraction(
     emit_event: EmitEvent = null_emit,
     *,
     artifacts_dir: str | os.PathLike[str] | None = None,
+    checkpoint_dir: str | os.PathLike[str] | None = None,
 ) -> PipelineDraft:
-    """Product understanding, applicability, systematic extraction, references."""
+    """Product understanding, applicability, systematic extraction, references.
+
+    Each finished section is checkpointed to ``checkpoint_dir`` before the next
+    one starts, and a run whose checkpoints already hold a section skips it.
+    The default directory is derived from the case and input hash rather than
+    the run id, so a fresh run over the same input resumes the previous one's
+    work instead of repeating its model calls.
+    """
     ctx = RunContext(
         run_input=run_input, corpus=corpus, llm=llm, emit_event=emit_event
     )
     artifacts = AgentArtifacts(artifacts_dir)
+    checkpoints = CheckpointStore(
+        checkpoint_dir_for(
+            run_input, checkpoint_dir, artifacts_dir, prompt_versions=PROMPT_VERSIONS
+        )
+    )
     tracker = ReferenceTracker()
 
     snapshot_id = getattr(corpus, "snapshot_id", run_input.corpus_snapshot_id)
@@ -131,8 +145,30 @@ def run_extraction(
     coverage_by_target = {(item.target_kind, item.target_id): item for item in coverage}
     total = len(plan)
 
+    if checkpoints.enabled:
+        checkpoints.write_state(
+            {
+                "run_id": run_input.run_id,
+                "case_id": run_input.case_id,
+                "input_hash": run_input.input_hash,
+                "corpus_snapshot_id": snapshot_id,
+                "team_id": run_input.team_id,
+                "plan_total": len(plan),
+                "prompt_versions": dict(PROMPT_VERSIONS),
+            }
+        )
+        artifacts.write_json(
+            "checkpoint_location.json", {"directory": str(checkpoints.directory)}
+        )
+
     results = _extract_plan(
-        ctx, plan, profile_facts, conditions_by_document, tracker, coverage_by_target
+        ctx,
+        plan,
+        profile_facts,
+        conditions_by_document,
+        tracker,
+        coverage_by_target,
+        checkpoints,
     )
     # Applied in plan order, not completion order, so the output is identical
     # whatever the concurrency and whatever order the provider answers in.
@@ -222,6 +258,7 @@ def _extract_plan(
     conditions_by_document: dict,
     tracker: ReferenceTracker,
     coverage_by_target: dict,
+    checkpoints: CheckpointStore | None = None,
 ) -> dict:
     """Extract every planned section, up to ``max_parallel_sections`` at a time.
 
@@ -237,9 +274,54 @@ def _extract_plan(
     most promising sections.
     """
     workers = max(1, int(getattr(ctx.config, "max_parallel_sections", 1) or 1))
+    store = checkpoints if checkpoints is not None else CheckpointStore(None)
     total = len(plan)
     results: dict[str, object] = {}
-    done = 0
+
+    # Resume. A section already recorded PROCESSED or EXCLUDED is restored from
+    # its checkpoint and never re-submitted, so its model calls are not spent
+    # twice. A recorded FAILED section is deliberately retried: those are
+    # mostly timeouts, and retrying them is the reason for resuming at all.
+    recovered = store.load()
+    if recovered.corrupt_lines:
+        ctx.warn(
+            f"{recovered.corrupt_lines} of {recovered.total_lines} checkpoint "
+            "record(s) were unreadable and were skipped; the sections they held "
+            "are treated as not yet done",
+            stage="extract",
+        )
+    pending_plan = []
+    for item in plan:
+        record = recovered.records.get(item.section_id)
+        if record is None or not record.completed:
+            pending_plan.append(item)
+            continue
+        results[item.section_id] = SectionResult(
+            drafts=list(record.drafts),
+            inspected_passage_ids=list(record.inspected_passage_ids),
+            resolutions=[],
+            notes=list(record.notes),
+        )
+        coverage_by_target[(TargetKind.SECTION, item.section_id)] = CoverageItem(
+            target_kind=TargetKind.SECTION,
+            target_id=item.section_id,
+            status=CoverageStatus(record.status),
+            explanation=record.explanation,
+            inspected_passage_ids=tuple(record.inspected_passage_ids),
+            draft_ids=tuple(d.draft_id for d in record.drafts),
+            document_id=record.document_id or item.document.document_id,
+        )
+    resumed = total - len(pending_plan)
+    if resumed:
+        ctx.event(
+            "extract",
+            f"Resumed from checkpoints: {resumed} of {total} section(s) already "
+            f"done, {len(pending_plan)} to go",
+            completed=resumed,
+            total=total,
+        )
+    plan = pending_plan
+    done = resumed
 
     def work(item):
         return extract_section(
@@ -263,16 +345,37 @@ def _extract_plan(
                 explanation=f"{type(error).__name__}: {error}",
                 document_id=item.document.document_id,
             )
+            # Failures are checkpointed too: a resumed run needs to know this
+            # section was attempted and why it did not finish.
+            store.record_section(
+                item.section_id,
+                status=CoverageStatus.FAILED,
+                document_id=item.document.document_id,
+                explanation=f"{type(error).__name__}: {error}",
+            )
             return
         results[item.section_id] = result
+        status = CoverageStatus.FAILED if result.failed else CoverageStatus.PROCESSED
+        explanation = result.failure_reason or ("; ".join(result.notes) or None)
         coverage_by_target[key] = CoverageItem(
             target_kind=TargetKind.SECTION,
             target_id=item.section_id,
-            status=CoverageStatus.FAILED if result.failed else CoverageStatus.PROCESSED,
-            explanation=result.failure_reason or ("; ".join(result.notes) or None),
+            status=status,
+            explanation=explanation,
             inspected_passage_ids=tuple(result.inspected_passage_ids),
             draft_ids=tuple(d.draft_id for d in result.drafts),
             document_id=item.document.document_id,
+        )
+        # Written before the next section starts, so an interruption costs at
+        # most the section in flight rather than the whole run.
+        store.record_section(
+            item.section_id,
+            status=status,
+            document_id=item.document.document_id,
+            explanation=explanation,
+            inspected_passage_ids=result.inspected_passage_ids,
+            drafts=result.drafts,
+            notes=result.notes,
         )
         ctx.event(
             "extract",
@@ -292,6 +395,9 @@ def _extract_plan(
                 record(item, work(item), None)
             except ModelBudgetExceeded:
                 _warn_budget(ctx, done, total)
+                break
+            except LLMConfigurationError as exc:
+                _warn_provider_unusable(ctx, done, total, exc)
                 break
             except LLMCallError as exc:
                 record(item, None, exc)
@@ -321,12 +427,44 @@ def _extract_plan(
                     if not stop:
                         _warn_budget(ctx, done, total)
                     stop = True
+                except LLMConfigurationError as exc:
+                    # The provider is unusable for the rest of the run - no
+                    # credential, no credit, a disabled key. Stop submitting,
+                    # but drain what is already in flight: those sections have
+                    # been paid for, and discarding them to raise sooner is how
+                    # a run with real requirements in hand ends up exporting
+                    # nothing. The run is reported partial, with the provider's
+                    # own message.
+                    if not stop:
+                        _warn_provider_unusable(ctx, done, total, exc)
+                    stop = True
                 except LLMCallError as exc:
+                    record(item, None, exc)
+                except Exception as exc:
+                    # Anything unforeseen is recorded against its own section
+                    # rather than thrown through the pool, for the same reason.
+                    ctx.warn(
+                        f"section {item.section_id} raised "
+                        f"{type(exc).__name__}: {exc}",
+                        stage="extract",
+                    )
                     record(item, None, exc)
                 if not stop and not ctx.budget_exhausted:
                     submit_next()
                 break
         return results
+
+
+def _warn_provider_unusable(
+    ctx: RunContext, done: int, total: int, exc: BaseException
+) -> None:
+    ctx.warn(
+        f"the model provider became unusable after {done} of {total} section(s): "
+        f"{exc}. The sections already read are kept and coverage is partial.",
+        stage="extract",
+    )
+    with ctx.lock:
+        ctx.budget_exhausted = True
 
 
 def _warn_budget(ctx: RunContext, done: int, total: int) -> None:
