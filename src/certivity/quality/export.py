@@ -52,7 +52,11 @@ def build_submission_detailed(run_input, draft, report, corpus) -> BuildResult:
             continue
         text = A.draft_text(d).strip()
         p = primaries.get(A.draft_primary_id(d))
-        if not text:
+        if A.draft_is_exclusion(d):
+            # "No requirements apply to ..." imposes nothing and has no counterpart in the answer
+            # key; it stays in the QualityReport for the record.
+            result.excluded[did] = "exclusion: removes a case from scope, imposes no requirement"
+        elif not text:
             result.excluded[did] = "empty text"
         elif len(text) > MAX_TEXT_CHARS:
             result.excluded[did] = (f"text is {len(text)} chars > {MAX_TEXT_CHARS}; needs faithful "
