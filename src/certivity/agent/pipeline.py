@@ -117,7 +117,7 @@ def run_extraction(
             stage="applicability",
         )
 
-    plan, coverage = build_inspection_plan(ctx, selected)
+    plan, coverage = build_inspection_plan(ctx, selected, profile)
     conditions_by_document = {
         document_id: decision.conditions
         for decision in decisions

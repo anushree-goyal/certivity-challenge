@@ -258,3 +258,73 @@ def test_sections_are_ordered_naturally_when_the_corpus_gives_no_ordinal():
     assert sorted(labels, key=_natural_label_key) == [
         "2", "3.1", "3.2", "3.2.1", "3.10", "10.1",
     ]
+
+
+# --------------------------------------------------------------------------- #
+# Inspection priority
+#
+# The first real end-to-end run spent its entire model budget on UN R10's
+# definitions clause and produced four requirements that appear nowhere in the
+# dev case's answer key, while R148's photometric sections went unread. Order
+# decides what a budget-limited run actually contains.
+# --------------------------------------------------------------------------- #
+
+
+def test_priority_prefers_obligations_and_product_terms_over_admin():
+    from certivity.agent.plan import _profile_terms, section_priority
+    from certivity.contracts import ProductFact, ProductProfile, Section, SourcePassage
+
+    profile = ProductProfile(
+        product_type="rear signalling lamp",
+        facts=(ProductFact(key="functions", value="rear position, stop", basis="stated"),),
+    )
+    terms = _profile_terms(profile)
+
+    def section(heading, label="6.1", namespace="main"):
+        return Section(
+            section_id="s", document_id="d", parent_section_id=None,
+            heading=heading, namespace=namespace, paragraph_label=label,
+        )
+
+    def passage(text):
+        return [SourcePassage(
+            passage_id="p", document_id="d", section_id="s", text=text,
+            paragraph_label="6.1", heading_ancestry=(), printed_start_page="1",
+        )]
+
+    substantive = section_priority(
+        section("Rear position lamp"),
+        passage("The rear position lamp shall have a luminous intensity of 4 cd and "
+                "shall not exceed 17 cd."),
+        terms,
+    )
+    admin = section_priority(
+        section("Names and addresses of Technical Services", "14"),
+        passage("The Contracting Parties shall communicate the names and addresses "
+                "of the Technical Services."),
+        terms,
+    )
+    empty = section_priority(section("Heading only", "7"), [], terms)
+
+    assert substantive > admin, "a requirement-bearing section must outrank admin text"
+    assert admin > empty, "an empty section is the least useful thing to spend a call on"
+
+
+def test_priority_reorders_the_plan_without_changing_coverage(
+    run_input, corpus, script
+):
+    """Order changes; the ledger does not. Every planned section still appears,
+    so a completed run is identical either way."""
+    from certivity.agent.plan import build_inspection_plan
+    from certivity.agent.context import RunContext
+    from certivity.contracts import ProductProfile
+
+    ctx = RunContext(run_input=run_input, corpus=corpus, llm=None)
+    documents = corpus.list_documents()
+    plan_unranked, cov_a = build_inspection_plan(ctx, documents, None)
+    plan_ranked, cov_b = build_inspection_plan(
+        ctx, documents, ProductProfile(product_type="signalling device")
+    )
+
+    assert {i.section_id for i in plan_unranked} == {i.section_id for i in plan_ranked}
+    assert len(cov_a) == len(cov_b)
