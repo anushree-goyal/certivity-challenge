@@ -62,7 +62,7 @@ Additions beyond the planned seven methods (listed in `contract-proposal.md`):
 | `search(query, document_id=None, limit=20)` | SQLite FTS5 navigation aid. Not a coverage mechanism |
 | `get_document(document_id)`, `diagnostics(document_id=None)`, `status()` | Metadata, parse diagnostics, readiness |
 | `get_document_path(document_id) -> Path` | **Server-only** original PDF path for the backend's `/pdf` route (`UnknownId` / `FileNotFoundError`) |
-| `corpus_status()` (module function) | Health-route readiness. Never raises |
+| `corpus_status(corpus_dir=None) -> dict` (module function) | Health-route readiness for a corpus folder (default `data/cache/corpus`). Never raises; `ready: False` with a `reason` when unavailable |
 | `bootstrap(package_dir, corpus_dir, fetch_missing=False) -> dict` | Startup: optional fetch, then build or reuse a snapshot; returns status (`ready`, `snapshot_id`, counts) |
 
 Errors: `CorpusNotReady` (no completed snapshot) and `UnknownId` (a `KeyError` subclass).

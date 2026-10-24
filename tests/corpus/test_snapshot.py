@@ -80,6 +80,7 @@ def test_checksum_mismatch_is_not_imported(tiny_package):
 def test_status_without_snapshot(tmp_path):
     status = corpus_status(CorpusPaths(tmp_path, tmp_path / "cache"))
     assert status["ready"] is False and "build" in status["reason"]
+    assert corpus_status(str(tmp_path / "cache"))["ready"] is False
 
 
 def test_bootstrap_and_open_by_corpus_dir(tiny_package):
@@ -95,6 +96,8 @@ def test_bootstrap_and_open_by_corpus_dir(tiny_package):
             reader.get_document_path("nope")
     finally:
         reader.close()
+    by_dir = corpus_status(str(tiny_package.cache_root))  # a plain folder path, as the backend passes it
+    assert by_dir["ready"] and by_dir["snapshot_id"] == status["snapshot_id"]
     single = open_corpus(tiny_package.snapshots / status["snapshot_id"])  # a snapshot directory also works
     assert single.snapshot_id == status["snapshot_id"]
     single.close()

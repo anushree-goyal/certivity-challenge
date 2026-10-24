@@ -460,13 +460,19 @@ def open_corpus(corpus_dir: str | Path | None = None, *, snapshot_id: str | None
     return SqliteCorpusReader(paths.snapshots / snapshot_id, paths)
 
 
-def corpus_status(paths: CorpusPaths | None = None) -> dict:
-    """Readiness for the backend health route; never raises."""
-    paths = paths or default_paths()
+def corpus_status(corpus_dir: str | Path | CorpusPaths | None = None) -> dict:
+    """Readiness for the backend health route; never raises.
+
+    ``corpus_dir`` is the corpus cache root (default ``data/cache/corpus``), like ``open_corpus``; a ``CorpusPaths``
+    is also accepted.
+    """
+    paths = corpus_dir if isinstance(corpus_dir, CorpusPaths) else default_paths(cache_root=corpus_dir)
     try:
         reader = open_corpus(paths=paths)
     except CorpusNotReady as exc:
         return {"ready": False, "reason": str(exc)}
+    except Exception as exc:  # noqa: BLE001 - a health check reports a broken corpus instead of failing
+        return {"ready": False, "reason": f"{type(exc).__name__}: {exc}"}
     try:
         return reader.status()
     finally:
