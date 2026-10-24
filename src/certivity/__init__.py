@@ -1,8 +1,3 @@
-"""Certivity industrial-AI hackathon application.
+"""Certivity hackathon application: specification and drawing in, cited engineering requirements out."""
 
-Placeholder package marker. Teammate 4 owns the package skeleton, root
-dependency configuration and entry points, and may replace this file; the
-agent component only needs ``certivity`` to be importable.
-"""
-
-__all__: list[str] = []
+__version__ = "0.1.0"
