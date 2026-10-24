@@ -9,7 +9,7 @@ function Plate({ x, y, w, h, depth = 6, r = 10, children, dashed }: {
   return (
     <g transform={`translate(${x} ${y}) ${SKEW}`}>
       <rect x={depth} y={-depth} width={w} height={h} rx={r} fill="none" stroke="currentColor" strokeWidth="1" />
-      <rect x={0} y={0} width={w} height={h} rx={r} fill="#fff" className="ink" strokeWidth="1.4"
+      <rect x={0} y={0} width={w} height={h} rx={r} className="ink plate" strokeWidth="1.4"
             strokeDasharray={dashed ? "5 4" : undefined} />
       {children}
     </g>
@@ -58,7 +58,7 @@ export function ExplodedAssembly({ title = "EXPLODED VIEW · REF. ASSEMBLY" }: {
         {[0, 1, 2].map((c) => [0, 1, 2, 3].map((r) => (
           <rect key={`${c}-${r}`} x={12 + c * 18} y={12 + r * 20} width={9} height={9} rx={1.5} fill="none" className="ink" />
         )))}
-        <rect x={24} y={92} width={22} height={10} fill="#fff" className="ink" />
+        <rect x={24} y={92} width={22} height={10} className="ink plate" />
       </Plate>
 
       {/* 4 reflector: nested cavities */}
@@ -77,7 +77,7 @@ export function ExplodedAssembly({ title = "EXPLODED VIEW · REF. ASSEMBLY" }: {
       {/* fasteners */}
       {[[30, 268], [44, 290]].map(([x, y], i) => (
         <g key={i} transform={`translate(${x} ${y}) rotate(-16)`}>
-          <rect x={0} y={-4} width={8} height={8} fill="#fff" className="ink" />
+          <rect x={0} y={-4} width={8} height={8} className="ink plate" />
           <path d="M8 0 H24" className="ink" strokeWidth="2.4" strokeDasharray="1.6 1.4" />
         </g>
       ))}
@@ -110,7 +110,7 @@ export function SourceSheet() {
     <svg className="drawing-art" viewBox="0 0 220 140" role="img" aria-label="Line drawing of a regulation page with a highlighted paragraph">
       <g transform={`translate(52 26) ${SKEW}`}>
         <rect x={10} y={-8} width={96} height={118} rx={4} fill="none" stroke="currentColor" />
-        <rect width={96} height={118} rx={4} fill="#fff" className="ink" strokeWidth="1.3" />
+        <rect width={96} height={118} rx={4} className="ink plate" strokeWidth="1.3" />
         {[14, 24, 34, 44].map((y) => <path key={y} d={`M12 ${y} h${y === 44 ? 44 : 70}`} stroke="currentColor" />)}
         <rect x={8} y={56} width={80} height={22} rx={3} fill="none" className="ink" strokeDasharray="4 3" />
         {[62, 70].map((y) => <path key={y} d={`M14 ${y} h64`} className="ink" />)}
