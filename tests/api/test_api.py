@@ -171,18 +171,54 @@ def test_package_case_fixes_case_id_to_folder_name(settings):
         assert other.status_code == 422 and "folder name" in other.json()["detail"]
 
 
-def test_own_input_case_id_is_required_and_validated(settings):
+def test_case_id_is_derived_for_own_input_and_still_validated_when_given(settings):
     with TestClient(create_app(settings, start_worker=False)) as client:
-        assert client.post("/api/runs", data={"team_id": "t", "spec_text": "lamp"}).status_code == 422
-        assert client.post("/api/runs", data={"team_id": "t", "case_id": "heldout_front", "spec_text": "lamp"}).status_code == 422
-        assert client.post("/api/runs", data={"team_id": "t", "case_id": "heldout-front-bumper", "spec_text": "lamp"}).status_code == 202
+        def case_of(**kw):
+            r = client.post("/api/runs", **kw)
+            assert r.status_code == 202, r.text
+            return client.get(f"/api/runs/{r.json()['run_id']}").json()["case_id"]
+
+        assert case_of(files={"spec_file": ("Front Bumper Spec.md", b"# x\n", "text/markdown")}) == "front-bumper-spec"
+        assert case_of(data={"spec_text": "# spec: Front Bumper\n\nbody"}) == "front-bumper"
+        assert case_of(files={"drawings": ("Side View.PNG", b"\x89PNG fake", "image/png")}) == "side-view"
+        assert case_of(data={"package_case": "dev-rear-lamp"}) == "dev-rear-lamp"
+        # API clients that do send a case_id still get the format check.
+        assert client.post("/api/runs", data={"case_id": "heldout_front", "spec_text": "x"}).status_code == 422
 
 
-def test_team_id_required(settings):
+def test_team_id_comes_from_configuration_and_missing_blocks_export(settings):
     settings = dataclasses.replace(settings, default_team_id="")
-    with TestClient(create_app(settings, start_worker=False)) as client:
-        missing = client.post("/api/runs", data={"package_case": "dev-rear-lamp", "team_id": "  "})
-        assert missing.status_code == 422 and "team_id" in missing.json()["detail"]
+    with TestClient(create_app(settings)) as client:
+        warning = client.get("/api/health").json()["team_id"]
+        assert warning["configured"] is False and "CERTIVITY_TEAM_ID is not set" in warning["warning"]
+        run = client.post("/api/runs", data={"package_case": "dev-rear-lamp"})
+        assert run.status_code == 202  # the analysis itself still runs
+        status = wait_finished(client, run.json()["run_id"])
+        assert any("CERTIVITY_TEAM_ID" in w for w in status["warnings"])
+        blocked = client.get(f"/api/runs/{run.json()['run_id']}/submission")
+        assert blocked.status_code == 409 and "CERTIVITY_TEAM_ID" in blocked.json()["reason"]
+
+
+def test_placeholder_team_id_warns_but_exports(settings):
+    settings = dataclasses.replace(settings, default_team_id="team-demo")
+    with TestClient(create_app(settings)) as client:
+        assert "placeholder" in client.get("/api/health").json()["team_id"]["warning"]
+        run_id = client.post("/api/runs", data={"package_case": "dev-rear-lamp"}).json()["run_id"]
+        wait_finished(client, run_id)
+        assert client.get(f"/api/runs/{run_id}/submission").status_code == 200
+
+
+def test_export_carries_configured_team_and_derived_case(settings):
+    settings = dataclasses.replace(settings, default_team_id="team-real-42")
+    with TestClient(create_app(settings)) as client:
+        run = client.post("/api/runs", files={"spec_file": ("Front Bumper Spec.md", b"# spec: Front bumper\nM1 vehicle\n", "text/markdown")})
+        run_id = run.json()["run_id"]
+        wait_finished(client, run_id)
+        sub = client.get(f"/api/runs/{run_id}/submission")
+        assert sub.status_code == 200
+        assert (sub.json()["team_id"], sub.json()["case_id"]) == ("team-real-42", "front-bumper-spec")
+        assert f'filename="front-bumper-spec_team-real-42_{run_id}.json"' in sub.headers["content-disposition"]
+        assert client.get("/api/health").json()["team_id"] == {"configured": True, "warning": None}
 
 
 def test_fixture_processing_needs_dev_flag(settings):

@@ -28,7 +28,7 @@ from certivity.api.components import (
 from certivity.api import package
 from certivity.api.pipeline import build_run_view
 from certivity.api.serialization import first, to_jsonable
-from certivity.api.settings import REPO_ROOT, Settings, load_settings
+from certivity.api.settings import REPO_ROOT, Settings, load_settings, team_id_problem
 from certivity.api.worker import RunWorker
 from certivity.run_store import RunState, RunStore
 from certivity.run_store.store import now_iso
@@ -39,6 +39,28 @@ MAX_SPEC_BYTES = 2 * 1024 * 1024
 MAX_DRAWING_BYTES = 25 * 1024 * 1024
 DRAWING_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
 SPEC_TYPES = (".md", ".markdown", ".txt")
+
+
+def _slug(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")[:60].strip("-")
+
+
+def derive_case_id(spec_name: str | None, spec_bytes: bytes | None, drawing_names: list[str]) -> str:
+    """Case ID for own input: from the spec file name, else the spec's first heading, else a drawing's name."""
+    if spec_name:
+        if slug := _slug(Path(spec_name).stem):
+            return slug
+    if spec_bytes:
+        for line in spec_bytes.decode("utf-8", "replace").splitlines():
+            if line.lstrip().startswith("#"):
+                heading = re.sub(r"^(spec(ification)?)\s*:\s*", "", line.strip().lstrip("#").strip(), flags=re.I)
+                if slug := _slug(heading):
+                    return slug
+                break
+    for name in drawing_names:
+        if slug := _slug(Path(name).stem):
+            return slug
+    return "analysis"
 
 
 def _sha256(data: bytes) -> str:
@@ -103,8 +125,10 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
 
     @app.get("/api/health")
     def health() -> dict[str, Any]:
+        problem = team_id_problem(settings.default_team_id)
         return {"app": {"ok": True, "version": __version__, "active_run": worker.active_run,
                         "queued_runs": worker.queued},
+                "team_id": {"configured": bool(settings.default_team_id.strip()), "warning": problem},
                 "corpus_reimport": {k: v for k, v in reimport.items() if k != "thread"}, **readiness(settings)}
 
     @app.get("/api/cases")
@@ -181,7 +205,9 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
         reuse_cached = reuse_cached and dev  # normal runs are always fresh
         files: dict[str, bytes] = {}
         spec_bytes: bytes | None = None
+        spec_name: str | None = None  # uploaded file name, used to derive a case ID for own input
         drawing_files: list[str] = []
+        drawing_names: list[str] = []
 
         if package_case_id:
             try:
@@ -203,6 +229,7 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
             if Path(spec_file.filename).suffix.lower() not in SPEC_TYPES:
                 raise HTTPException(422, f"Specification must be one of {', '.join(SPEC_TYPES)}")
             spec_bytes = await spec_file.read()
+            spec_name = spec_file.filename
         elif spec_text.strip():
             spec_bytes = spec_text.encode("utf-8")
         if spec_bytes is not None and not spec_bytes.strip():
@@ -223,6 +250,7 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
             if suffix not in DRAWING_TYPES:
                 raise HTTPException(422, f"Drawing {upload.filename!r} must be PNG, JPEG or WebP")
             content = await upload.read()
+            drawing_names.append(upload.filename)
             if len(content) > MAX_DRAWING_BYTES:
                 raise HTTPException(413, f"Drawing {upload.filename!r} is larger than 25 MB")
             name = f"drawing-{len(drawing_files) + 1}{suffix}"
@@ -231,10 +259,10 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
 
         if "spec.md" not in files and not drawing_files:
             raise HTTPException(422, "Provide a specification and/or an exploded-view drawing")
+        # Team ID comes from CERTIVITY_TEAM_ID (the form field remains for the CLI and API clients). A missing
+        # team ID does not stop the analysis; it blocks the export, which needs it.
         team_id = team_id.strip() or settings.default_team_id.strip()
-        case_id = case_id.strip()
-        if not team_id or not case_id:
-            raise HTTPException(422, "team_id and case_id are required for the submission")
+        case_id = case_id.strip() or derive_case_id(spec_name, spec_bytes, drawing_names)
         is_package_folder = settings.cases_dir.is_dir() and (settings.cases_dir / case_id).is_dir() and "/" not in case_id
         if not is_package_folder and not CASE_ID_PATTERN.match(case_id):
             raise HTTPException(422, "case_id may contain only lowercase letters, digits and hyphens")
@@ -299,6 +327,9 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
     def run_submission(run_id: str):
         m = get_manifest(run_id)
         path = store.artifact_path(m.get("cached_from") or run_id, "submission.json")
+        team_problem = None if (m.get("team_id") or "").strip() else team_id_problem("")
+        if team_problem:
+            return JSONResponse({"available": False, "reason": team_problem}, status_code=409)
         if not path.is_file():
             if not RunState(m["state"]).finished:
                 reason = f"The run is still {m['state']} (stage: {m.get('stage')})."

@@ -123,6 +123,7 @@ export interface ReimportStatus { state: "idle" | "running" | "done" | "failed";
 
 export interface Health {
   app: { ok: boolean; version: string; active_run: string | null; queued_runs: number };
+  team_id?: { configured: boolean; warning: string | null };
   pipeline_mode: string;
   participant_package: { ready: boolean; cases: string[] };
   modules: Record<string, { ready: boolean; error?: string; required?: boolean }>;

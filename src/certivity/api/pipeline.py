@@ -231,7 +231,9 @@ def execute_run(run_id: str, store: RunStore, settings: Settings) -> None:
         blocking = export.get("blocking_issues") or []
         if blocking:
             warnings.append(f"Export reported {len(blocking)} blocking issue(s).")
-        if not valid:
+        if not (manifest.get("team_id") or "").strip():
+            warnings.append("CERTIVITY_TEAM_ID is not set, so the export is blocked; set it and run again.")
+        elif not valid:
             warnings.append("Submission did not pass the official validator; no download is offered.")
 
         state = (RunState.COMPLETED if valid and not coverage_open and not remaining and not blocking
