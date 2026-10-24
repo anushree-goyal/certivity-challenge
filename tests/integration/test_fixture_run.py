@@ -65,3 +65,31 @@ def test_fixture_run_end_to_end(settings, package):
 
         metrics = client.put(f"/api/runs/{run_id}/platform-metrics", json={"requirement_f1": None, "note": "not uploaded"})
         assert metrics.json()["source"].startswith("entered manually")
+
+
+def test_engineer_review_is_recorded_but_not_exported(settings):
+    with TestClient(create_app(settings)) as client:
+        run_id = client.post("/api/runs", data={"package_case": "dev-rear-lamp"}).json()["run_id"]
+        wait_finished(client, run_id)
+        before = client.get(f"/api/runs/{run_id}/submission").content
+
+        ok = client.put(f"/api/runs/{run_id}/reviews/D-1", json={"status": "approved", "note": "checked vs drawing"})
+        assert ok.status_code == 200 and ok.json()["status"] == "approved"
+        client.put(f"/api/runs/{run_id}/reviews/D-2", json={"status": "flagged"})
+        reviews = client.get(f"/api/runs/{run_id}/results").json()["engineer_reviews"]
+        assert reviews["D-1"]["note"] == "checked vs drawing" and reviews["D-2"]["status"] == "flagged"
+
+        client.put(f"/api/runs/{run_id}/reviews/D-2", json={"status": "unreviewed"})
+        assert "D-2" not in client.get(f"/api/runs/{run_id}/results").json()["engineer_reviews"]
+        assert client.put(f"/api/runs/{run_id}/reviews/D-99", json={"status": "approved"}).status_code == 404
+        assert client.put(f"/api/runs/{run_id}/reviews/D-1", json={"status": "verified"}).status_code == 422
+        assert client.get(f"/api/runs/{run_id}/submission").content == before  # submission untouched
+
+
+def test_fixture_view_uses_explicit_export_mapping(settings):
+    with TestClient(create_app(settings)) as client:
+        run_id = client.post("/api/runs", data={"package_case": "dev-rear-lamp"}).json()["run_id"]
+        wait_finished(client, run_id)
+        view = client.get(f"/api/runs/{run_id}/results").json()
+        assert view["view_warnings"] == []
+        assert next(r for r in view["requirements"] if r["draft_id"] == "D-6")["requirement_id"] == "R-005"

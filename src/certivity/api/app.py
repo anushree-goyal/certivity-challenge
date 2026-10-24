@@ -30,6 +30,7 @@ from certivity.api.worker import RunWorker
 from certivity.run_store import RunState, RunStore
 from certivity.run_store.store import now_iso
 
+ENGINEER_REVIEW_STATES = ("unreviewed", "approved", "flagged")
 MAX_SPEC_BYTES = 2 * 1024 * 1024
 MAX_DRAWING_BYTES = 25 * 1024 * 1024
 DRAWING_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
@@ -266,6 +267,31 @@ def create_app(settings: Settings | None = None, start_worker: bool = True) -> F
             raise HTTPException(422, "Expected a JSON object")
         store.write_artifact(run_id, "platform_metrics.json", {**data, "source": "entered manually from the platform"})
         return store.read_artifact(run_id, "platform_metrics.json")
+
+    @app.put("/api/runs/{run_id}/reviews/{draft_id}")
+    async def put_engineer_review(run_id: str, draft_id: str, request: Request) -> dict[str, Any]:
+        """An engineer's own review of one requirement. Recorded with the run; never written into the submission."""
+        m = get_manifest(run_id)
+        draft = store.read_artifact(m.get("cached_from") or run_id, "pipeline_draft.json") or {}
+        if draft_id not in {d.get("draft_id") for d in draft.get("draft_requirements") or []}:
+            raise HTTPException(404, f"No draft {draft_id!r} in this run")
+        body = await request.json()
+        status = body.get("status") if isinstance(body, dict) else None
+        if status not in ENGINEER_REVIEW_STATES:
+            raise HTTPException(422, f"status must be one of {', '.join(ENGINEER_REVIEW_STATES)}")
+        note = str(body.get("note") or "")[:2000]
+        entry = {"status": status, "note": note, "updated_at": now_iso()}
+
+        def change(reviews):
+            reviews = dict(reviews or {})
+            if status == "unreviewed" and not note:
+                reviews.pop(draft_id, None)
+            else:
+                reviews[draft_id] = entry
+            return reviews
+
+        store.update_artifact(run_id, "engineer_reviews.json", change)
+        return {"draft_id": draft_id, **entry}
 
     @app.post("/api/runs/{run_id}/cancel")
     def cancel_run(run_id: str) -> dict[str, Any]:

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import type { CaseInfo, Health } from "../types";
+import { prettyCase } from "./Sidebar";
+import { ExplodedAssembly } from "./Drawings";
 
 export function NewRunForm({ health, onCreated }: { health: Health | null; onCreated: (id: string) => void }) {
   const [cases, setCases] = useState<CaseInfo[]>([]);
@@ -17,6 +19,8 @@ export function NewRunForm({ health, onCreated }: { health: Health | null; onCre
 
   useEffect(() => { api.cases().then(setCases).catch(() => undefined); }, []);
   useEffect(() => { if (health && !health.real_pipeline_ready) setMode("fixture"); }, [health]);
+
+  const hasInput = !!packageCase || !!specFile || !!specText.trim() || drawings.length > 0;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,54 +47,81 @@ export function NewRunForm({ health, onCreated }: { health: Health | null; onCre
   };
 
   return (
-    <form className="card newrun" onSubmit={submit}>
-      <h2>New run</h2>
-      <label>Input case from package
-        <select value={packageCase} onChange={(e) => setPackageCase(e.target.value)}>
-          <option value="">— upload my own input —</option>
-          {cases.map((c) => (
-            <option key={c.case_id} value={c.case_id}>
-              {c.case_id} ({[c.has_spec && "spec", ...c.drawings].filter(Boolean).join(", ")})
-            </option>
-          ))}
-        </select>
-      </label>
-      {!packageCase && (
-        <>
-          <label>Specification (.md / .txt)
-            <input type="file" accept=".md,.markdown,.txt" onChange={(e) => setSpecFile(e.target.files?.[0] ?? null)} />
+    <form onSubmit={submit}>
+      <div className="crumbs"><span>Analyses</span><span>New</span></div>
+      <section className="card hero">
+        <div>
+          <h1>New compliance analysis</h1>
+          <p>Upload a technical specification or an exploded-view drawing. ReguLens finds the UN Regulations that apply,
+            extracts each engineering obligation and links it to the exact base-version page and paragraph.</p>
+          <div className="steps">
+            <span className="step"><b>1</b>Specification or drawing</span>
+            <span className="step"><b>2</b>Applicable regulations</span>
+            <span className="step"><b>3</b>Cited requirements</span>
+          </div>
+        </div>
+        <ExplodedAssembly />
+      </section>
+
+      <div className="form-grid">
+        <section className="card">
+          <h2>Product input</h2>
+          <p className="hint">A technical specification and/or an exploded-view drawing of the component.</p>
+          <label>Case from the regulation package
+            <select value={packageCase} onChange={(e) => setPackageCase(e.target.value)}>
+              <option value="">Upload my own input</option>
+              {cases.map((c) => (
+                <option key={c.case_id} value={c.case_id}>
+                  {prettyCase(c.case_id)} ({[c.has_spec && "spec", ...c.drawings].filter(Boolean).join(", ")})
+                </option>
+              ))}
+            </select>
           </label>
-          {!specFile && (
-            <label>…or paste specification text
-              <textarea rows={4} value={specText} onChange={(e) => setSpecText(e.target.value)} />
-            </label>
+          {!packageCase && (
+            <>
+              <label>Technical specification (.md, .txt)
+                <input type="file" accept=".md,.markdown,.txt" onChange={(e) => setSpecFile(e.target.files?.[0] ?? null)} />
+              </label>
+              {!specFile && (
+                <label>Or paste the specification
+                  <textarea rows={6} value={specText} onChange={(e) => setSpecText(e.target.value)}
+                            placeholder="Product type, vehicle category, functions, parts, materials…" />
+                </label>
+              )}
+            </>
           )}
-        </>
-      )}
-      <label>{packageCase ? "Extra" : ""} exploded-view drawing(s)
-        <input type="file" accept=".png,.jpg,.jpeg,.webp" multiple onChange={(e) => setDrawings(Array.from(e.target.files ?? []))} />
-      </label>
-      <div className="row">
-        <label>Team ID<input value={teamId} onChange={(e) => setTeamId(e.target.value)} placeholder="team-07" /></label>
-        <label>Case ID<input value={caseId} onChange={(e) => setCaseId(e.target.value)} placeholder={packageCase || "case folder name"} /></label>
+          <label>{packageCase ? "Additional exploded-view drawings" : "Exploded-view drawings (PNG, JPEG, WebP)"}
+            <input type="file" accept=".png,.jpg,.jpeg,.webp" multiple onChange={(e) => setDrawings(Array.from(e.target.files ?? []))} />
+          </label>
+        </section>
+
+        <section className="card">
+          <h2>Submission</h2>
+          <div className="two">
+            <label>Team ID<input value={teamId} onChange={(e) => setTeamId(e.target.value)} placeholder="team-07" /></label>
+            <label>Case ID<input value={caseId} onChange={(e) => setCaseId(e.target.value)} placeholder={packageCase || "case folder name"} /></label>
+          </div>
+          <label>Processing
+            <select value={mode} onChange={(e) => setMode(e.target.value as "real" | "fixture")}>
+              <option value="real">Full analysis (corpus and model)</option>
+              <option value="fixture">Fixture: synthetic data for interface testing</option>
+            </select>
+          </label>
+          <label className="check">
+            <input type="checkbox" checked={reuseCached} onChange={(e) => setReuseCached(e.target.checked)} />
+            Reuse a cached result for identical input and configuration
+          </label>
+          {mode === "real" && health && !health.real_pipeline_ready && (
+            <div className="banner">The full pipeline is not ready (see system status in the sidebar). The run will stop and show why.</div>
+          )}
+          {mode === "fixture" && <div className="banner fixture">Fixture output is synthetic and is labelled as such everywhere.</div>}
+          {error && <div className="banner error">{error}</div>}
+          <div className="form-actions">
+            <button type="submit" disabled={busy || !hasInput}>{busy ? "Starting…" : "Start analysis"}</button>
+            {!hasInput && <span className="hint">Choose a case or add a specification or drawing.</span>}
+          </div>
+        </section>
       </div>
-      <div className="row">
-        <label>Pipeline
-          <select value={mode} onChange={(e) => setMode(e.target.value as "real" | "fixture")}>
-            <option value="real">Real processing</option>
-            <option value="fixture">Fixture (synthetic demo data)</option>
-          </select>
-        </label>
-        <label className="check">
-          <input type="checkbox" checked={reuseCached} onChange={(e) => setReuseCached(e.target.checked)} />
-          Reuse cached result if identical
-        </label>
-      </div>
-      {mode === "real" && health && !health.real_pipeline_ready && (
-        <p className="warn">The real pipeline is not ready (see status bar). This run will fail with the reason.</p>
-      )}
-      {error && <p className="error">{error}</p>}
-      <button type="submit" disabled={busy}>{busy ? "Starting…" : "Start run"}</button>
     </form>
   );
 }

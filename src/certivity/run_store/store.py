@@ -161,6 +161,13 @@ class RunStore:
             return None
         return json.loads(path.read_text(encoding="utf-8"))
 
+    def update_artifact(self, run_id: str, name: str, change, module: str = "app") -> Any:
+        """Read-modify-write a JSON artifact under the store lock. `change` maps the old value (or None) to the new."""
+        with self._lock:
+            data = change(self.read_artifact(run_id, name, module))
+            _write_json_atomic(self.module_dir(run_id, module) / name, data)
+            return data
+
     def artifact_path(self, run_id: str, name: str, module: str = "app") -> Path:
         return self.module_dir(run_id, module) / name
 

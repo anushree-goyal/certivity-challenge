@@ -92,8 +92,12 @@ export interface RunView {
   validation: ValidationReport | null;
   evaluation: Record<string, unknown> | null;
   platform_metrics: Record<string, unknown> | null;
+  engineer_reviews: Record<string, EngineerReview>;
   submission: { available: boolean; requirement_count: number };
 }
+
+export type EngineerReviewStatus = "unreviewed" | "approved" | "flagged";
+export interface EngineerReview { status: EngineerReviewStatus; note: string; updated_at: string }
 
 export interface CaseInfo { case_id: string; has_spec: boolean; drawings: string[]; has_expected_for_evaluation: boolean }
 

@@ -37,7 +37,7 @@ export function ProfileView({ view, runId }: { view: RunView; runId: string }) {
         <h3>Input</h3>
         {view.run.spec_file && <a href={api.inputUrl(runId, view.run.spec_file)} target="_blank" rel="noreferrer">Open specification</a>}
         {(view.run.drawing_files ?? []).map((d) => (
-          <img key={d} className="page" alt={d} src={api.inputUrl(runId, d)} />
+          <img key={d} className="drawing" alt={`Exploded view ${d}`} src={api.inputUrl(runId, d)} />
         ))}
         <p className="muted small">Input hash {view.run.input_hash}</p>
       </section>

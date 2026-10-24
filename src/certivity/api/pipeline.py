@@ -341,6 +341,7 @@ def build_run_view(store: RunStore, run_id: str) -> dict[str, Any] | None:
         "validation": validation,
         "evaluation": evaluation,
         "platform_metrics": store.read_artifact(run_id, "platform_metrics.json"),
+        "engineer_reviews": store.read_artifact(run_id, "engineer_reviews.json") or {},
         "submission": {"available": submission_path.is_file(),
                        "requirement_count": len(official)},
     }

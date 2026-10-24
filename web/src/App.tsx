@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "./api";
 import type { Health, RunSummary } from "./types";
-import { HealthBar } from "./components/HealthBar";
+import { Sidebar } from "./components/Sidebar";
 import { NewRunForm } from "./components/NewRunForm";
-import { RunList } from "./components/RunList";
 import { RunDetail } from "./components/RunDetail";
 
 export default function App() {
@@ -15,34 +14,29 @@ export default function App() {
   const refreshRuns = useCallback(() => api.runs().then(setRuns).catch(() => undefined), []);
 
   useEffect(() => {
-    api.health().then(setHealth).catch((e) => setHealthError(String(e.message ?? e)));
+    const loadHealth = () => api.health().then((h) => { setHealth(h); setHealthError(null); })
+      .catch((e) => setHealthError(String(e.message ?? e)));
+    loadHealth();
     refreshRuns();
-    const t = setInterval(refreshRuns, 4000);
-    return () => clearInterval(t);
+    const runsTimer = setInterval(refreshRuns, 4000);
+    const healthTimer = setInterval(loadHealth, 30000);
+    return () => { clearInterval(runsTimer); clearInterval(healthTimer); };
   }, [refreshRuns]);
 
-  const select = (id: string) => {
+  const select = (id: string | null) => {
     setSelected(id);
-    history.replaceState(null, "", `?run=${id}`);
+    history.replaceState(null, "", id ? `?run=${id}` : location.pathname);
   };
 
   return (
-    <div className="app">
-      <header className="topbar">
-        <h1>Certivity requirements</h1>
-        <HealthBar health={health} error={healthError} />
-      </header>
-      <div className="layout">
-        <aside className="sidebar">
-          <NewRunForm health={health} onCreated={(id) => { refreshRuns(); select(id); }} />
-          <RunList runs={runs} selected={selected} onSelect={select} />
-        </aside>
-        <main className="main">
-          {selected ? <RunDetail runId={selected} onFinished={refreshRuns} /> : (
-            <div className="empty">Start a run or pick one from the list.</div>
-          )}
-        </main>
-      </div>
+    <div className="shell">
+      <Sidebar runs={runs} selected={selected} health={health} healthError={healthError}
+               onNew={() => select(null)} onSelect={select} newActive={!selected} />
+      <main className="main">
+        {selected
+          ? <RunDetail key={selected} runId={selected} onFinished={refreshRuns} />
+          : <NewRunForm health={health} onCreated={(id) => { refreshRuns(); select(id); }} />}
+      </main>
     </div>
   );
 }

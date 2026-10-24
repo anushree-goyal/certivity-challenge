@@ -75,8 +75,9 @@ class FixtureCorpus:
         )
         svg = (
             '<svg xmlns="http://www.w3.org/2000/svg" width="850" height="1100" font-family="sans-serif">'
-            '<rect width="100%" height="100%" fill="#fff8e1"/>'
-            '<text x="40" y="70" font-size="30" fill="#b45309">FIXTURE PAGE: not a real regulation page</text>'
+            '<rect width="100%" height="100%" fill="#f8fafc"/>'
+            '<rect x="20" y="20" width="810" height="1060" fill="none" stroke="#cbd5e1" stroke-dasharray="8 6"/>'
+            '<text x="40" y="70" font-size="28" fill="#475569">FIXTURE PAGE: not a real regulation page</text>'
             f'<text x="40" y="120" font-size="20">{html.escape(doc["regulation"])} {doc["version_label"]} | '
             f'PDF page index {pdf_page_index} | printed page {printed if printed else "unknown"}</text>'
             f"{lines}</svg>"
@@ -188,7 +189,9 @@ def review_requirements(run_input, draft, corpus, llm, emit_event):
                          "requested_context": "Resolve reference to Annex 4 colour definition"})
         remaining.append("D-6 waits for reference resolution")
     return {"accepted_draft_ids": accepted, "findings": findings, "duplicate_mapping": {"D-3": "D-2"},
-            "rejected": [{"draft_id": "D-3", "reason": "Duplicate of D-2"}], "remaining_issues": remaining}
+            "rejected": [{"draft_id": "D-3", "reason": "Duplicate of D-2"}], "remaining_issues": remaining,
+            # Same numbering as build_submission below; the real quality module supplies its own mapping.
+            "export_mapping": {d: f"R-{i:03d}" for i, d in enumerate(accepted, 1)}}
 
 
 def build_submission(run_input, draft, report, corpus):
