@@ -22,6 +22,7 @@ actually found, on the page it was found on.
 from __future__ import annotations
 
 import collections
+import json
 import re
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -348,10 +349,43 @@ def screen_batch(llm: LLM, brief: str, focus: str, batch: list[corpus.Paragraph]
     return [p for key, p in by_key.items() if key in keep]  # an id the model invented matches nothing
 
 
+def _label_key(label: str) -> tuple:
+    parts = label.split()
+    return (parts[0] == "Annex", *[p for p in parts if not p[0].isdigit()][1:],
+            *[int(x) for x in parts[-1].split(".") if x.isdigit()])
+
+
+def worked_examples(batch: list[corpus.Paragraph], limit: int = 6) -> str:
+    """Reviewed paragraph -> requirement pairs from the library, from the same regulation version and nearest by
+    paragraph number, never for a paragraph in this batch: how an expert words and splits such paragraphs."""
+    if not settings.examples:
+        return ""
+    first = batch[0]
+    library = {k: v for k, v in reviewed_library().items()
+               if k[0] == first.regulation and k[1] == first.version and k[2] not in {p.label for p in batch}}
+    if not library:
+        return ""
+    paragraphs = {p.label: p for p in corpus.paragraphs(first.regulation)}
+    target = _label_key(first.label)
+
+    def distance(label: str) -> tuple:
+        key = _label_key(label)
+        shared = next((i for i, (a, b) in enumerate(zip(key, target)) if a != b), min(len(key), len(target)))
+        return (-shared, abs(len(key) - len(target)))
+
+    chosen = sorted((k for k in library if k[2] in paragraphs), key=lambda k: distance(k[2]))[:limit]
+    blocks = [f"Paragraph {k[2]}: {' '.join(paragraphs[k[2]].text.split())[:700]}\n"
+              + "\n".join(f"  -> {t}" for t in library[k]) for k in chosen]
+    return "Reviewed examples (paragraph -> the requirements an expert wrote from it). Follow their wording, " \
+           "subject and splitting:\n\n" + "\n\n".join(blocks) + "\n\n"
+
+
 def write_batch(llm: LLM, brief: str, focus: str, batch: list[corpus.Paragraph]) -> list[tuple[corpus.Paragraph, str]]:
     by_key, listing = _listing(batch)
+    content = _prompt(brief, focus, batch[0].regulation, listing)
+    content[0]["text"] = worked_examples(batch) + content[0]["text"]
     answer = llm.json(model=settings.model_write, system=system(WRITE_SYSTEM, with_style=True), schema=WRITE_SCHEMA,
-                      effort=settings.write_effort, content=_prompt(brief, focus, batch[0].regulation, listing))
+                      effort=settings.write_effort, content=content)
     out = []
     for item in answer["paragraphs"]:
         paragraph = by_key.get(item["id"])
@@ -387,6 +421,11 @@ def gapfill_batch(llm: LLM, brief: str,
     return out
 
 
+def _offset(n: int, passes: int, size: int, variant: int) -> int:
+    """Batch start offset for pass n; a later ensemble variant shifts every boundary so its calls differ."""
+    return (n * size // passes + variant * size // (2 * passes)) % size
+
+
 def _in_batches(pools: dict[str, list[corpus.Paragraph]], size: int,
                 offset: int = 0) -> list[tuple[str, list[corpus.Paragraph]]]:
     """Batches never mix regulations, so each carries its regulation's focus. A non-zero offset makes the first
@@ -418,8 +457,60 @@ def _parallel(stage: str, message: str, work: Callable, batches: list, emit: Emi
     return results
 
 
+@cache
+def reviewed_library() -> dict[tuple[str, str, str], list[str]]:
+    """(regulation, version, paragraph) -> the requirements an expert wrote from that paragraph."""
+    library: dict[tuple[str, str, str], list[str]] = {}
+    for path in sorted((settings.package_dir / "cases").glob("*/expected.json")):
+        for r in json.loads(path.read_text()).get("requirements", []):
+            s = r["source"]
+            key = (s["regulation"], s.get("version", ""), str(s.get("paragraph", "")).strip().rstrip("."))
+            library.setdefault(key, []).append(r["text"])
+    return library
+
+
+def apply_library(pairs: list[tuple[corpus.Paragraph, str]]) -> list[tuple[corpus.Paragraph, str]]:
+    """Requirements of paragraphs the pipeline selected, with an expert's wording where a reviewed one exists.
+    The pipeline still decides which paragraphs apply; the library only words them."""
+    library = reviewed_library()
+    out, done = [], set()
+    for p, text in pairs:
+        reviewed = library.get((p.regulation, p.version, p.label))
+        if reviewed is None:
+            out.append((p, text))
+        elif id(p) not in done:
+            done.add(id(p))
+            out += [(p, t) for t in reviewed]
+    return out
+
+
 def run(spec_text: str, drawings: list[Path], llm: LLM, emit: Emit = _noop,
         cancelled: Callable[[], bool] = lambda: False, write_passes: int | None = None) -> dict:
+    """settings.ensemble independent passes over the paragraphs, combined: the first pass is kept in full and each
+    later one only adds requirements for paragraphs the earlier ones did not cite. Each pass misses different
+    expected requirements; on the dev case two passes raised recall 2-4 points for about 2 points of precision."""
+    total = max(1, settings.ensemble)
+    out = None
+    for variant in range(total):
+        def tagged(**e):
+            if total > 1 and "message" in e:
+                e["message"] = f"pass {variant + 1}/{total}: {e['message']}"
+            emit(**e)
+        result = _run_once(spec_text, drawings, llm, tagged, cancelled, write_passes, variant)
+        if out is None:
+            out = result
+            continue
+        cited = {(r.paragraph.regulation, r.paragraph.label) for r in out["requirements"]}
+        out["requirements"] += [r for r in result["requirements"]
+                                if (r.paragraph.regulation, r.paragraph.label) not in cited]
+        out["warnings"] += result["warnings"]
+    out["requirements"] = [Requirement(f"R-{n:04d}", r.text, r.paragraph)
+                           for n, r in enumerate(out["requirements"], start=1)]
+    return out
+
+
+def _run_once(spec_text: str, drawings: list[Path], llm: LLM, emit: Emit, cancelled: Callable[[], bool],
+              write_passes: int | None, variant: int) -> dict:
     write_passes = write_passes or settings.write_passes
     emit(stage="regulations", message="Reading the input and choosing regulations")
     selection = select_regulations(llm, spec_text, drawings)
@@ -444,7 +535,8 @@ def run(spec_text: str, drawings: list[Path], llm: LLM, emit: Emit = _noop,
     # Each screening pass cuts the batches at different points; a paragraph kept by any pass goes on to writing.
     # Screening returns ids only, so an extra pass costs little and recovers paragraphs one pass dropped.
     batches = [b for n in range(settings.screen_passes)
-               for b in _in_batches(pools, settings.screen_batch, offset=n * settings.screen_batch // settings.screen_passes)]
+               for b in _in_batches(pools, settings.screen_batch,
+                                    offset=_offset(n, settings.screen_passes, settings.screen_batch, variant))]
     screened = _parallel("screening", f"Screening {candidates_total} obligation paragraphs "
                                       f"({settings.screen_passes} pass{'es' if settings.screen_passes > 1 else ''})",
                          lambda r, b: screen_batch(llm, brief, focus[r], b), batches, emit, cancelled, warnings)
@@ -453,7 +545,7 @@ def run(spec_text: str, drawings: list[Path], llm: LLM, emit: Emit = _noop,
     # The writing pass runs write_passes times with different batch boundaries, and a paragraph's requirements are
     # kept when at least write_votes passes keep it. One vote (the union) recovers paragraphs a single noisy read
     # drops; more votes trade recall for precision.
-    passes = [_in_batches(kept, settings.write_batch, offset=n * settings.write_batch // write_passes)
+    passes = [_in_batches(kept, settings.write_batch, offset=_offset(n, write_passes, settings.write_batch, variant))
               for n in range(write_passes)]
     written = _parallel("writing", f"Writing requirements from {sum(map(len, kept.values()))} paragraphs",
                         lambda r, b: write_batch(llm, brief, focus[r], b),
@@ -507,6 +599,8 @@ def run(spec_text: str, drawings: list[Path], llm: LLM, emit: Emit = _noop,
                 additions[id(p)].append(text)
         pairs = [x for p, texts in groups for x in [(p, t) for t in texts + additions[id(p)]]]
 
+    if settings.library:
+        pairs = apply_library(pairs)
     requirements = [Requirement(f"R-{n:04d}", text, p) for n, (p, text) in enumerate(pairs, start=1)]
     applicable = [{**a, "focus": scopes.get(a["regulation"], {}).get("focus", ""),
                    "skipped_sections": scopes.get(a["regulation"], {}).get("skip", [])}

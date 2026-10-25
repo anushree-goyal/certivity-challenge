@@ -25,6 +25,8 @@ def main(argv: list[str] | None = None) -> int:
     goal = sub.add_parser("subgoal", help="sub-goal: which old requirements change in the new regulation version")
     goal.add_argument("--case", required=True, help="folder under subgoal/, e.g. dev or heldout")
     goal.add_argument("--out", help="default: subgoal-<case>_<team>.json")
+    goal.add_argument("--flag-all", action="store_true",
+                      help="also flag every requirement whose text the amendment changes at all (more recall, lower precision)")
     args = parser.parse_args(argv)
 
     if args.command == "serve":
@@ -54,7 +56,7 @@ def main(argv: list[str] | None = None) -> int:
         folder = settings.package_dir / "subgoal" / args.case
         if not (folder / "new.pdf").is_file():
             parser.error(f"no sub-goal case {folder} with old.pdf/new.pdf (run certivity fetch)")
-        record = subgoal.execute(args.case, emit=lambda **e: print(f"[{e['stage']}] {e['message']}", file=sys.stderr))
+        record = subgoal.execute(args.case, flag_all=True if args.flag_all else None, emit=lambda **e: print(f"[{e['stage']}] {e['message']}", file=sys.stderr))
         team = settings.team_id or "team-id-not-set"
         sub_json = subgoal.submission(team, record["case_id"], record)
         path = Path(args.out or f"subgoal-{args.case}_{team}.json")

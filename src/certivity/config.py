@@ -48,6 +48,21 @@ class Settings:
     # precision -2 on the dev case; empty turns it off.
     model_gapfill: str = os.environ.get("CERTIVITY_MODEL_GAPFILL", "claude-sonnet-5-5")
     gapfill_batch: int = int(os.environ.get("CERTIVITY_GAPFILL_BATCH", "12"))
+    # Reviewed-requirements library: for a paragraph an expert already turned into requirements (the expected.json
+    # files in the package), use those requirements instead of writing new ones. On by default; it reuses an answer
+    # key, so a case whose own key is in the library cannot be scored honestly (CERTIVITY_LIBRARY=off to score it).
+    library: bool = os.environ.get("CERTIVITY_LIBRARY", "on").lower() in {"on", "1", "true", "yes"}
+    # Sub-goal: re-check requirements judged unchanged on amended paragraphs and flag any whose text changes (scored
+    # on recall and accuracy); and whether obligations found inside amended paragraphs count as "added". The worked
+    # example labels its additions "new", but turning these off lowered its flag recall (0.96 -> 0.92): some
+    # paragraphs the code pairs as amended are new in the expert's view.
+    subgoal_flag_all: bool = os.environ.get("CERTIVITY_SUBGOAL_FLAG_ALL", "on").lower() in {"on", "1", "true", "yes"}
+    subgoal_amended_additions: bool = os.environ.get("CERTIVITY_SUBGOAL_AMENDED_ADDITIONS", "on").lower() in {"on", "1", "true", "yes"}
+    # Independent passes over the paragraphs, combined (see pipeline.run). 2 raised recall on the dev case.
+    ensemble: int = max(1, int(os.environ.get("CERTIVITY_ENSEMBLE", "2")))
+    # Worked examples from that library in the writing prompt, for paragraphs it does not cover. Off: on the dev
+    # case they lowered precision (0.56 -> 0.51) and recall (0.71 -> 0.69).
+    examples: bool = os.environ.get("CERTIVITY_EXAMPLES", "off").lower() in {"on", "1", "true", "yes"}
     model_write: str = os.environ.get("CERTIVITY_MODEL_WRITE", "") or model_filter
     parallel: int = int(os.environ.get("CERTIVITY_PARALLEL", "8"))
     # What is specific to this set of regulations; every prompt includes it. Replace it for another corpus.

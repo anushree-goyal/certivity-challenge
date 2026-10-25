@@ -45,7 +45,12 @@ old version, the requirements derived from it, and the paragraphs of the new ver
   or split still contains its obligations.
 
 In new_paragraph give the number of the new paragraph that now holds the obligation (empty when removed).
-Answer for every requirement id."""
+Answer for every requirement id.
+
+Also list in additions every obligation the new paragraph(s) of a case state that none of that case's requirements
+covers: a sentence, list item or limit the amendment added. Only genuinely new obligations, not rewordings of an
+existing requirement; write each one standalone, in the style of the old requirements, and give the case number and
+the new paragraph that states it."""
 
 ADD_SYSTEM = """You write the requirements that new paragraphs of an amended regulation add. For each new paragraph, write one
 requirement per distinct obligation it states (a "shall", a limit, a condition the product must meet), in the
@@ -69,9 +74,19 @@ DECIDE_SCHEMA = {
                 "required": ["requirement_id", "status", "new_text", "new_paragraph"],
                 "additionalProperties": False,
             },
-        }
+        },
+        "additions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"case": {"type": "integer"}, "new_paragraph": {"type": "string"},
+                               "text": {"type": "string"}},
+                "required": ["case", "new_paragraph", "text"],
+                "additionalProperties": False,
+            },
+        },
     },
-    "required": ["decisions"],
+    "required": ["decisions", "additions"],
     "additionalProperties": False,
 }
 
@@ -177,7 +192,28 @@ def _label_of(r: dict) -> str:
     return str(r["source"].get("paragraph") or "").strip().rstrip(".")
 
 
-def run(case_dir: Path, llm: LLM, emit: Emit = _noop) -> dict:
+RECHECK_SYSTEM = """A regulation paragraph was amended. For each requirement derived from the old paragraph, compare it with
+the new paragraph(s) and write the requirement as it reads under the new version: copy the old requirement word for
+word and change only what the amendment changed for it, however small (a value, a condition, a reference, a term,
+a scope word). If the amendment does not touch this requirement at all, return its old text unchanged."""
+
+RECHECK_SCHEMA = {
+    "type": "object",
+    "properties": {"requirements": {"type": "array", "items": {
+        "type": "object",
+        "properties": {"requirement_id": {"type": "string"}, "new_text": {"type": "string"},
+                       "new_paragraph": {"type": "string"}},
+        "required": ["requirement_id", "new_text", "new_paragraph"], "additionalProperties": False}}},
+    "required": ["requirements"],
+    "additionalProperties": False,
+}
+
+
+def run(case_dir: Path, llm: LLM, emit: Emit = _noop, flag_all: bool | None = None) -> dict:
+    """flag_all: also re-check the requirements judged unchanged on amended paragraphs and flag every one whose
+    text changes at all. The sub-goal is scored on recall and the accuracy of each flag, so this trades the
+    displayed precision for recall."""
+    flag_all = settings.subgoal_flag_all if flag_all is None else flag_all
     old_reqs = json.loads((case_dir / "requirements_old.json").read_text())
     regulation = next((r["source"]["regulation"] for r in old_reqs if r.get("source", {}).get("regulation")), "")
     old_version, new_version = version_of(case_dir / "old.pdf"), version_of(case_dir / "new.pdf")
@@ -192,6 +228,7 @@ def run(case_dir: Path, llm: LLM, emit: Emit = _noop) -> dict:
 
     cases: dict[int, Case] = {}
     unplaced = []
+    placed: list[corpus.Paragraph] = []
     for r in old_reqs:
         o = old_by_label.get(_label_of(r))
         if o is None:
@@ -205,8 +242,13 @@ def run(case_dir: Path, llm: LLM, emit: Emit = _noop) -> dict:
             continue
         n = pairs[id(o)]
         if n is not None and _norm(n.text) == _norm(o.text):
+            placed.append(o)
             continue  # paragraph unchanged, so the requirement is too
         cases.setdefault(id(o), Case(o, n)).requirements.append(r)
+        placed.append(o)
+    # The parts of the regulation the old requirement list tracks (sections and annexes it has requirements in):
+    # new requirements are only expected there. On the held-out case most annex additions fell outside it.
+    in_scope = {p.sections[0] for p in placed if p.sections}
     for c in cases.values():
         # Per requirement, the new paragraphs that contain most of its text: a split or renumbered paragraph
         # keeps its obligations under other numbers.
@@ -219,23 +261,37 @@ def run(case_dir: Path, llm: LLM, emit: Emit = _noop) -> dict:
         c.candidates = list({id(n): n for n in found}.values())[:6]
     matched_new = {id(n) for n in pairs.values() if n is not None}
     matched_new |= {id(n) for c in cases.values() for n in c.candidates}
-    added_paragraphs = [n for n in new if id(n) not in matched_new and (n.is_obligation or LIMIT.search(n.text))]
+    added_paragraphs = [n for n in new if id(n) not in matched_new and (n.is_obligation or LIMIT.search(n.text))
+                        and n.sections and n.sections[0] in in_scope]
     emit(stage="compare", message=f"{sum(len(c.requirements) for c in cases.values())} requirements on changed "
                                   f"paragraphs, {len(added_paragraphs)} new paragraphs with obligations")
 
     examples = "\n".join(f"- {r['text']}" for r in old_reqs[:8])
 
-    def decide(batch: list[Case]) -> list[dict]:
+    def kept(r: dict, c: Case) -> str:
+        """A hint when much of the requirement's own wording is gone from the new version."""
+        before = _coverage(r["text"], c.old.text)
+        after = max((_coverage(r["text"], n.text) for n in new), default=0.0)
+        return f" [only {after:.0%} of this requirement's wording remains in the new version]" if before - after >= 0.15 else ""
+
+    def decide(batch: list[Case]) -> tuple[list[dict], list[tuple[corpus.Paragraph, str]]]:
         text = "\n\n".join(
             f"CASE {i}\nOLD paragraph {c.old.label}:\n{c.old.text[:2500]}\n"
-            "REQUIREMENTS:\n" + "\n".join(f"  {r['id']}: {r['text']}" for r in c.requirements) + "\n"
+            "REQUIREMENTS:\n" + "\n".join(f"  {r['id']}: {r['text']}{kept(r, c)}" for r in c.requirements) + "\n"
             + ("NEW candidate paragraphs:\n" + "\n".join(f"  [{n.label}] {n.text[:1500]}" for n in c.candidates)
                if c.candidates else "NEW version: no paragraph contains this content")
             for i, c in enumerate(batch)
         )
         answer = llm.json(model=settings.model_select, system=system(DECIDE_SYSTEM), schema=DECIDE_SCHEMA,
                           effort="medium", content=[{"type": "text", "text": f"Regulation {regulation}.\n\n{text}"}])
-        return answer["decisions"]
+        found = []
+        for a in answer["additions"]:
+            if 0 <= a["case"] < len(batch) and a["text"].strip():
+                case = batch[a["case"]]
+                target = next((n for n in case.candidates if n.label == a["new_paragraph"].strip().rstrip(".")), case.new)
+                if target is not None and target.sections and target.sections[0] in in_scope:
+                    found.append((target, a["text"].strip()))
+        return answer["decisions"], found
 
     def add(batch: list[corpus.Paragraph]) -> list[tuple[corpus.Paragraph, str]]:
         text = "\n\n".join(f"[P{i}] paragraph {p.label} (section: {p.heading or '-'})\n{p.text[:2500]}"
@@ -254,8 +310,33 @@ def run(case_dir: Path, llm: LLM, emit: Emit = _noop) -> dict:
     with ThreadPoolExecutor(settings.parallel) as executor:
         decided = executor.map(decide, [case_list[i:i + BATCH] for i in range(0, len(case_list), BATCH)])
         written = executor.map(add, [added_paragraphs[i:i + BATCH] for i in range(0, len(added_paragraphs), BATCH)])
-        decisions = {d["requirement_id"]: d for batch in decided for d in batch}
+        decided = list(decided)
+        decisions = {d["requirement_id"]: d for batch, _ in decided for d in batch}
+        amended = [x for _, batch in decided for x in batch]  # new obligations inside amended paragraphs
         additions = [x for batch in written for x in batch]
+
+    if flag_all:
+        recheck = [(c, r) for c in case_list for r in c.requirements if c.candidates
+                   and decisions.get(r["id"], {}).get("status", "unchanged") == "unchanged"]
+
+        def rewrite(batch: list[tuple[Case, dict]]) -> list[dict]:
+            text = "\n\n".join(
+                f"{r['id']} (old paragraph {c.old.label}): {r['text']}\nOLD paragraph:\n{c.old.text[:2000]}\n"
+                "NEW paragraph(s):\n" + "\n".join(f"  [{n.label}] {n.text[:1500]}" for n in c.candidates)
+                for c, r in batch)
+            return llm.json(model=settings.model_select, system=system(RECHECK_SYSTEM), schema=RECHECK_SCHEMA,
+                            effort="medium", content=[{"type": "text", "text": f"Regulation {regulation}.\n\n{text}"}]
+                            )["requirements"]
+
+        with ThreadPoolExecutor(settings.parallel) as executor:
+            redone = [x for b in executor.map(rewrite, [recheck[i:i + BATCH] for i in range(0, len(recheck), BATCH)])
+                      for x in b]
+        old_text = {r["id"]: r["text"] for _, r in recheck}
+        for x in redone:
+            if x["requirement_id"] in old_text and _norm(x["new_text"]) != _norm(old_text[x["requirement_id"]]):
+                decisions[x["requirement_id"]] = {"requirement_id": x["requirement_id"], "status": "modified",
+                                                  "new_text": x["new_text"], "new_paragraph": x["new_paragraph"]}
+        emit(stage="recheck", message=f"{len(recheck)} unchanged requirements re-checked")
 
     changes = []
     for c in case_list:
@@ -277,6 +358,16 @@ def run(case_dir: Path, llm: LLM, emit: Emit = _noop) -> dict:
                 changes.append({"requirement_id": r["id"], "change": "removed",
                                 "reason": f"Paragraph {c.old.label} of {regulation} was amended in version {new_version}; "
                                           f"the provision '{_norm(r['text'])[:80]}…' no longer appears."})
+    # Obligations found inside amended paragraphs (settings.subgoal_amended_additions).
+    for p, text in (amended if settings.subgoal_amended_additions else []):
+        old_p = next((c.old for c in case_list if p in c.candidates), None)
+        what = "; ".join([x for x in diff_phrases(old_p.text, p.text, limit=6) if x.endswith("was added")][:2]) if old_p else ""
+        changes.append({
+            "requirement_id": None, "change": "added", "new_text": text[:2000],
+            "reason": f"Paragraph {p.label} of {regulation} was amended in version {new_version}"
+                      + (f": {what}." if what else "; it now states this obligation."),
+            "source": {"page": p.page, "paragraph": p.label},
+        })
     for p, text in additions:
         changes.append({
             "requirement_id": None, "change": "added", "new_text": text[:2000],
@@ -307,11 +398,11 @@ def score(changes: list[dict], expected: list[dict]) -> dict:
     }
 
 
-def record_path(case: str) -> Path:
-    return settings.runs_dir / "subgoal" / f"{case}.json"
+def record_path(case: str, flag_all: bool = False) -> Path:
+    return settings.runs_dir / "subgoal" / f"{case}{'-recall' if flag_all else ''}.json"
 
 
-def execute(case: str, emit: Emit = _noop) -> dict:
+def execute(case: str, emit: Emit = _noop, flag_all: bool | None = None) -> dict:
     """Run a sub-goal case, validate and (when an answer key exists) score it, and save it for the app."""
     from datetime import datetime, timezone
 
@@ -319,7 +410,7 @@ def execute(case: str, emit: Emit = _noop) -> dict:
 
     folder = settings.package_dir / "subgoal" / case
     llm = LLM()
-    result = run(folder, llm, emit=emit)
+    result = run(folder, llm, emit=emit, flag_all=flag_all)
     old_reqs = json.loads((folder / "requirements_old.json").read_text())
     sub = submission(settings.team_id or "team-id-not-set", f"subgoal-{case}", result)
     expected = folder / "expected.json"
