@@ -27,7 +27,7 @@ class FakeLLM:
             return {"paragraphs": [{"id": "P0", "additions": ["Added obligation."]}, {"id": "P999", "additions": ["Invented."]}]}
         if "applicable" in schema["properties"]:
             return {"product": {"summary": "Rear lamp", "vehicle_categories": ["M1"], "functions": ["stop lamp"],
-                                "parts": ["lens"], "unknowns": []},
+                                "parts": ["lens"], "materials": ["PMMA"], "unknowns": []},
                     "applicable": [{"regulation": "UN R148", "applies": True, "reason": "signalling lamp"},
                                    {"regulation": "UN R48", "applies": False, "reason": "considered, rejected"},
                                    {"regulation": "UN R999", "applies": True, "reason": "not in the index"}]}

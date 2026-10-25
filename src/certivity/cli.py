@@ -29,7 +29,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "fetch":
-        tool = settings.package_dir / "tools" / "fetch_regulations.py"
+        tool = (settings.package_dir / "tools" / "fetch_regulations.py").resolve()
         return subprocess.call([sys.executable, str(tool), "--role", "base"], cwd=settings.package_dir)
 
     from certivity import checks, pipeline

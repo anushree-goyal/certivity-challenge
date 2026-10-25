@@ -46,7 +46,9 @@ MAX_TEXT = 3000
 SELECT_SYSTEM = """You are a homologation engineer. Given a product specification and/or drawings of a part, you
 describe the product and decide which regulations from a fixed list apply to it.
 
-A regulation applies if it sets requirements the product itself must meet: regulations that approve the part,
+Decide from each regulation's scope, not only its title: a regulation applies when any part, function, sensor,
+lamp, electronic unit or material of the product falls within what its scope covers. A regulation applies if it
+sets requirements the product itself must meet: regulations that approve the part,
 regulations for the system or vehicle it is fitted to where they set requirements on this part (its design,
 performance, markings, tests or installation), and cross-cutting regulations triggered by what the part
 contains. Exclude regulations for other systems, other parts and other vehicle types. Be decisive: a regulation
@@ -97,6 +99,10 @@ Drop a paragraph (return no requirements for it) when any of these holds:
 Markings the product must bear, restrictions ("may only ... if", "is not permitted") and limit values are
 requirements.
 
+Never put the product's name or its part names into a requirement ("the bumper module", "the lamp unit of the
+product"): keep the regulation's own subject and scope word for word ("the external surface of the vehicle", "the
+ESA", "the device"). The product description only tells you which paragraphs apply.
+
 For each paragraph you keep, write its requirements following the writing guide below: one requirement per
 distinct obligation (each line of a list or table is shown on its own line), each one standalone, with its
 exceptions, conditions and values kept inside it. Where the guide and these instructions differ, follow the guide."""
@@ -111,9 +117,10 @@ SELECT_SCHEMA = {
                 "vehicle_categories": {"type": "array", "items": {"type": "string"}},
                 "functions": {"type": "array", "items": {"type": "string"}},
                 "parts": {"type": "array", "items": {"type": "string"}},
+                "materials": {"type": "array", "items": {"type": "string"}},
                 "unknowns": {"type": "array", "items": {"type": "string"}},
             },
-            "required": ["summary", "vehicle_categories", "functions", "parts", "unknowns"],
+            "required": ["summary", "vehicle_categories", "functions", "parts", "materials", "unknowns"],
             "additionalProperties": False,
         },
         "applicable": {
@@ -175,8 +182,9 @@ GAPFILL_SYSTEM = (
     "missing case, row, limit, condition-specific rule or separate duty. Do not restate, rephrase or merge existing "
     "requirements, and do not add anything the paragraph does not state. Most paragraphs are already complete: return "
     "no additions for them. Only add an obligation that applies to this product as described: skip cases, rows and "
-    "rules for functions, lamp or device types, categories or variants the product does not have. Write each addition "
-    "following the writing guide below."
+    "rules for functions, lamp or device types, categories or variants the product does not have. Never put the "
+    "product's name or its part names into an addition: keep the regulation's own subject and scope word for word. "
+    "Write each addition following the writing guide below."
 )
 
 GAPFILL_SCHEMA = {
@@ -269,17 +277,28 @@ def system(prompt: str, with_style: bool = False) -> str:
 
 
 def select_regulations(llm: LLM, spec_text: str, drawings: list[Path]) -> dict:
+    """Asked twice, the second time with the list in reverse order, so the two answers are independent; a
+    regulation either answer picks is kept. Missing a whole regulation costs every requirement in it."""
     docs = corpus.documents()
-    listing = "\n".join(f"- {d.regulation}: {d.title}" for d in docs.values() if d.pdf)
-    content: list[dict] = [image_block(p) for p in drawings]
-    content.append({"type": "text", "text":
-        f"Regulations you may choose from:\n{listing}\n\n"
-        f"Product specification:\n{spec_text.strip() or '(none - use the drawings)'}"})
-    answer = llm.json(model=settings.model_select, system=system(SELECT_SYSTEM), content=content,
-                      schema=SELECT_SCHEMA, effort="medium")
-    answer["applicable"] = [{"regulation": a["regulation"], "reason": a["reason"]} for a in answer["applicable"]
-                            if a["applies"] and a["regulation"] in docs and docs[a["regulation"]].pdf]
-    return answer
+    available = [d for d in docs.values() if d.pdf]
+    answers = []
+    scopes = {d.regulation: corpus.scope_text(d.regulation) for d in available}
+    for order in (available, available[::-1]):
+        listing = "\n".join(f"- {d.regulation}: {d.title}\n  Scope: {scopes[d.regulation] or '-'}" for d in order)
+        content: list[dict] = [image_block(p) for p in drawings]
+        content.append({"type": "text", "text":
+            f"Regulations you may choose from:\n{listing}\n\n"
+            f"Product specification:\n{spec_text.strip() or '(none - use the drawings)'}"})
+        answers.append(llm.json(model=settings.model_select, system=system(SELECT_SYSTEM), content=content,
+                                schema=SELECT_SCHEMA, effort="medium"))
+    chosen: dict[str, str] = {}
+    for answer in answers:
+        for a in answer["applicable"]:
+            if a["applies"] and a["regulation"] in docs and docs[a["regulation"]].pdf:
+                chosen.setdefault(a["regulation"], a["reason"])
+    order = {d.regulation: i for i, d in enumerate(available)}
+    return {"product": answers[0]["product"],
+            "applicable": [{"regulation": r, "reason": chosen[r]} for r in sorted(chosen, key=order.get)]}
 
 
 def candidates(regulations: list[str]) -> dict[str, list[corpus.Paragraph]]:
@@ -302,7 +321,8 @@ def scope(llm: LLM, brief: str, pools: dict[str, list[corpus.Paragraph]]) -> dic
 
 def product_brief(product: dict) -> str:
     return (f"{product['summary']}\nVehicle categories: {', '.join(product['vehicle_categories']) or 'unknown'}\n"
-            f"Functions: {'; '.join(product['functions'])}\nParts: {'; '.join(product['parts'])}")
+            f"Functions: {'; '.join(product['functions'])}\nParts: {'; '.join(product['parts'])}\n"
+            f"Materials: {'; '.join(product.get('materials', [])) or 'not stated'}")
 
 
 def _listing(batch: list[corpus.Paragraph]) -> tuple[dict[str, corpus.Paragraph], str]:

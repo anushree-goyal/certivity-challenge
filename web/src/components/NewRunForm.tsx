@@ -41,6 +41,8 @@ export function NewRunForm({ health, onCreated }: { health: Health | null; onCre
   const [specFile, setSpecFile] = useState<File | null>(null);
   const [specText, setSpecText] = useState("");
   const [drawings, setDrawings] = useState<File[]>([]);
+  // The platform only accepts an upload whose case_id is the case folder name; own files get it typed here.
+  const [caseId, setCaseId] = useState("");
   const [mode, setMode] = useState<"real" | "fixture">("real");
   const [reuseCached, setReuseCached] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -72,6 +74,10 @@ export function NewRunForm({ health, onCreated }: { health: Health | null; onCre
       setError("Before starting: choose a case or add a specification or drawing.");
       return;
     }
+    if (!packageCase && !caseId.trim()) {
+      setError("Before starting: enter the case ID the platform expects (the case folder name).");
+      return;
+    }
     setBusy(true);
     setError(null);
     const form = new FormData();
@@ -79,6 +85,7 @@ export function NewRunForm({ health, onCreated }: { health: Health | null; onCre
     form.set("reuse_cached", String(DEV_MODE && reuseCached));  // normal runs are always fresh
     form.set("dev", String(DEV_MODE));
     if (packageCase) form.set("package_case", packageCase);
+    else if (caseId.trim()) form.set("case_id", caseId.trim());
     if (specFile) form.set("spec_file", specFile);
     else if (specText.trim()) form.set("spec_text", specText);
     drawings.forEach((d) => form.append("drawings", d));
@@ -134,6 +141,12 @@ export function NewRunForm({ health, onCreated }: { health: Health | null; onCre
           )}
           {!packageCase && (
             <>
+              <label>Case ID
+                <input value={caseId} onChange={(e) => setCaseId(e.target.value)}
+                       placeholder={cases.find((c) => c.held_out)?.case_id ?? "e.g. heldout-front-bumper"} />
+              </label>
+              <p className="hint">Written into the exported file. The platform only accepts the case folder name, e.g.{" "}
+                <code>{cases.find((c) => c.held_out)?.case_id ?? "heldout-front-bumper"}</code>.</p>
               <label>Technical specification (.md, .txt)
                 <input type="file" accept=".md,.markdown,.txt" onChange={(e) => setSpecFile(e.target.files?.[0] ?? null)} />
               </label>

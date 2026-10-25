@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 vi.mock("../api", () => ({
   api: {
@@ -27,7 +27,6 @@ describe("new analysis input screen", () => {
   it("shows only the product inputs and Start analysis", async () => {
     await renderForm("");
     expect(screen.queryByText(/team id/i)).toBeNull();
-    expect(screen.queryByText(/case id/i)).toBeNull();
     expect(screen.queryByText("Run settings")).toBeNull();
     expect(screen.queryByText(/processing/i)).toBeNull();
     expect(screen.queryByText(/reuse a cached result/i)).toBeNull();
@@ -35,6 +34,21 @@ describe("new analysis input screen", () => {
     expect(screen.getByText("Technical specification (.md, .txt)")).toBeTruthy();
     expect(screen.getByText("Exploded-view drawings (PNG, JPEG, WebP)")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Start analysis" })).toBeTruthy();
+  });
+
+  it("asks for the case ID only when uploading own files, suggesting the held-out case", async () => {
+    await renderForm("");
+    const field = screen.getByLabelText("Case ID") as HTMLInputElement;
+    expect(field.placeholder).toBe("heldout-front-bumper");
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "heldout-front-bumper" } });
+    expect(screen.queryByLabelText("Case ID")).toBeNull();  // a package case brings its own case ID
+  });
+
+  it("will not start an upload without a case ID", async () => {
+    await renderForm("");
+    fireEvent.change(screen.getByPlaceholderText(/product type/i), { target: { value: "A front bumper" } });
+    fireEvent.click(screen.getByRole("button", { name: "Start analysis" }));
+    expect(screen.getByRole("alert").textContent).toMatch(/case ID/);
   });
 
   it("offers main-goal cases only, held-out first", async () => {

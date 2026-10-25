@@ -13,6 +13,8 @@ CERTIVITY_NOTES at another one, when working with a different set of obligations
   UN R148 (light-signalling devices) replaces UN R4, R6, R7, R23, R38, R50, R77, R87 and R91;
   UN R149 (road illumination devices) replaces UN R19, R98, R112, R113, R119 and R123;
   UN R150 (retro-reflective devices) replaces UN R3, R27, R69, R70 and R104.
+- A UN Global Technical Regulation (GTR) and the UN Regulation that transposes it are separate entries in the
+  list; cite each one whose scope covers the product.
 - Electronics (control units, LEDs, sensors, switches, heaters) bring in UN R10 electromagnetic compatibility.
   Software update or cyber-security regulations (UN R155, UN R156) concern the vehicle manufacturer's
   management systems, not a component's own design.

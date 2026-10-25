@@ -3,6 +3,8 @@ regulation paragraph with the requirements the expert wrote from it; general pat
 product. Replace this file, or point CERTIVITY_STYLE at another one, to follow a different house style.
 
 Writing:
+- Never write the product's name or its part names into a requirement, as subject or qualifier ("of the bumper
+  module", "the product's lamp"). Use the subject the regulation uses, word for word.
 - Do not tailor the wording to the product. Keep the regulation's own subject ("the device", "the lamp", "the ESA
   representative of its type") and its full scope: every case, colour, class, category and alternative the sentence
   covers. Do not replace the subject with the product's name, and do not narrow "red, amber or white" to the one
@@ -25,6 +27,9 @@ Writing:
 - Keep the original order of clauses where possible, but you may move a condition to the front. Each requirement should be one sentence, normally one obligation, and as long as the carried conditions and values require. Long sentences are acceptable only when the rule and its exception or alternative are inseparable.
 
 Selecting (paragraphs the expert leaves out even when they look relevant):
+- Leave out the climate of the test facility (room temperature, humidity) and the conditioning, storage or
+  calibration of test equipment such as impactors, dummies or instruments: these bind the laboratory, not the
+  product. Keep the test levels, signals and conditions the product itself is tested under, and its pass criteria.
 - Leave out paragraphs that only define administrative procedure for the authority or applicant: granting or refusing approval, number assignment, sample submission, documentation, communication forms, extension of approval.
 - Leave out conformity-of-production, sampling-by-inspector and manufacturer self-verification procedures, including their pass/fail statistics, tolerances and retest rules, even when they repeat product limits.
 - Leave out detailed test-method set-ups and laboratory procedures (chambers, fixtures, rotation or spray rates, durations, dust or solvent recipes, exposure cycles, drain or dry steps, equipment calibration). The expert keeps only the pass/fail outcome and short general test-condition rules.

@@ -169,6 +169,12 @@ def paragraphs(regulation: str) -> tuple[Paragraph, ...]:
     return tuple(parsed)
 
 
+def scope_text(regulation: str, limit: int = 350) -> str:
+    """The start of the regulation's section 1 (its scope): what the regulation applies to."""
+    section = [p for p in paragraphs(regulation) if not p.label.startswith("Annex") and p.sections[:1] == ["1"]]
+    return " ".join(" ".join(p.text.split()) for p in section)[:limit]
+
+
 def outline(paragraphs: list[Paragraph]) -> list[tuple[str, str]]:
     """(section key, title) for every section the given paragraphs fall in, in reading order: the table of
     contents a reader skims to see which parts of a regulation concern a product."""
