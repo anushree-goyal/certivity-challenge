@@ -26,6 +26,22 @@ Every model answer is cached in `data/cache/llm/` by request content, so running
 
 **Another set of obligations.** Everything specific to UN Regulations lives in [src/certivity/notes.md](src/certivity/notes.md), which every prompt includes: how vehicle and component regulations relate, which lighting regulations replaced which, when EMC applies. For a different corpus, write a new notes file and set `CERTIVITY_NOTES`. The parser expects numbered paragraphs (`5.1.2.`) and `Annex N` headings. A corpus laid out differently needs a change to the regular expressions at the top of `corpus.py`.
 
+## Sub-goal: requirement changes between versions
+
+`certivity subgoal --case dev|heldout` reads `subgoal/<case>/old.pdf`, `new.pdf` and `requirements_old.json` and writes
+the changes file (`subgoal-<case>_<team>.json`), checked with the official validator including `--requirements-old`.
+
+1. **Compare (code only).** Both versions are split into paragraphs and paired, by number or by text when renumbered.
+   Only old requirements on changed or deleted paragraphs go on; one that cites a table is placed by its page. For each,
+   the new paragraphs containing most of its text are found, since split or renumbered paragraphs keep their obligations.
+2. **Decide (Sonnet, a few calls).** Per requirement: unchanged, modified (old text with only the amended words changed)
+   or removed; and the requirements that new paragraphs add.
+3. **Reasons (code).** Written from the diff in the worked example's form, e.g. "Paragraph 6.5.2 (formerly 6.5) of UN R175
+   was amended in version 1.0.0: '0.2 m.' became 'the distance to extreme outer edge of the vehicle.'", with the new
+   page and paragraph as source.
+
+On the dev example it finds all 7 expected changed requirements (6 with the right change type) for about $0.10.
+
 ## Setup
 
 Requirements: Python 3.12+, plus Node 20+ to build the UI.
@@ -56,7 +72,8 @@ Tests: `.venv/bin/python -m pytest`. A scripted model stands in for Claude, so t
 | `src/certivity/checks.py` | The participant package's validator and local scorer |
 | `src/certivity/runs.py` | Runs on disk (`runs/<id>/`) and the background worker |
 | `src/certivity/api.py` | HTTP API for the UI, plus the built UI |
-| `src/certivity/cli.py` | `serve`, `run`, `fetch` |
+| `src/certivity/subgoal.py` | The sub-goal: old/new comparison, decisions, reasons |
+| `src/certivity/cli.py` | `serve`, `run`, `subgoal`, `fetch` |
 | `web/` | React UI |
 
 ## Held-out case

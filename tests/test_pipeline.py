@@ -109,3 +109,36 @@ def test_api_run_end_to_end(tmp_path, monkeypatch):
         assert client.put(f"/api/runs/{run_id}/reviews/{req['draft_id']}", json={"status": "approved"}).status_code == 200
         if settings.team_id:
             assert client.get(f"/api/runs/{run_id}/submission").status_code == 200
+
+
+def test_subgoal_diff_and_alignment():
+    from certivity import subgoal
+
+    assert subgoal.diff_phrases("shall be 0.2 m.", "shall be the distance to the edge.") == \
+        ["'0.2 m.' became 'the distance to the edge.'"]
+    old = [corpus.Paragraph("UN R1", "1", "5.1", 1, "The device shall be red.", ""),
+           corpus.Paragraph("UN R1", "1", "6.5", 2, "The test shall be repeated three times at 20 degrees.", "")]
+    new = [corpus.Paragraph("UN R1", "2", "5.1", 1, "The device shall be red or amber.", ""),
+           corpus.Paragraph("UN R1", "2", "6.6", 2, "The test shall be repeated three times at 20 degrees.", "")]
+    pairs = subgoal.align(old, new)
+    assert pairs[id(old[0])] is new[0]  # same number, amended text
+    assert pairs[id(old[1])] is new[1]  # renumbered, same text
+
+
+def test_subgoal_dev_example_finds_every_expected_change_candidate():
+    """Code-only part on the real dev example: every expected modified/removed requirement is on a changed paragraph."""
+    import json
+    from certivity import subgoal
+
+    folder = settings.package_dir / "subgoal" / "dev"
+    if not (folder / "new.pdf").is_file():
+        pytest.skip("sub-goal PDFs not downloaded")
+    old_reqs = json.loads((folder / "requirements_old.json").read_text())
+    old = corpus.parse_pdf("UN R175", "0.1.0", folder / "old.pdf")
+    new = corpus.parse_pdf("UN R175", "1.0.0", folder / "new.pdf")
+    pairs, by_label = subgoal.align(old, new), {p.label: p for p in reversed(old)}
+    changed = {r["id"] for r in old_reqs
+               if pairs[id(by_label[subgoal._label_of(r)])] is None
+               or subgoal._norm(pairs[id(by_label[subgoal._label_of(r)])].text) != subgoal._norm(by_label[subgoal._label_of(r)].text)}
+    expected = {c["requirement_id"] for c in json.loads((folder / "expected.json").read_text())["changes"] if c["requirement_id"]}
+    assert expected <= changed

@@ -17,12 +17,15 @@ import pymupdf
 
 from certivity.config import settings
 
-PARSER_VERSION = 9
+PARSER_VERSION = 10
 
 # "UN R150, version 1.2.1 | page 7 of 54" - the running header on every page.
 HEADER = re.compile(r"^UN .*\|\s*page \d+ of \d+\s*$")
 # "6.9.1." or "6.9.1. Text..." - UN regulations end every paragraph number with a dot.
 LABEL = re.compile(r"^((?:\d{1,2}\.){1,7})(?:\s+(.*))?$")
+# Some versions drop the final dot ("5.1.4.1 An ACPE intervention..."): accepted for three or more levels when text
+# starting with a capital or "(" follows, which a cross-reference or a measured value does not.
+LABEL_NO_DOT = re.compile(r"^(\d{1,2}(?:\.\d{1,2}){2,6})\s+([A-Z(].*)$")
 # "Annex 9 Method(s) of testing..." starts an annex; its paragraphs restart at "1.". Body text that wraps onto
 # "Annex 5 of this Regulation" is told apart by the capitalised title (or nothing / "- Appendix") after the number.
 ANNEX = re.compile(r"^Annex\s+(\d{1,2})([A-Z]?)(?:$|\s+[-–(]?\s*[A-Z])")
@@ -118,7 +121,7 @@ def parse_pdf(regulation: str, version: str, pdf: Path) -> list[Paragraph]:
                 if annex and (m := PART.match(line)):
                     part, section, subsection, current = m.group(1), None, None, None
                     continue
-                m = LABEL.match(line)
+                m = LABEL.match(line) or LABEL_NO_DOT.match(line)
                 if m and current is not None and REFERENCE_END.search(current.text):
                     m = None  # a cross-reference that wrapped onto a new line, not a new paragraph
                 if m:

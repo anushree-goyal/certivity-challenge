@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -21,6 +22,9 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--case", required=True)
     run.add_argument("--out", help="default: <case>_<team>.json")
     sub.add_parser("fetch", help="download the base regulation PDFs with the package's own tool")
+    goal = sub.add_parser("subgoal", help="sub-goal: which old requirements change in the new regulation version")
+    goal.add_argument("--case", required=True, help="folder under subgoal/, e.g. dev or heldout")
+    goal.add_argument("--out", help="default: subgoal-<case>_<team>.json")
     args = parser.parse_args(argv)
 
     if args.command == "serve":
@@ -30,7 +34,42 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "fetch":
         tool = (settings.package_dir / "tools" / "fetch_regulations.py").resolve()
-        return subprocess.call([sys.executable, str(tool), "--role", "base"], cwd=settings.package_dir)
+        status = subprocess.call([sys.executable, str(tool), "--role", "base"], cwd=settings.package_dir)
+        # The sub-goal's old/new PDFs, with the tool's own checksum-verified download (it only fetches them
+        # when run without filters, which would also download every latest regulation version).
+        import certifi
+
+        from certivity.checks import _tool
+        os.environ.setdefault("SSL_CERT_FILE", certifi.where())  # python.org builds on macOS ship no CA certificates
+        fetch_one = _tool("fetch_regulations").fetch_one
+        for listing in sorted(settings.package_dir.glob("subgoal/*/files.json")):
+            for item in json.loads(listing.read_text()):
+                label = f"sub-goal {listing.parent.name}/{item['name']}"
+                print(f"{label}: {fetch_one({'regulation': label, **item}, listing.parent, name=item['name'])}")
+        return status
+
+    if args.command == "subgoal":
+        from certivity import checks, subgoal
+        from certivity.llm import LLM
+
+        folder = settings.package_dir / "subgoal" / args.case
+        if not (folder / "new.pdf").is_file():
+            parser.error(f"no sub-goal case {folder} with old.pdf/new.pdf (run certivity fetch)")
+        llm = LLM()
+        result = subgoal.run(folder, llm, emit=lambda **e: print(f"[{e['stage']}] {e['message']}", file=sys.stderr))
+        team = settings.team_id or "team-id-not-set"
+        sub_json = subgoal.submission(team, f"subgoal-{args.case}", result)
+        path = Path(args.out or f"subgoal-{args.case}_{team}.json")
+        path.write_text(json.dumps(sub_json, indent=2))
+        validation = checks.validate(sub_json, json.loads((folder / "requirements_old.json").read_text()))
+        kinds = {k: sum(c["change"] == k for c in result["changes"]) for k in ("modified", "removed", "added")}
+        print(f"{result['regulation']} {result['old_version']} -> {result['new_version']}: {kinds} -> {path}")
+        if result["unplaced"]:
+            print(f"warning: {len(result['unplaced'])} old requirements cite a paragraph not found in old.pdf")
+        print("valid" if validation["valid"] else f"INVALID: {validation['errors'][:5]}")
+        u = llm.usage.as_dict()
+        print(f"model calls: {u['calls']} ({u['cached_calls']} cached), about ${u['cost_usd']:.3f} at list prices")
+        return 0 if validation["valid"] else 1
 
     from certivity import checks, pipeline
     from certivity.llm import LLM

@@ -20,10 +20,10 @@ def _tool(name: str):
     return module
 
 
-def validate(submission: dict) -> dict:
+def validate(submission: dict, requirements_old: list[dict] | None = None) -> dict:
     tool = _tool("validate")
     index = tool.load_index(settings.package_dir / "regulations" / "index.json")
-    problems = tool.validate(submission, index=index)
+    problems = tool.validate(submission, index=index, requirements_old=requirements_old)
     return {"valid": not problems, "errors": [{"path": p.path, "message": p.message} for p in problems]}
 
 
