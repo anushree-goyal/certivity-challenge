@@ -44,6 +44,10 @@ class Settings:
     # and write_votes decides instead (1 = union: highest recall, lower precision).
     model_arbiter: str = os.environ.get("CERTIVITY_MODEL_ARBITER", "claude-sonnet-5-5")
     arbiter_batch: int = int(os.environ.get("CERTIVITY_ARBITER_BATCH", "20"))
+    # Completeness check that only adds requirements a cited paragraph states but the list misses. Recall +3.5,
+    # precision -2 on the dev case; empty turns it off.
+    model_gapfill: str = os.environ.get("CERTIVITY_MODEL_GAPFILL", "claude-sonnet-5-5")
+    gapfill_batch: int = int(os.environ.get("CERTIVITY_GAPFILL_BATCH", "12"))
     model_write: str = os.environ.get("CERTIVITY_MODEL_WRITE", "") or model_filter
     parallel: int = int(os.environ.get("CERTIVITY_PARALLEL", "8"))
     # What is specific to this set of regulations; every prompt includes it. Replace it for another corpus.

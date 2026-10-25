@@ -11,7 +11,8 @@ obligation become candidates. The model makes three kinds of judgement only:
    different batch boundaries, and a paragraph either pass keeps goes on;
 4. batched calls on the small model, with more thinking, read only the kept paragraphs closely, drop the ones
    that clearly do not apply, and write one requirement per obligation; this runs three times;
-5. paragraphs all three writing passes kept stay; the few they disagreed on go to Sonnet, which settles them.
+5. paragraphs all three writing passes kept stay; the few they disagreed on go to Sonnet, which settles them;
+6. Sonnet checks each cited paragraph for obligations its requirements miss (for this product only) and adds them.
 
 Nothing here is specific to one kind of part. What is specific to this corpus of regulations lives in the
 notes file (CERTIVITY_NOTES), which every prompt includes. Every requirement cites a paragraph the parser
@@ -168,6 +169,33 @@ ARBITER_SYSTEM = (
     + "\nAnswer for every id, in order."
 )
 
+GAPFILL_SYSTEM = (
+    "You check a requirement list for completeness. For each regulation paragraph you get the requirements already "
+    "written from it. List only the obligations the paragraph states that none of the existing requirements covers: a "
+    "missing case, row, limit, condition-specific rule or separate duty. Do not restate, rephrase or merge existing "
+    "requirements, and do not add anything the paragraph does not state. Most paragraphs are already complete: return "
+    "no additions for them. Only add an obligation that applies to this product as described: skip cases, rows and "
+    "rules for functions, lamp or device types, categories or variants the product does not have. Write each addition "
+    "following the writing guide below."
+)
+
+GAPFILL_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "paragraphs": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"id": {"type": "string"}, "additions": {"type": "array", "items": {"type": "string"}}},
+                "required": ["id", "additions"],
+                "additionalProperties": False,
+            },
+        }
+    },
+    "required": ["paragraphs"],
+    "additionalProperties": False,
+}
+
 ARBITER_SCHEMA = {
     "type": "object",
     "properties": {
@@ -320,6 +348,25 @@ def arbitrate_batch(llm: LLM, brief: str, focus: str, batch: list[corpus.Paragra
     return [by_key[d["id"]] for d in answer["decisions"] if d["applies"] and d["id"] in by_key]
 
 
+def gapfill_batch(llm: LLM, brief: str,
+                  batch: list[tuple[corpus.Paragraph, list[str]]]) -> list[tuple[corpus.Paragraph, str]]:
+    """Obligations each paragraph states that its existing requirements miss. Only adds; never changes a requirement."""
+    text = "\n\n".join(
+        f"[P{i}] {p.regulation} paragraph {p.label} (section: {p.heading or '-'})\n{p.text[:MAX_TEXT]}\nEXISTING:\n"
+        + "\n".join(f"  - {t}" for t in texts)
+        for i, (p, texts) in enumerate(batch)
+    )
+    answer = llm.json(model=settings.model_gapfill, system=system(GAPFILL_SYSTEM, with_style=True),
+                      schema=GAPFILL_SCHEMA, effort="medium",
+                      content=[{"type": "text", "text": f"Product:\n{brief}\n\n{text}"}])
+    out = []
+    for item in answer["paragraphs"]:
+        index = item["id"].strip("[]P ")
+        if index.isdigit() and int(index) < len(batch):  # an id the model invented is dropped
+            out += [(batch[int(index)][0], t.strip()) for t in item["additions"] if t.strip()]
+    return out
+
+
 def _in_batches(pools: dict[str, list[corpus.Paragraph]], size: int,
                 offset: int = 0) -> list[tuple[str, list[corpus.Paragraph]]]:
     """Batches never mix regulations, so each carries its regulation's focus. A non-zero offset makes the first
@@ -420,6 +467,26 @@ def run(spec_text: str, drawings: list[Path], llm: LLM, emit: Emit = _noop,
         if id(p) in agreed and key not in seen:  # the same sentence cited from two paragraphs is kept once
             seen.add(key)
             pairs.append((p, text))
+
+    if settings.model_gapfill and pairs:
+        # Completeness check on the cited paragraphs: a stronger model lists obligations a paragraph states that its
+        # requirements miss, for this product only. Additions go right after their paragraph's requirements.
+        cited: dict[int, tuple[corpus.Paragraph, list[str]]] = {}
+        for p, text in pairs:
+            cited.setdefault(id(p), (p, []))[1].append(text)
+        groups = list(cited.values())
+        size = settings.gapfill_batch
+        found = _parallel("completeness", f"Checking {len(groups)} cited paragraphs for missed obligations",
+                          lambda r, b: gapfill_batch(llm, brief, b),
+                          [("", groups[i:i + size]) for i in range(0, len(groups), size)], emit, cancelled, warnings)
+        additions: dict[int, list[str]] = collections.defaultdict(list)
+        for p, text in (x for batch in found for x in batch):
+            key = " ".join(re.sub(r"[^\w ]", " ", text.lower()).split())
+            if key not in seen:
+                seen.add(key)
+                additions[id(p)].append(text)
+        pairs = [x for p, texts in groups for x in [(p, t) for t in texts + additions[id(p)]]]
+
     requirements = [Requirement(f"R-{n:04d}", text, p) for n, (p, text) in enumerate(pairs, start=1)]
     applicable = [{**a, "focus": scopes.get(a["regulation"], {}).get("focus", ""),
                    "skipped_sections": scopes.get(a["regulation"], {}).get("skip", [])}

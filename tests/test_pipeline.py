@@ -22,6 +22,9 @@ class FakeLLM:
         self.usage = Usage()
 
     def json(self, *, model, system, content, schema, effort="low"):
+        items = schema["properties"].get("paragraphs", {}).get("items", {}).get("properties", {})
+        if "additions" in items:  # completeness check: one addition for the first paragraph of each batch
+            return {"paragraphs": [{"id": "P0", "additions": ["Added obligation."]}, {"id": "P999", "additions": ["Invented."]}]}
         if "applicable" in schema["properties"]:
             return {"product": {"summary": "Rear lamp", "vehicle_categories": ["M1"], "functions": ["stop lamp"],
                                 "parts": ["lens"], "unknowns": []},
@@ -47,8 +50,10 @@ def test_pipeline_cites_only_parsed_paragraphs():
     out = pipeline.run("Rear lamp", [], FakeLLM())
     assert [a["regulation"] for a in out["applicable"]] == ["UN R148"]  # unknown regulation dropped
     assert not any(r.paragraph.label.startswith("Annex 8 ") for r in out["requirements"])  # skipped by scope
-    assert out["requirements"] and len(out["requirements"]) % 2 == 0  # invented id P999 dropped everywhere
-    assert all(r.text != "Invented paragraph." for r in out["requirements"])
+    texts = [r.text for r in out["requirements"]]
+    assert texts.count("Added obligation.") == 1  # the completeness check only adds, and duplicates are kept once
+    assert texts.count("First obligation.") == 1 and texts.count("Second obligation.") == 1
+    assert all(r.text not in {"Invented paragraph.", "Rejected, so never used.", "Invented."} for r in out["requirements"])
     sub = pipeline.submission("team-x", "dev-rear-lamp", out["requirements"])
     assert checks.validate(sub)["valid"]
     assert checks.score(sub, "dev-rear-lamp")["regulation_level"]["precision"] == 1.0
@@ -62,7 +67,7 @@ class DisagreeingLLM(FakeLLM):
         self.calls = 0
 
     def json(self, *, model, system, content, schema, effort="low"):
-        if "paragraphs" in schema["properties"]:
+        if "paragraphs" in schema["properties"] and "requirements" in schema["properties"]["paragraphs"]["items"]["properties"]:
             self.calls += 1
             kept = [{"id": "P0", "applies": True, "requirements": ["Agreed obligation."]}]
             if self.calls == 1:
