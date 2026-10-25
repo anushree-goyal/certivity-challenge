@@ -1,10 +1,10 @@
 import type { Health, RunSummary } from "../types";
 import { FlowButton } from "./ui/flow-button";
 
-export function Sidebar({ runs, selected, health, healthError, onNew, onSelect, newActive, view, onRegulations }: {
+export function Sidebar({ runs, selected, health, healthError, onNew, onSelect, newActive, view, onRegulations, onSubgoal }: {
   runs: RunSummary[]; selected: string | null; health: Health | null; healthError: string | null;
   onNew: () => void; onSelect: (id: string) => void; newActive: boolean;
-  view: "analyses" | "regulations"; onRegulations: () => void;
+  view: "analyses" | "regulations" | "subgoal"; onRegulations: () => void; onSubgoal: () => void;
 }) {
   return (
     <aside className="sidebar">
@@ -47,6 +47,10 @@ export function Sidebar({ runs, selected, health, healthError, onNew, onSelect, 
                 aria-current={view === "regulations" ? "page" : undefined}>
           Regulations
           {health?.corpus_freshness && <span className="side-nav-count">{health.corpus_freshness.index_entries}</span>}
+        </button>
+        <button type="button" className={`side-nav-item${view === "subgoal" ? " active" : ""}`} onClick={onSubgoal}
+                aria-current={view === "subgoal" ? "page" : undefined}>
+          Sub-goal: version changes
         </button>
       </nav>
 

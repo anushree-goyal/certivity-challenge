@@ -1,5 +1,5 @@
 import type {
-  CaseInfo, EngineerReview, EngineerReviewStatus, ExportStatus, Health, RegulationsReport, ReimportStatus,
+  CaseInfo, EngineerReview, SubgoalCase, SubgoalJob, SubgoalResult, EngineerReviewStatus, ExportStatus, Health, RegulationsReport, ReimportStatus,
   RunComparison, RunStatus, RunSummary, RunView,
 } from "./types";
 
@@ -69,6 +69,10 @@ export const api = {
       method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status, note }),
     }),
   submissionUrl: (id: string) => `/api/runs/${id}/submission`,
+  subgoalCases: () => getJSON<SubgoalCase[]>("/api/subgoal"),
+  subgoalResult: (c: string) => getJSON<SubgoalResult>(`/api/subgoal/${encodeURIComponent(c)}`),
+  runSubgoal: (c: string) => sendJSON<SubgoalJob>(`/api/subgoal/${encodeURIComponent(c)}/run`, { method: "POST" }),
+  subgoalSubmissionUrl: (c: string) => `/api/subgoal/${encodeURIComponent(c)}/submission`,
   inputUrl: (id: string, name: string) => `/api/runs/${id}/input/${encodeURIComponent(name)}`,
   pageUrl: (documentId: string, pdfPageIndex: number, mode: string, snapshot?: string | null) =>
     `/api/documents/${encodeURIComponent(documentId)}/pages/${pdfPageIndex}?${query(mode, snapshot)}`,

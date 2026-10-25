@@ -130,6 +130,101 @@ def health() -> dict:
     }
 
 
+# --- sub-goal --------------------------------------------------------------------------------------
+
+subgoal_jobs: dict[str, dict] = {}
+
+
+def _subgoal_case(case: str) -> Path:
+    folder = settings.package_dir / "subgoal" / case
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", case) or not (folder / "requirements_old.json").is_file():
+        raise HTTPException(404, f"No sub-goal case {case}")
+    return folder
+
+
+@app.get("/api/subgoal")
+def subgoal_cases() -> list[dict]:
+    from certivity import subgoal
+
+    root = settings.package_dir / "subgoal"
+    out = []
+    for folder in sorted(root.iterdir() if root.is_dir() else []):
+        if not (folder / "requirements_old.json").is_file():
+            continue
+        old = json.loads((folder / "requirements_old.json").read_text())
+        record = subgoal.record_path(folder.name)
+        saved = json.loads(record.read_text()) if record.is_file() else None
+        out.append({
+            "case": folder.name, "case_id": f"subgoal-{folder.name}", "held_out": folder.name != "dev",
+            "regulation": next((r["source"].get("regulation") for r in old if r.get("source")), None),
+            "requirements_old": len(old), "ready": (folder / "old.pdf").is_file() and (folder / "new.pdf").is_file(),
+            "has_expected": (folder / "expected.json").is_file(),
+            "job": subgoal_jobs.get(folder.name, {"state": "done" if saved else "idle"}),
+            "summary": {k: sum(c["change"] == k for c in saved["changes"]) for k in ("modified", "removed", "added")}
+            if saved else None,
+        })
+    return sorted(out, key=lambda c: (not c["held_out"], c["case"]))
+
+
+@app.post("/api/subgoal/{case}/run")
+def subgoal_run(case: str) -> dict:
+    from certivity import subgoal
+
+    folder = _subgoal_case(case)
+    if not (folder / "new.pdf").is_file():
+        raise HTTPException(400, "The old/new PDFs are not downloaded: run certivity fetch")
+    if not credentials_configured():
+        raise HTTPException(400, "No model credential: set ANTHROPIC_API_KEY in .env")
+    if subgoal_jobs.get(case, {}).get("state") == "running":
+        return subgoal_jobs[case]
+
+    job = {"state": "running", "started_at": now(), "message": "Comparing the two versions"}
+    subgoal_jobs[case] = job
+
+    def work() -> None:
+        try:
+            subgoal.execute(case, emit=lambda **e: job.update(message=e.get("message", "")))
+            job.update(state="done", finished_at=now())
+        except Exception as exc:
+            job.update(state="failed", finished_at=now(), error=str(exc))
+
+    threading.Thread(target=work, daemon=True).start()
+    return job
+
+
+@app.get("/api/subgoal/{case}")
+def subgoal_result(case: str) -> dict:
+    from certivity import subgoal
+
+    folder = _subgoal_case(case)
+    record = subgoal.record_path(case)
+    if not record.is_file():
+        raise HTTPException(404, "This sub-goal case has not been run yet")
+    old = {r["id"]: r for r in json.loads((folder / "requirements_old.json").read_text())}
+    return {**json.loads(record.read_text()), "old_requirements": old,
+            "job": subgoal_jobs.get(case, {"state": "done"})}
+
+
+@app.get("/api/subgoal/{case}/submission")
+def subgoal_submission(case: str) -> Response:
+    from certivity import subgoal
+
+    folder = _subgoal_case(case)
+    record = subgoal.record_path(case)
+    if not record.is_file():
+        return JSONResponse(status_code=409, content={"detail": "This sub-goal case has not been run yet"})
+    if not settings.team_id:
+        return JSONResponse(status_code=409, content={"detail": "CERTIVITY_TEAM_ID is not set"})
+    saved = json.loads(record.read_text())
+    sub = subgoal.submission(settings.team_id, saved["case_id"], saved)
+    validation = checks.validate(sub, json.loads((folder / "requirements_old.json").read_text()))
+    if not validation["valid"]:
+        return JSONResponse(status_code=409, content={"detail": validation["errors"][:5]})
+    filename = f"{saved['case_id']}_{settings.team_id}.json"
+    return Response(json.dumps(sub, indent=2), media_type="application/json",
+                    headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+
+
 @app.get("/api/corpus/reimport")
 def reimport_status() -> dict:
     return reimport

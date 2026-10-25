@@ -138,3 +138,20 @@ export interface ExportStatus {
   available: boolean; case_id: string; code: "valid" | "running" | "team_missing" | "no_submission" | "invalid" | "validator_error" | null;
   reason?: string; errors: { path: string; message: string }[]; team_id_placeholder?: boolean;
 }
+
+export interface SubgoalJob { state: "idle" | "running" | "done" | "failed"; started_at?: string; finished_at?: string; message?: string; error?: string }
+export interface SubgoalCase {
+  case: string; case_id: string; held_out: boolean; regulation: string | null; requirements_old: number;
+  ready: boolean; has_expected: boolean; job: SubgoalJob;
+  summary: { modified: number; removed: number; added: number } | null;
+}
+export interface SubgoalChange {
+  requirement_id: string | null; change: "modified" | "removed" | "added"; new_text?: string | null; reason: string;
+  source?: { page: number; paragraph: string };
+}
+export interface SubgoalResult {
+  case: string; case_id: string; regulation: string; old_version: string; new_version: string; finished_at: string;
+  requirements_old: number; unplaced: string[]; changes: SubgoalChange[]; job: SubgoalJob;
+  validation: ValidationReport; evaluation: Record<string, unknown> | null; usage: Record<string, unknown> | null;
+  old_requirements: Record<string, { id: string; text: string; source: { page?: number; paragraph?: string } }>;
+}

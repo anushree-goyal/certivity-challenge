@@ -289,3 +289,50 @@ def run(case_dir: Path, llm: LLM, emit: Emit = _noop) -> dict:
 
 def submission(team_id: str, case_id: str, result: dict) -> dict:
     return {"team_id": team_id, "case_id": case_id, "changes": result["changes"]}
+
+
+def score(changes: list[dict], expected: list[dict]) -> dict:
+    """Against a case's expected.json: recall and accuracy of the flagged changes, and the added requirements."""
+    want = {c["requirement_id"]: c["change"] for c in expected if c["change"] != "added"}
+    ours = {c["requirement_id"]: c["change"] for c in changes if c["change"] != "added"}
+    found = set(want) & set(ours)
+    added_want = {c["source"]["paragraph"] for c in expected if c["change"] == "added"}
+    added_ours = {c["source"]["paragraph"] for c in changes if c["change"] == "added"}
+    return {
+        "flagged_recall": round(len(found) / max(1, len(want)), 3),
+        "flagged_precision": round(len(found) / max(1, len(ours)), 3),
+        "change_type_right": f"{sum(want[i] == ours[i] for i in found)} of {len(found)}",
+        "missed": sorted(set(want) - set(ours)),
+        "added_paragraphs_found": f"{len(added_want & added_ours)} of {len(added_want)}",
+    }
+
+
+def record_path(case: str) -> Path:
+    return settings.runs_dir / "subgoal" / f"{case}.json"
+
+
+def execute(case: str, emit: Emit = _noop) -> dict:
+    """Run a sub-goal case, validate and (when an answer key exists) score it, and save it for the app."""
+    from datetime import datetime, timezone
+
+    from certivity import checks
+
+    folder = settings.package_dir / "subgoal" / case
+    llm = LLM()
+    result = run(folder, llm, emit=emit)
+    old_reqs = json.loads((folder / "requirements_old.json").read_text())
+    sub = submission(settings.team_id or "team-id-not-set", f"subgoal-{case}", result)
+    expected = folder / "expected.json"
+    record = {
+        "case": case, "case_id": f"subgoal-{case}", "regulation": result["regulation"],
+        "old_version": result["old_version"], "new_version": result["new_version"],
+        "finished_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "requirements_old": len(old_reqs), "unplaced": result["unplaced"], "changes": result["changes"],
+        "validation": checks.validate(sub, old_reqs),
+        "evaluation": score(result["changes"], json.loads(expected.read_text())["changes"]) if expected.is_file() else None,
+        "usage": llm.usage.as_dict(),
+    }
+    path = record_path(case)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(record, indent=1))
+    return record

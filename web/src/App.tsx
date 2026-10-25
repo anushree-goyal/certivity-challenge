@@ -7,13 +7,15 @@ import { Sidebar } from "./components/Sidebar";
 import { NewRunForm } from "./components/NewRunForm";
 import { RunDetail } from "./components/RunDetail";
 import { RegulationsPage } from "./components/RegulationsPage";
+import { SubgoalPage } from "./components/SubgoalPage";
 import { CorpusBanner } from "./components/CorpusBanner";
 
-type View = "analyses" | "regulations";
+type View = "analyses" | "regulations" | "subgoal";
 
 function initialView(): { view: View; reg: string | null } {
   const q = new URLSearchParams(location.search);
-  return { view: q.get("view") === "regulations" ? "regulations" : "analyses", reg: q.get("reg") };
+  const v = q.get("view");
+  return { view: v === "regulations" || v === "subgoal" ? v : "analyses", reg: q.get("reg") };
 }
 
 export default function App() {
@@ -56,7 +58,7 @@ export default function App() {
   usePoller(() => loadHealth().finally(() => setRetryIn((t) => Math.min(t * 2, 15000))), online ? 30000 : retryIn, true);
 
   // A link to a specific analysis or the regulations page opens straight at the workspace, past the front page.
-  const opensWorkspace = useRef(selected !== null || view === "regulations");
+  const opensWorkspace = useRef(selected !== null || view !== "analyses");
   useEffect(() => {
     if (!opensWorkspace.current) return;
     const t = window.setTimeout(() => toWorkspace(false), 60);  // after first layout
@@ -77,17 +79,23 @@ export default function App() {
     toWorkspace(false);
   };
 
+  const openSubgoal = () => {
+    setView("subgoal");
+    history.replaceState(null, "", "?view=subgoal");
+    toWorkspace(false);
+  };
+
   return (
     <>
       <Landing onStart={() => { select(null); toWorkspace(); }} onScroll={() => toWorkspace()} />
       <div className="shell" id="workspace" ref={workspace}>
         <Sidebar runs={runs} selected={view === "analyses" ? selected : null} health={health} healthError={healthError}
                  onNew={() => select(null)} onSelect={select} newActive={view === "analyses" && !selected}
-                 view={view} onRegulations={() => openRegulations(null)} />
+                 view={view} onRegulations={() => openRegulations(null)} onSubgoal={openSubgoal} />
         <main className="main">
           {!online && <div className="banner error offline-banner" role="alert">{OFFLINE_MESSAGE} Retrying…</div>}
           <CorpusBanner health={health} onChanged={loadHealth} />
-          {view === "regulations"
+          {view === "subgoal" ? <SubgoalPage /> : view === "regulations"
             ? <RegulationsPage focus={focusReg} />
             : selected
               ? <RunDetail key={selected} runId={selected} health={health} onFinished={refreshRuns} onOpenRegulation={openRegulations} />

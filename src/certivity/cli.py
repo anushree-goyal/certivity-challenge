@@ -49,25 +49,25 @@ def main(argv: list[str] | None = None) -> int:
         return status
 
     if args.command == "subgoal":
-        from certivity import checks, subgoal
-        from certivity.llm import LLM
+        from certivity import subgoal
 
         folder = settings.package_dir / "subgoal" / args.case
         if not (folder / "new.pdf").is_file():
             parser.error(f"no sub-goal case {folder} with old.pdf/new.pdf (run certivity fetch)")
-        llm = LLM()
-        result = subgoal.run(folder, llm, emit=lambda **e: print(f"[{e['stage']}] {e['message']}", file=sys.stderr))
+        record = subgoal.execute(args.case, emit=lambda **e: print(f"[{e['stage']}] {e['message']}", file=sys.stderr))
         team = settings.team_id or "team-id-not-set"
-        sub_json = subgoal.submission(team, f"subgoal-{args.case}", result)
+        sub_json = subgoal.submission(team, record["case_id"], record)
         path = Path(args.out or f"subgoal-{args.case}_{team}.json")
         path.write_text(json.dumps(sub_json, indent=2))
-        validation = checks.validate(sub_json, json.loads((folder / "requirements_old.json").read_text()))
-        kinds = {k: sum(c["change"] == k for c in result["changes"]) for k in ("modified", "removed", "added")}
-        print(f"{result['regulation']} {result['old_version']} -> {result['new_version']}: {kinds} -> {path}")
-        if result["unplaced"]:
-            print(f"warning: {len(result['unplaced'])} old requirements cite a paragraph not found in old.pdf")
+        validation = record["validation"]
+        kinds = {k: sum(c["change"] == k for c in record["changes"]) for k in ("modified", "removed", "added")}
+        print(f"{record['regulation']} {record['old_version']} -> {record['new_version']}: {kinds} -> {path}")
+        if record["unplaced"]:
+            print(f"warning: {len(record['unplaced'])} old requirements cite a paragraph not found in old.pdf")
         print("valid" if validation["valid"] else f"INVALID: {validation['errors'][:5]}")
-        u = llm.usage.as_dict()
+        if record["evaluation"]:
+            print("against expected.json:", record["evaluation"])
+        u = record["usage"]
         print(f"model calls: {u['calls']} ({u['cached_calls']} cached), about ${u['cost_usd']:.3f} at list prices")
         return 0 if validation["valid"] else 1
 
