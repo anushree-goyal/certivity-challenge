@@ -43,7 +43,7 @@ from certivity.contracts import (
     ModelUsage,
     content_hash,
 )
-from certivity.llm.cache import CacheBackend, CallCache, NullCache
+from certivity.llm.cache import CacheBackend, CallCache, LayeredCache, NullCache
 from certivity.llm.schema_check import schema_errors
 
 logger = logging.getLogger(__name__)
@@ -597,6 +597,7 @@ def adapter_from_env(
             ("candidate_scope", "CERTIVITY_MODEL_APPLICABILITY"),
             ("document_scope", "CERTIVITY_MODEL_APPLICABILITY"),
             ("extract_obligations", "CERTIVITY_MODEL_EXTRACT"),
+            ("compact_obligations", "CERTIVITY_MODEL_EXTRACT"),
             ("revise_obligations", "CERTIVITY_MODEL_REVISE"),
             ("quality_review", "CERTIVITY_MODEL_REVIEW"),
             ("quality_dedup", "CERTIVITY_MODEL_REVIEW"),
@@ -627,6 +628,10 @@ def adapter_from_env(
         base_url=os.environ.get("ANTHROPIC_BASE_URL") or None,
     )
     cache: CacheBackend = CallCache(cache_dir) if cache_dir else NullCache()
+    shared_dir = os.environ.get("CERTIVITY_SHARED_LLM_CACHE", "")
+    if cache_dir and shared_dir and shared_dir.lower() != "off":
+        # Answers shared across runs: a rerun of the same case pays nothing again.
+        cache = LayeredCache(cache, CallCache(shared_dir))
     return StructuredLLMAdapter(
         config,
         cache=cache,

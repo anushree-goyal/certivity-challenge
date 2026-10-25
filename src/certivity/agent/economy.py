@@ -540,7 +540,7 @@ _GENERIC_CONTEXT = frozenset(
 )
 
 
-def _values(text: str) -> tuple[NumericValue, ...]:
+def values_in(text: str) -> tuple[NumericValue, ...]:
     found = []
     for m in _VALUE.finditer(text):
         comparator = (m.group("cmp") or "").lower() or None
@@ -570,7 +570,7 @@ def _in_annex(item: PlanItem, passage: SourcePassage) -> bool:
     return label.startswith(("Annex", "Appendix")) or (passage.namespace or "main") != "main"
 
 
-def _context(item: PlanItem, passage: SourcePassage) -> Optional[str]:
+def context_heading(item: PlanItem, passage: SourcePassage) -> Optional[str]:
     """The section heading, when the paragraph sits under a device-specific one."""
     heading = (item.section.heading or "").strip().rstrip(":.")
     if not heading or heading.lower() in _GENERIC_CONTEXT:
@@ -593,17 +593,16 @@ def has_obligation_wording(ctx: RunContext, item: PlanItem) -> bool:
     )
 
 
-def economy_extract_section(ctx: RunContext, item: PlanItem) -> SectionResult:
-    """One plain-English requirement per obligation paragraph of the section."""
-    try:
-        passages = ctx.corpus.get_passages(list(item.section.primary_passage_ids))
-    except Exception as exc:  # a corpus failure is a failed section, not a crash
-        return SectionResult(
-            drafts=[], inspected_passage_ids=[], resolutions=[], notes=[],
-            failed=True, failure_reason=f"corpus read failed: {exc}",
-        )
+def obligation_paragraphs(item: PlanItem, passages: list[SourcePassage]) -> list[SourcePassage]:
+    """The paragraphs of a section that can carry a requirement on the part.
 
-    drafts: list[DraftRequirement] = []
+    Kept: text that states an obligation (shall / must). Dropped, for free:
+    tables (their values are read with the paragraph that points at them),
+    "No requirements." lines, footnotes, test-method descriptions, and test
+    procedures or paperwork in annexes. Shared by economy mode and the compact
+    extraction, so both decide what is worth reading the same way.
+    """
+    kept: list[SourcePassage] = []
     for passage in passages:
         if passage.is_table or not _OBLIGATION.search(passage.text):
             continue
@@ -617,27 +616,62 @@ def economy_extract_section(ctx: RunContext, item: PlanItem) -> SectionResult:
             or _PROCEDURAL.search(body[:160])
         ):
             continue  # test method or paperwork in an annex, not a requirement on the part
-        text = plain_english(passage.text)
-        context = _context(item, passage)
-        if context:
-            text = f"For {context[0].lower() + context[1:] if context[1:2].islower() else context}: {text}"
-        text = _clip(text)
-        drafts.append(
-            DraftRequirement(
-                draft_id=draft_id_for(item.section_id, passage.passage_id, text),
-                text=text,
-                supporting_passage_ids=(passage.passage_id,),
-                primary_passage_id=passage.passage_id,
-                obligation_kind=ObligationKind.MANDATORY,
-                applicability_reason=f"Paragraph of {item.document.regulation} "
-                f"{item.section.paragraph_label or item.section.heading} kept as relevant to this part.",
-                values=_values(passage.text),
-                document_id=item.document.document_id,
-                section_id=item.section_id,
-                prompt_version="economy-v1",
-                notes=ECONOMY_NOTE,
-            )
+        kept.append(passage)
+    return kept
+
+
+def economy_requirement(item: PlanItem, passage: SourcePassage) -> Optional[DraftRequirement]:
+    """The rule-based requirement for one obligation paragraph."""
+    text = plain_english(passage.text)
+    context = context_heading(item, passage)
+    if context:
+        text = f"For {context[0].lower() + context[1:] if context[1:2].islower() else context}: {text}"
+    text = _clip(text)
+    if not text:
+        return None
+    return DraftRequirement(
+        draft_id=draft_id_for(item.section_id, passage.passage_id, text),
+        text=text,
+        supporting_passage_ids=(passage.passage_id,),
+        primary_passage_id=passage.passage_id,
+        obligation_kind=ObligationKind.MANDATORY,
+        applicability_reason=f"Paragraph of {item.document.regulation} "
+        f"{item.section.paragraph_label or item.section.heading} kept as relevant to this part.",
+        values=values_in(passage.text),
+        document_id=item.document.document_id,
+        section_id=item.section_id,
+        prompt_version="economy-v1",
+        notes=ECONOMY_NOTE,
+    )
+
+
+def switch_to_economy(ctx: RunContext, exc: BaseException) -> None:
+    """From now on this run makes no model call; said once, as a warning."""
+    with ctx.lock:
+        already = ctx.economy
+        ctx.economy = True
+    if not already:
+        ctx.warn(
+            f"the model cannot be used ({exc}); the rest of this run makes no model "
+            "calls (economy mode): relevance from saved category knowledge or wording, "
+            "one plain-English requirement per obligation paragraph",
+            stage="agent",
         )
+
+
+def economy_extract_section(ctx: RunContext, item: PlanItem) -> SectionResult:
+    """One plain-English requirement per obligation paragraph of the section."""
+    try:
+        passages = ctx.corpus.get_passages(list(item.section.primary_passage_ids))
+    except Exception as exc:  # a corpus failure is a failed section, not a crash
+        return SectionResult(
+            drafts=[], inspected_passage_ids=[], resolutions=[], notes=[],
+            failed=True, failure_reason=f"corpus read failed: {exc}",
+        )
+
+    drafts = [
+        d for d in (economy_requirement(item, p) for p in obligation_paragraphs(item, passages)) if d
+    ]
 
     return SectionResult(
         drafts=drafts,

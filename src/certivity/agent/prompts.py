@@ -72,6 +72,10 @@ PROMPT_VERSIONS: dict[str, str] = {
     # paperwork out of the expensive extraction call.
     "part_category": "v1",
     "section_triage": "v1",
+    # v1 (compact_obligations): paragraph-level extraction, ~20 paragraphs a
+    # call, minimal output. Citations, pages and values are filled in by code,
+    # so the model only decides relevance and writes the requirement text.
+    "compact_obligations": "v1",
 }
 
 _SHARED_RULES = """
@@ -787,6 +791,78 @@ SECTION_TRIAGE_SCHEMA: dict[str, Any] = {
                     "section_id": {"type": "string"},
                     "reason": {"type": "string"},
                     "verdict": {"type": "string", "enum": ["extract", "skip"]},
+                },
+            },
+        }
+    },
+}
+
+
+# --------------------------------------------------------------------------- #
+# Compact extraction: many obligation paragraphs per call, minimal output
+# --------------------------------------------------------------------------- #
+
+COMPACT_OBLIGATIONS_INSTRUCTIONS = (
+    """
+You turn regulation paragraphs into the requirements one specific vehicle part
+must meet. You get the part (its category and product facts) and a list of
+paragraphs, each with its id, regulation, label, heading path and text.
+"""
+    + _SHARED_RULES
+    + """
+For EVERY paragraph id supplied, return exactly one entry with a `decision`:
+
+- "requirement": the paragraph obliges this part, its installation on the
+  vehicle, or its markings. Write its requirements in `requirements`.
+- "not_applicable": it governs a device, function, vehicle category or case
+  this part does not have. Functions and components the product facts do not
+  list are absent. Decide; do not keep a paragraph "to be safe" - citing
+  paragraphs that do not apply is the main way a submission loses precision.
+- "no_obligation": a definition without a measurable rule, a heading, a step
+  for the approval authority, or the description of a test method.
+
+Writing requirements:
+- One obligation per requirement. A paragraph that sets two separate limits
+  gives two requirements; merging them loses one. A rule together with its own
+  exception or allowance stays ONE requirement - do not split those.
+- Plain English an engineer can act on: "must" / "must not", no legal filler.
+  Name the device or function the rule is about, so the sentence stands alone.
+- Keep every number, unit, tolerance, range, condition, exception, defined term
+  and category exactly as written. No paragraph numbers in the text.
+- `condition`: when the requirement applies, if it is conditional (for example
+  "for vehicles of category M1"); omit it when the requirement is unconditional.
+"""
+)
+
+COMPACT_OBLIGATIONS_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["paragraphs"],
+    "properties": {
+        "paragraphs": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["passage_id", "decision", "requirements"],
+                "properties": {
+                    "passage_id": {"type": "string"},
+                    "decision": {
+                        "type": "string",
+                        "enum": ["requirement", "not_applicable", "no_obligation"],
+                    },
+                    "requirements": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "required": ["text"],
+                            "properties": {
+                                "text": {"type": "string"},
+                                "condition": _optional("string"),
+                            },
+                        },
+                    },
                 },
             },
         }

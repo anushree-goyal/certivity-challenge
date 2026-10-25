@@ -92,6 +92,8 @@ def team_id_problem(team_id: str) -> str | None:
 
 def load_settings() -> Settings:
     _load_dotenv(REPO_ROOT / ".env")
+    # Model answers shared across runs (see certivity.llm.cache.LayeredCache); "off" disables it.
+    os.environ.setdefault("CERTIVITY_SHARED_LLM_CACHE", str(REPO_ROOT / "data/cache/llm-calls"))
     entry_points = {
         name: os.environ.get(f"CERTIVITY_EP_{name.upper()}", default)
         for name, default in DEFAULT_ENTRY_POINTS.items()

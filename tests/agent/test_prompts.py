@@ -33,6 +33,7 @@ ALL_SCHEMAS = {
     "revise_obligations": p.REVISE_OBLIGATIONS_SCHEMA,
     "part_category": p.PART_CATEGORY_SCHEMA,
     "section_triage": p.SECTION_TRIAGE_SCHEMA,
+    "compact_obligations": p.COMPACT_OBLIGATIONS_SCHEMA,
 }
 
 

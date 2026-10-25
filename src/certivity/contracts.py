@@ -314,6 +314,9 @@ class RunConfig:
     finishes instead of failing. "lite": like "auto", on the small model
     (the model adapter picks it), and sections that state no obligation
     are never sent to it."""
+    compact_extraction: bool = False
+    """Extract obligation paragraphs, about 20 to a call, with a minimal answer
+    (always on in "lite" mode). Off: the section-by-section extraction."""
     cite_superseded_regulations: bool = False
     """False: a regulation that another selected regulation says it combines
     (R148 combines R6, R7, R23, R38) is compared and listed, but requirements

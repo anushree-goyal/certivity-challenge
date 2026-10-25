@@ -448,6 +448,19 @@ def default_script() -> dict[str, Any | Responder]:
             ]
         }
 
+    def compact_obligations(payload: Any) -> dict[str, Any]:
+        import re
+
+        out = []
+        for p in payload["paragraphs"]:
+            if re.search(r"\b(shall|must)\b", p["text"], re.I):
+                body = re.sub(r"^\s*[\d.]+\s*", "", p["text"])
+                out.append({"passage_id": p["passage_id"], "decision": "requirement",
+                            "requirements": [{"text": "The device must comply: " + body[:120]}]})
+            else:
+                out.append({"passage_id": p["passage_id"], "decision": "no_obligation", "requirements": []})
+        return {"paragraphs": out}
+
     return {
         "product_profile": product_profile,
         "candidate_scope": candidate_scope,
@@ -456,4 +469,5 @@ def default_script() -> dict[str, Any | Responder]:
         "revise_obligations": revise_obligations,
         "part_category": part_category,
         "section_triage": section_triage,
+        "compact_obligations": compact_obligations,
     }

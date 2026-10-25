@@ -564,3 +564,19 @@ def test_cache_key_includes_the_task_model(tmp_path):
     response = second.generate_json("bulk", "instructions", {}, SCHEMA)
     assert response.cached is False
     assert response.data == {"answer": "haiku"}
+
+
+def test_shared_cache_lets_a_second_run_reuse_an_answer(tmp_path, monkeypatch):
+    from certivity.llm import adapter_from_env
+
+    monkeypatch.setenv("CERTIVITY_SHARED_LLM_CACHE", str(tmp_path / "shared"))
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    first = adapter_from_env(cache_dir=tmp_path / "run1")
+    first._client = FakeClient([FakeResponse(text='{"answer": "paid once"}')])
+    first.generate_json("extract", "instructions", {"k": "v"}, SCHEMA)
+
+    second = adapter_from_env(cache_dir=tmp_path / "run2")
+    second._client = FakeClient([])  # any real request would fail the test
+    response = second.generate_json("extract", "instructions", {"k": "v"}, SCHEMA)
+    assert response.cached and response.data == {"answer": "paid once"}
+    assert any((tmp_path / "run2").rglob("*.json")), "the run keeps its own copy"

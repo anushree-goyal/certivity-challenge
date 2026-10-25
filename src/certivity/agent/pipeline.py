@@ -64,7 +64,9 @@ from certivity.agent.economy import (
     match_category,
     product_terms,
     prune_uncertain,
+    switch_to_economy,
 )
+from certivity.agent.compact import compact_extract
 from certivity.agent.extract import extract_section
 from certivity.agent.plan import build_inspection_plan
 from certivity.agent.profile import build_product_profile, profile_payload
@@ -123,7 +125,7 @@ def run_extraction(
                     level="error",
                 )
                 raise
-            _switch_to_economy(ctx, exc)
+            switch_to_economy(ctx, exc)
         except (ModelBudgetExceeded, LLMCallError) as exc:
             # Without a profile there is nothing to decide scope against, so this is
             # the one stage whose failure ends the run.
@@ -163,7 +165,7 @@ def run_extraction(
         except LLMConfigurationError as exc:
             if mode not in FALLBACK_MODES:
                 raise
-            _switch_to_economy(ctx, exc)
+            switch_to_economy(ctx, exc)
             decisions, selected = economy_applicability(ctx, vocabulary)
         except (ModelBudgetExceeded, LLMCallError) as exc:
             ctx.warn(f"applicability assessment stopped early: {exc}", stage="applicability")
@@ -207,9 +209,13 @@ def run_extraction(
     )
     registry.save()
 
-    results = _extract_plan(
-        ctx, plan, profile_facts, conditions_by_document, tracker, coverage_by_target
-    )
+    if mode == "lite" or getattr(ctx.config, "compact_extraction", False):
+        results = compact_extract(ctx, plan, profile, category)
+        _record_results(ctx, plan, results, coverage_by_target)
+    else:
+        results = _extract_plan(
+            ctx, plan, profile_facts, conditions_by_document, tracker, coverage_by_target
+        )
     # Applied in plan order, not completion order, so the output is identical
     # whatever the concurrency and whatever order the provider answers in.
     for item in plan:
@@ -340,7 +346,7 @@ def _extract_plan(
             # In "auto" mode the remaining sections are read without it.
             if getattr(ctx.config, "extraction_mode", "model") not in FALLBACK_MODES:
                 raise
-            _switch_to_economy(ctx, exc)
+            switch_to_economy(ctx, exc)
             return economy_extract_section(ctx, item)
 
     def record(item, result, error: Optional[BaseException]) -> None:
@@ -451,16 +457,20 @@ def _drop_sections_without_obligations(
     return kept
 
 
-def _switch_to_economy(ctx: RunContext, exc: BaseException) -> None:
-    with ctx.lock:
-        already = ctx.economy
-        ctx.economy = True
-    if not already:
-        ctx.warn(
-            f"the model cannot be used ({exc}); the rest of this run makes no model "
-            "calls (economy mode): relevance from saved category knowledge or wording, "
-            "one plain-English requirement per obligation paragraph",
-            stage="agent",
+def _record_results(ctx: RunContext, plan: list, results: dict, coverage_by_target: dict) -> None:
+    """Coverage entries for results produced outside ``_extract_plan``."""
+    for item in plan:
+        result = results.get(item.section_id)
+        if result is None:
+            continue
+        coverage_by_target[(TargetKind.SECTION, item.section_id)] = CoverageItem(
+            target_kind=TargetKind.SECTION,
+            target_id=item.section_id,
+            status=CoverageStatus.FAILED if result.failed else CoverageStatus.PROCESSED,
+            explanation=result.failure_reason or ("; ".join(result.notes) or None),
+            inspected_passage_ids=tuple(result.inspected_passage_ids),
+            draft_ids=tuple(d.draft_id for d in result.drafts),
+            document_id=item.document.document_id,
         )
 
 

@@ -68,3 +68,31 @@ class CallCache:
         except BaseException:
             Path(tmp).unlink(missing_ok=True)
             raise
+
+
+class LayeredCache:
+    """The run's own cache in front of a cache shared by every run.
+
+    The run folder keeps its record of what was asked and answered (audit);
+    the shared folder means a rerun, a restart or a second run of the same
+    case does not pay again for an identical call. The key is the same in
+    both, and it covers everything that can change an answer, so sharing it
+    across runs cannot return a different input's answer.
+    """
+
+    def __init__(self, primary: CacheBackend, shared: CacheBackend) -> None:
+        self.primary = primary
+        self.shared = shared
+
+    def get(self, key: str) -> Optional[dict[str, Any]]:
+        value = self.primary.get(key)
+        if value is not None:
+            return value
+        value = self.shared.get(key)
+        if value is not None:
+            self.primary.put(key, value)
+        return value
+
+    def put(self, key: str, value: dict[str, Any]) -> None:
+        self.primary.put(key, value)
+        self.shared.put(key, value)
