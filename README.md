@@ -1,172 +1,66 @@
 # certivity-challenge
 
-Turns a product specification and/or exploded-view drawing into the engineering requirements it must fulfil under UN Regulations. Each requirement cites the base-version page and paragraph. The output is the official hackathon submission JSON.
+Turns a product specification and/or exploded-view drawing into the engineering requirements it must fulfil under UN Regulations. Each requirement cites the base-version page and paragraph. The output is the hackathon's submission JSON, checked with the official validator.
 
-This app is built by four owners. The shared design is in the team plan (`certivity-main-goal-build-plan.md`, shared with each owner):
+## What a good result is
 
-| Folder | Owner |
-| --- | --- |
-| `src/certivity/agent/`, `llm/`, `contracts.py` | Anushree: extraction, reasoning, shared contracts |
-| `src/certivity/corpus/` | Teammate 2: regulation corpus, lookup, page rendering |
-| `src/certivity/quality/`, `evaluation/` | Teammate 3: review, export, validation, scoring |
-| `src/certivity/api/`, `run_store/`, `cli.py`, `web/`, root config | Teammate 4: API, runs, UI, integration |
+From the challenge brief: pick the regulations that apply to the product, write **one clear obligation per requirement** in terms an engineer can act on (such as a measurable limit), and cite a version and page someone can open and check. **Recall matters somewhat more than precision**: a missed requirement can mean a non-compliant product, while an extra one only costs reading time. But the list must not be padded to be safe.
+
+The pipeline is tuned to that balance and measured, not guessed: a change is kept only if recall rises without precision falling, scored with a local judge that matches requirements one to one as the platform does (it reproduced the platform's score within about one point). On the dev case the platform scores this version at precision 56.2%, recall 71.6%, F1 63.0%, F2 67.9%. Variants that asked the model to keep borderline paragraphs, or to look only for measurable limits, were tested and lowered recall or precision, so they are not used.
+
+## How it works
+
+Code does the reading and the model makes the judgements, so a run is fast and cheap: about 20 calls on Sonnet and 150 on Haiku, about 3 minutes, about $0.55 at list prices (the CLI prints the estimate). Nothing is specific to one kind of part.
+
+1. **Corpus (code only).** Each base PDF in the participant package is split into numbered paragraphs (`6.9.1`, `Annex 9 3.1`, `Annex 6 Part 1 3`). Each paragraph keeps its page and section path. The result is cached in `data/cache/paragraphs/`.
+2. **Regulations (1 call, Sonnet).** The spec, the drawings and the list of regulations in `index.json` go to the model. It describes the product and marks each regulation it considers as applying or not.
+3. **Scope (1 call, Sonnet).** The model reads only the chosen regulations' tables of contents and drops whole sections that concern something else. For a steering wheel that means the automated-steering and trailer sections of R79; for a rear lamp, the sections about other lamps. It also writes a short focus note per regulation.
+4. **Screen (batched calls, Haiku).** The remaining paragraphs that state an obligation (shall, must, may only, limits…) go to the model 60 at a time, together with the product description and the regulation's focus note. It returns only the ids of paragraphs that may apply, and keeps a paragraph when in doubt. This runs twice with the batches cut at different points, and a paragraph either pass keeps goes on. The output is just ids, so both passes together cost about a cent.
+5. **Write (batched calls, Haiku with more thinking).** Only the kept paragraphs are read closely, 15 at a time. The model drops the ones that clearly don't apply (other variants, permissions that constrain nothing, steps of a test method) and writes one requirement per obligation, list item, limit value or table row. Test procedures contribute only test levels, conditions and pass criteria, not laboratory steps, and introductory paragraphs give way to their sub-paragraphs. The same sentence cited from two paragraphs is kept once. The writing pass runs three times with the batches cut at different points. Paragraphs all three passes keep stay. The few they disagree on go to Sonnet, which settles each one (one model read of a paragraph is noisy; this spends the strong model only where the cheap one is unsure). On the dev case this gave the best precision and recall together. `CERTIVITY_MODEL_ARBITER=` (empty) switches arbitration off; then `CERTIVITY_WRITE_VOTES=1` keeps any paragraph one pass kept (highest recall). A requirement can only cite a paragraph the parser found, so the page and paragraph always come from the PDF.
+6. **Completeness (a few calls, Sonnet).** For every cited paragraph, Sonnet sees the requirements already written from it and adds only obligations the paragraph states that they miss, for this product's functions only. It never changes or removes a requirement. On the dev case it raised recall about 3.5 points and F2 about 2 for about 2 points of precision; `CERTIVITY_MODEL_GAPFILL=` (empty) turns it off.
+7. **Checks.** The participant package's `tools/validate.py` runs on every result. On the dev case, `tools/score_local.py` also gives regulation and page scores.
+
+Every model answer is cached in `data/cache/llm/` by request content, so running the same input again costs nothing.
+
+**House style.** How requirements are worded, and which paragraphs an expert leaves out, is in [src/certivity/style.md](src/certivity/style.md), which the writing and arbitration prompts include. It was distilled from the worked example by having a model compare each regulation paragraph with the requirements the expert wrote from it, and it holds general rules only (no product, regulation number, paragraph or value). The most important: keep the regulation's own subject and full scope instead of tailoring it to the product, keep exceptions inside the requirement they modify, and split per row or case, not per value. Replace it (or set `CERTIVITY_STYLE`) to follow another house style.
+
+**Another set of obligations.** Everything specific to UN Regulations lives in [src/certivity/notes.md](src/certivity/notes.md), which every prompt includes: how vehicle and component regulations relate, which lighting regulations replaced which, when EMC applies. For a different corpus, write a new notes file and set `CERTIVITY_NOTES`. The parser expects numbered paragraphs (`5.1.2.`) and `Annex N` headings. A corpus laid out differently needs a change to the regular expressions at the top of `corpus.py`.
 
 ## Setup
 
-Requirements: Python 3.12+ and Node 20+ (for building the UI only).
+Requirements: Python 3.12+, plus Node 20+ to build the UI.
 
 ```bash
 git clone https://github.com/Certivity/industrial-ai-hackathon data/participant-package
 python3 -m venv .venv && .venv/bin/pip install -e '.[dev]'
-cp .env.example .env                # set CERTIVITY_TEAM_ID (team id from hackathon.certivity.io) and model credentials
-.venv/bin/certivity bootstrap --fetch   # first time: download base PDFs and build the corpus snapshot
+cp .env.example .env              # set CERTIVITY_TEAM_ID and ANTHROPIC_API_KEY
+.venv/bin/certivity fetch         # download the base regulation PDFs
 (cd web && npm install && npm run build)
-.venv/bin/certivity health          # shows what is ready; never prints secrets
-.venv/bin/certivity serve           # rebuilds/reuses the snapshot, then http://127.0.0.1:8000 (API + UI)
+.venv/bin/certivity serve         # http://127.0.0.1:8000 (API + UI)
 ```
 
-If you keep the participant package somewhere else, set `CERTIVITY_PARTICIPANT_PACKAGE`. On macOS, if downloads fail with `CERTIFICATE_VERIFY_FAILED`, see the package README (`export SSL_CERT_FILE="$(python3 -m certifi)"`).
+Headless run of one case: `.venv/bin/certivity run --case dev-rear-lamp`. It writes `<case>_<team>.json` and prints validation, the local score and the model calls it made.
 
-Frontend development with hot reload: run `certivity serve` and `cd web && npm run dev` together. Then open http://localhost:5173 (it proxies `/api`).
+Frontend development with hot reload: run `certivity serve` and `cd web && npm run dev` together, then open http://localhost:5173 (it proxies `/api`).
 
-Headless run of one case: `certivity run --case dev-rear-lamp --team team-07`.
+Tests: `.venv/bin/python -m pytest`. A scripted model stands in for Claude, so the tests make no API calls.
 
-### Fixture mode
+## Code
 
-`CERTIVITY_PIPELINE_MODE=fixture`, or "Fixture" in the UI, runs labelled synthetic stand-ins (`src/certivity/api/fixture_mode.py`). You can use it before the real modules are merged. Fixture runs carry an orange **FIXTURE DATA** badge and banner. Their pages are placeholders, and their submissions still go through the official validator. They are never cached as real results.
-
-## How a run works
-
-`POST /api/runs` saves immutable input copies under `runs/<id>/input/` and queues the run. A single background worker then:
-
-1. opens one corpus snapshot and the LLM adapter, and keeps them for the whole run;
-2. calls `run_extraction`, then `review_requirements`;
-3. while review findings request context or a correction, calls `revise_extraction` and reviews again, up to `CERTIVITY_MAX_REVISION_ROUNDS` and the time budget. Unfinished findings are reported;
-4. calls `build_submission` and `validate_submission` (official validator). Only a valid file is offered for download;
-5. stores evidence passages, then asks the evaluation module for local regulation/page scoring via `evaluate_case(submission_path, case_id, participant_package)`. The app never locates or reads the golden answer; the evaluation module does both, and returns nothing for a case without one.
-
-Run states: `queued`, `running`, `completed` (valid output, full coverage, no open issues), `partial` (valid output but pending/failed coverage or open review issues), `failed`. A server restart marks unfinished runs `failed` with `interrupted: true`. A cached run (opt-in "reuse cached") reuses a fresh run with the same input, team/case, corpus snapshot, component versions and model settings, and is labelled "cached result".
-
-Per-run folders: `agent/` (Anushree), `quality/` (Teammate 3), `app/` (app). The agent receives its folder as `artifacts_dir=`, and the model-call cache lives in `agent/llm-cache/`.
-
-## HTTP API
-
-| Route | Purpose |
+| File | What it does |
 | --- | --- |
-| `POST /api/runs` | multipart: `team_id`, `case_id`, `package_case` or `spec_file`/`spec_text`, `drawings[]`, `mode`, `reuse_cached` |
-| `GET /api/runs`, `GET /api/runs/{id}` | list; state, stage, progress, warnings, errors, recent events |
-| `GET /api/runs/{id}/results` | RunView: profile, applicability, requirements + evidence, coverage, findings, validation, metrics |
-| `GET /api/runs/{id}/submission` | the exact validated JSON, or 409 with the reason |
-| `GET /api/runs/{id}/input/{name}` | the stored input files |
-| `PUT /api/runs/{id}/platform-metrics` | record scores read off the organizer platform (never computed here) |
-| `POST /api/runs/{id}/cancel` | queued runs stop at once; running runs stop when the current stage finishes |
-| `GET /api/compare?a=&b=` | cited regulations/pages/paragraphs that differ between two runs (not a semantic comparison) |
-| `GET /api/documents[/{id}/pdf \| /{id}/pages/{pdf_page_index}]` | source documents of the loaded snapshot; page index is zero-based; `?snapshot_id=` refuses a mismatched snapshot |
-| `GET /api/cases`, `GET /api/health` | cases (re-read from disk; held-out first; sub-goal folders typed `subgoal`); readiness and corpus freshness |
-| `GET /api/regulations` | every index entry: versions, PDF downloaded and verified, imported in the corpus, pages, document ID (no paths, no download URLs) |
-| `POST/GET /api/corpus/reimport` | build a new corpus snapshot through the corpus module's `bootstrap`; refused while an analysis runs |
+| `src/certivity/corpus.py` | Reads the index and parses PDFs into paragraphs; renders pages |
+| `src/certivity/pipeline.py` | The steps above, plus their prompts |
+| `src/certivity/notes.md` | What is specific to this regulation corpus; included in every prompt |
+| `src/certivity/llm.py` | The one model call (structured JSON output), with the disk cache |
+| `src/certivity/checks.py` | The participant package's validator and local scorer |
+| `src/certivity/runs.py` | Runs on disk (`runs/<id>/`) and the background worker |
+| `src/certivity/api.py` | HTTP API for the UI, plus the built UI |
+| `src/certivity/cli.py` | `serve`, `run`, `fetch` |
+| `web/` | React UI |
 
-## Integration contract (what the app expects from each module)
+## Held-out case
 
-Entry points are configurable (`CERTIVITY_EP_*` in `.env.example`). Defaults:
-
-- **Corpus (confirmed by Teammate 2):** `bootstrap(package_dir, corpus_dir)` runs at `certivity serve` startup (no network; `certivity bootstrap --fetch` downloads missing PDFs). `open_corpus(corpus_dir)` opens the current snapshot for each run. Source pages open the run's own snapshot with `open_corpus(corpus_dir, snapshot_id=…)`, so they stay viewable after a re-import. `get_document_path`: `UnknownId` → 404, `FileNotFoundError` → 500. `PageAsset.asset_ref` is a local PNG. `/api/health` uses `corpus_status(corpus_dir)`.
-- **LLM (confirmed, contracts 1.0.0):** `certivity.llm:create_llm(cache_dir=run/agent/llm-cache)`. `/api/health` shows `llm.describe()` as-is (secret-free). If `credentials_configured` is false, a real run fails at the loading stage with that reason, before any work.
-- **Agent (confirmed):** `run_extraction(run_input, corpus, llm, emit_event, artifacts_dir=run/agent)`. The app builds the record with `contracts.make_run_input(run_id=, team_id=, case_id=, corpus_snapshot_id=, specification_text=, drawing_paths=, input_hash=)`, which is keyword-only and turns paths into `DrawingRef`s. Empty input is refused at upload, because `RunInput` rejects it.
-- **Quality (confirmed by Teammate 3):** `review_requirements`, then `build_submission_detailed` (preferred; its `.submission`, `.export_mapping`, `.excluded`, `.blocking_issues` are stored in `app/export.json`), then `validate_submission(submission, participant_package)`. Drafts link to requirements through `export_mapping` only. A finding goes to revision when `requested_context` or `requested_correction` is set. A `review_incomplete` remaining issue makes the run `partial` and shows "not verified" in the UI. `SubmissionBuildError` (over 5,000 requirements or 5 MB) fails the run with that message. The quality module writes to `runs/<id>/quality/` and to `evaluation/` for candidate submissions.
-- `emit_event` accepts a `RunEvent` record, a dict, or keyword arguments. It never raises into a module, so cancel takes effect when the current stage finishes.
-
-`tests/integration/test_contract_conformance.py` checks these signatures as soon as a module is merged. Until then it is skipped. `tests/integration/test_real_mode_wiring.py` runs real mode against dataclass stand-ins.
-
-## Integration checklist (after each component merge)
-
-- [ ] `pytest` passes, with no conformance skips for merged modules; `certivity health` shows the merged module ready
-- [ ] `certivity run --case dev-rear-lamp` reaches `completed` or `partial`, not `failed`
-- [ ] the downloaded JSON passes `python data/participant-package/tools/validate.py <file>`
-- [ ] one requirement's source page opens, and its printed page matches the citation
-- [ ] an error path is visible in the UI (e.g. a real run with missing credentials)
-
-## Submission (organizers)
-
-- Held-out case: `git -C data/participant-package pull`, run `certivity bootstrap` again, then start a run with the new case from the dropdown. Set team ID and case ID (= the case folder name).
-- Download the validated JSON from the run and upload it on the platform. For the held-out case the **last valid upload counts**, so keep the chosen file. Teammate 3 coordinates scoring uploads.
-- Repository/demo: this repository plus `certivity serve`. No hosted services are required.
-
-## Progress is never lost (checkpoints, resume, export)
-
-Extraction saves each finished section to disk before starting the next one, so
-an interrupted run keeps what it read. Two caches sit outside the run folder:
-
-| Path | Holds | Turn off with |
-| --- | --- | --- |
-| `data/cache/checkpoints/<case>-<snapshot>-<input>-<prompts>/` | finished sections and their obligations | `CERTIVITY_CHECKPOINT_DIR=off` |
-| `data/cache/llm/{agent,quality}/` | model answers, keyed by the whole call | `CERTIVITY_LLM_CACHE=off` |
-
-Both are keyed on the work rather than the run id, so **running the same case
-again resumes it**: sections already finished are skipped, and model answers
-already paid for are replayed. Sections recorded as failed are retried, because
-those are usually timeouts. A prompt change gives a new checkpoint key, so a
-resume never keeps obligations the current prompt would not produce.
-
-```bash
-certivity run --case dev-rear-lamp            # resumes by itself; re-run to continue
-certivity run --case dev-rear-lamp --fast     # bounded mode, finishes inside the window
-certivity run --case dev-rear-lamp --fresh    # ignore saved checkpoints (keeps them)
-certivity export --latest --out upload.json   # valid JSON from checkpoints; no model call
-certivity export --run <id> --from-draft runs/<old>/agent/pipeline_draft.json
-certivity apistats --latest                   # calls, 429s, retries, tokens, cost, diagnosis
-certivity probe --calls 8 --concurrency 4     # controlled latency / rate-limit probe
-certivity health --verify-model               # go/no-go: can the account be billed at all?
-```
-
-`export` makes no API call, so it works when the provider does not. It runs the
-same deterministic checks and the same official export code as a full run: a
-requirement whose citation does not resolve is dropped, never guessed, so a gap
-shows up as fewer requirements rather than an invented page.
-
-### Extraction modes
-
-`full` (default) reads every section of every selected document, follows
-references and revises against review findings. `fast` reads the same corpus
-with the same prompts and citation checks, but caps how many sections are read
-(after prioritisation, so the tail that is dropped is the least promising), uses
-one batch per section, and skips the reference second pass and revision rounds.
-Fast mode does **not** narrow the regulation set: applicability already finds
-all four regulations the worked example expects, and the score weights recall.
-
-Per-dimension overrides for benchmarking: `CERTIVITY_MAX_SECTIONS_TOTAL`,
-`CERTIVITY_PASSAGES_PER_BATCH`, `CERTIVITY_MAX_PARALLEL_SECTIONS`,
-`CERTIVITY_MAX_REFERENCE_DEPTH`, `CERTIVITY_MAX_BATCHES_PER_SECTION`,
-`CERTIVITY_MAX_MODEL_CALLS`, `CERTIVITY_REQUEST_TIMEOUT_S`.
-
-### Rate limiting
-
-The shared limiter is **off** unless configured, and concurrency defaults are
-unchanged. Turn it on only against a measurement:
-`CERTIVITY_LIMIT_CONCURRENCY`, `CERTIVITY_LIMIT_REQUESTS_PER_MINUTE`,
-`CERTIVITY_LIMIT_INPUT_TOKENS_PER_MINUTE`. Retries are handled in the adapter
-rather than the SDK so every attempt and every `retry-after` is counted;
-`CERTIVITY_SDK_RETRIES=1` hands them back to the SDK.
-
-## Sunday held-out steps
-
-The held-out case arrives as a new folder in the participant package. Nothing in the code needs to change.
-
-**Check first that the Anthropic account has credit** (`certivity health --verify-model`, which spends one cheap call and exits non-zero with the provider's own message). `certivity health` alone reports a configured key as ready, which an account with no credit also is - that distinction cost a run. Without credit no extraction is possible, and `certivity export` is the only thing that still produces a file.
-
-**One command:** `certivity heldout` does steps 1–4 in one go: pull, download base PDFs, refresh the corpus, then run the first `heldout-*` case. It prints where the validated export was saved. Budgets: `--max-calls N --review-calls M`. Mode: `--fast` for the bounded run. Steps 1–5 below do the same in the UI.
-
-**If a run is interrupted or runs out of time:** re-run the same command to resume it, or run `certivity export --latest --out upload.json` to get a valid file from whatever finished. Upload early and often — the last valid upload counts, so a partial file uploaded at 11:00 is strictly better than nothing at 13:00.
-
-1. Run `git pull` in the participant package (`git -C data/participant-package pull`).
-2. Run `python tools/fetch_regulations.py --role base` in the participant package to download any new base PDFs.
-3. Start or refresh the app (`certivity serve`, then http://localhost:8000). If the banner says "Regulation package changed — corpus needs re-import", click **Re-import corpus** and wait for it to finish. The **Regulations** page shows what is downloaded and imported.
-4. Make sure `CERTIVITY_TEAM_ID` in `.env` is your real team id (the app warns if it is missing or a placeholder). Under "Case from the regulation package", select **heldout-front-bumper**: it is listed first, and its folder name becomes the case ID. Check the inputs the form says it picked up, then start the run.
-5. On the run page, check the case ID and validator status beside **Export requirements JSON**, then export and upload at hackathon.certivity.io. The last valid upload counts, not the best; at most 5 valid uploads per hour; uploads close at 13:00.
-
-New case folders, new index entries and newly downloaded PDFs are read from disk on each request, so the app does not need a restart. Re-importing builds a new corpus snapshot. Analyses already finished keep showing their own snapshot, and re-import is disabled while an analysis is running.
-
-## Third-party licences
-
-- **PyMuPDF** (PDF parsing and page rendering, corpus module) is **AGPL-3.0** (or a commercial Artifex licence). The team accepted it for the hackathon on 2026-10-24: the repository is private and organizers do not run our code. If this application is later distributed or offered to other people over a network, its complete source must be made available under the AGPL, or PyMuPDF replaced or commercially licensed.
-- The participant package's tools and schemas are MIT; its data is for use in this hackathon only (`data/participant-package/LICENSE-DATA.md`). The package and downloaded PDFs are not committed.
+1. `git -C data/participant-package pull`, then `.venv/bin/certivity fetch`.
+2. Start a run with the new case from the dropdown (or use `certivity run --case <folder>`).
+3. Download the validated JSON and upload it. For the held-out case the **last valid upload counts**.
