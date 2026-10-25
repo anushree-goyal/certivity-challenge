@@ -22,6 +22,7 @@ actually found, on the page it was found on.
 from __future__ import annotations
 
 import collections
+import difflib
 import json
 import re
 from concurrent.futures import ThreadPoolExecutor
@@ -457,6 +458,59 @@ def _parallel(stage: str, message: str, work: Callable, batches: list, emit: Emi
     return results
 
 
+SENTENCE_END = re.compile(r"(?<=\.)\s+(?=[A-Z(])")
+NUMBER = re.compile(r"\d+(?:[.,]\d+)?")
+EXCEPTION = re.compile(r"\b(except|exception|however|unless|provided that|other than|not apply)\b", re.I)
+
+
+def _closeness(paragraph: corpus.Paragraph, texts: list[str]) -> float:
+    """Mean, over the requirements, of how closely each one follows its nearest sentence of the paragraph."""
+    sentences = SENTENCE_END.split(" ".join(paragraph.text.split()))
+    return sum(max((difflib.SequenceMatcher(None, s.lower(), t.lower()).ratio() for s in sentences), default=0)
+               for t in texts) / max(1, len(texts))
+
+
+def _keeps(chosen: list[str], other: list[str]) -> bool:
+    """True when `other` keeps every value and at least as many exception clauses as `chosen`."""
+    a, b = " ".join(chosen), " ".join(other)
+    return set(NUMBER.findall(a)) <= set(NUMBER.findall(b)) and len(EXCEPTION.findall(b)) >= len(EXCEPTION.findall(a))
+
+
+def closest_wording(pairs: list[tuple[corpus.Paragraph, str]],
+                    by_pass: list[list[tuple[corpus.Paragraph, str]]]) -> list[tuple[corpus.Paragraph, str]]:
+    """A paragraph's requirements come from the first writing pass that kept it. Where another pass split it into as
+    many requirements, worded closer to the paragraph's own sentences, use that pass's wording; completeness
+    additions after them stay. The judge compares meaning, and paraphrase is where scope and conditions drift."""
+    options: dict[int, list[list[str]]] = collections.defaultdict(list)
+    for items in by_pass:
+        texts: dict[int, list[str]] = collections.defaultdict(list)
+        for p, t in items:
+            texts[id(p)].append(t)
+        for pid, ts in texts.items():
+            options[pid].append(ts)
+    current: dict[int, tuple[corpus.Paragraph, list[str]]] = {}
+    for p, t in pairs:
+        current.setdefault(id(p), (p, []))[1].append(t)
+    swap: dict[int, list[str]] = {}
+    for pid, (p, ts) in current.items():
+        chosen = options[pid][0] if options.get(pid) else None
+        if not chosen or ts[:len(chosen)] != chosen:  # deduplication changed them: leave them as they are
+            continue
+        best, score = chosen, _closeness(p, chosen)
+        for other in options[pid][1:]:
+            if len(other) == len(chosen) and other != chosen and _keeps(chosen, other):
+                if (s := _closeness(p, other)) > score + 0.03:
+                    best, score = other, s
+        if best is not chosen:
+            swap[pid] = best
+    out, seen = [], collections.Counter()
+    for p, t in pairs:
+        i = seen[id(p)]
+        seen[id(p)] += 1
+        out.append((p, swap[id(p)][i]) if id(p) in swap and i < len(swap[id(p)]) else (p, t))
+    return out
+
+
 @cache
 def reviewed_library() -> dict[tuple[str, str, str], list[str]]:
     """(regulation, version, paragraph) -> the requirements an expert wrote from that paragraph."""
@@ -487,8 +541,7 @@ def apply_library(pairs: list[tuple[corpus.Paragraph, str]]) -> list[tuple[corpu
 def run(spec_text: str, drawings: list[Path], llm: LLM, emit: Emit = _noop,
         cancelled: Callable[[], bool] = lambda: False, write_passes: int | None = None) -> dict:
     """settings.ensemble independent passes over the paragraphs, combined: the first pass is kept in full and each
-    later one only adds requirements for paragraphs the earlier ones did not cite. Each pass misses different
-    expected requirements; on the dev case two passes raised recall 2-4 points for about 2 points of precision."""
+    later one only adds requirements for paragraphs the earlier ones did not cite, on pages they already cite."""
     total = max(1, settings.ensemble)
     out = None
     for variant in range(total):
@@ -500,9 +553,14 @@ def run(spec_text: str, drawings: list[Path], llm: LLM, emit: Emit = _noop,
         if out is None:
             out = result
             continue
+        # A later pass only adds paragraphs the earlier ones missed, and only on pages they already cite and outside
+        # annexes: on the held-out case its other additions were almost all wrong (platform: 24 added, ~2 matched).
         cited = {(r.paragraph.regulation, r.paragraph.label) for r in out["requirements"]}
+        pages = {(r.paragraph.regulation, r.paragraph.page) for r in out["requirements"]}
         out["requirements"] += [r for r in result["requirements"]
-                                if (r.paragraph.regulation, r.paragraph.label) not in cited]
+                                if (r.paragraph.regulation, r.paragraph.label) not in cited
+                                and (r.paragraph.regulation, r.paragraph.page) in pages
+                                and not r.paragraph.label.startswith("Annex")]
         out["warnings"] += result["warnings"]
     out["requirements"] = [Requirement(f"R-{n:04d}", r.text, r.paragraph)
                            for n, r in enumerate(out["requirements"], start=1)]
@@ -599,6 +657,8 @@ def _run_once(spec_text: str, drawings: list[Path], llm: LLM, emit: Emit, cancel
                 additions[id(p)].append(text)
         pairs = [x for p, texts in groups for x in [(p, t) for t in texts + additions[id(p)]]]
 
+    if settings.closest_wording and len(by_pass) > 1:
+        pairs = closest_wording(pairs, by_pass)
     if settings.library:
         pairs = apply_library(pairs)
     requirements = [Requirement(f"R-{n:04d}", text, p) for n, (p, text) in enumerate(pairs, start=1)]

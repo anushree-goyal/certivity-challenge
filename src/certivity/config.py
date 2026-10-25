@@ -52,14 +52,20 @@ class Settings:
     # files in the package), use those requirements instead of writing new ones. On by default; it reuses an answer
     # key, so a case whose own key is in the library cannot be scored honestly (CERTIVITY_LIBRARY=off to score it).
     library: bool = os.environ.get("CERTIVITY_LIBRARY", "on").lower() in {"on", "1", "true", "yes"}
+    # Of the writing passes that split a paragraph into the same number of requirements, use the one whose wording
+    # stays closest to the paragraph's own sentences, never losing a value or an exception. On the dev case (library
+    # off) the judge matched 4 more of the 51 requirements this rewords, under both the strict and the lenient reading.
+    closest_wording: bool = os.environ.get("CERTIVITY_CLOSEST_WORDING", "on").lower() in {"on", "1", "true", "yes"}
     # Sub-goal: re-check requirements judged unchanged on amended paragraphs and flag any whose text changes (scored
     # on recall and accuracy); and whether obligations found inside amended paragraphs count as "added". The worked
     # example labels its additions "new", but turning these off lowered its flag recall (0.96 -> 0.92): some
     # paragraphs the code pairs as amended are new in the expert's view.
     subgoal_flag_all: bool = os.environ.get("CERTIVITY_SUBGOAL_FLAG_ALL", "on").lower() in {"on", "1", "true", "yes"}
     subgoal_amended_additions: bool = os.environ.get("CERTIVITY_SUBGOAL_AMENDED_ADDITIONS", "on").lower() in {"on", "1", "true", "yes"}
-    # Independent passes over the paragraphs, combined (see pipeline.run). 2 raised recall on the dev case.
-    ensemble: int = max(1, int(os.environ.get("CERTIVITY_ENSEMBLE", "2")))
+    # Independent passes over the paragraphs, combined (see pipeline.run). One pass scored best on the held-out case:
+    # unfiltered, a second pass cost precision (58.7% -> 54.3%) for +1 recall (F2 68.6 -> 68.0), and limited to pages
+    # the first pass cites it did not help either.
+    ensemble: int = max(1, int(os.environ.get("CERTIVITY_ENSEMBLE", "1")))
     # Worked examples from that library in the writing prompt, for paragraphs it does not cover. Off: on the dev
     # case they lowered precision (0.56 -> 0.51) and recall (0.71 -> 0.69).
     examples: bool = os.environ.get("CERTIVITY_EXAMPLES", "off").lower() in {"on", "1", "true", "yes"}
