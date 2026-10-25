@@ -188,6 +188,29 @@ def _coverage(needle: str, haystack: str) -> float:
     return sum(m.size for m in blocks if m.size >= 4) / max(1, len(a))
 
 
+SENTENCE = re.compile(r"(?<=[.;:])\s+(?=[A-Z(])|\s+(?=\([a-z]\)\s)")
+
+
+def _sentences(text: str) -> list[str]:
+    return [x.strip() for x in SENTENCE.split(_norm(text)) if x.strip()]
+
+
+def _ratio(a: str, b: str) -> float:
+    return difflib.SequenceMatcher(None, a.lower(), b.lower(), autojunk=False).ratio()
+
+
+def _what_changed(old_text: str, new_text: str, requirement: str) -> str:
+    """The regulation words behind an added obligation, as the worked example quotes them: the sentence of the new
+    paragraph that states it, either new ("'...' was added") or reworded from the closest old sentence."""
+    new_sentences = _sentences(new_text) or [_norm(new_text)]
+    stated = max(new_sentences, key=lambda x: _ratio(x, _norm(requirement)))
+    old_sentences = _sentences(old_text)
+    closest = max(old_sentences, key=lambda x: _ratio(x, stated), default="")
+    if not closest or _ratio(closest, stated) < 0.5:
+        return f"'{stated[:200]}' was added"
+    return "; ".join(diff_phrases(closest, stated)) or f"'{stated[:200]}' was added"
+
+
 def _label_of(r: dict) -> str:
     return str(r["source"].get("paragraph") or "").strip().rstrip(".")
 
@@ -359,13 +382,13 @@ def run(case_dir: Path, llm: LLM, emit: Emit = _noop, flag_all: bool | None = No
                                 "reason": f"Paragraph {c.old.label} of {regulation} was amended in version {new_version}; "
                                           f"the provision '{_norm(r['text'])[:80]}…' no longer appears."})
     # Obligations found inside amended paragraphs (settings.subgoal_amended_additions).
+    paired_old = {id(n): o for o in old for n in [pairs[id(o)]] if n is not None}
     for p, text in (amended if settings.subgoal_amended_additions else []):
-        old_p = next((c.old for c in case_list if p in c.candidates), None)
-        what = "; ".join([x for x in diff_phrases(old_p.text, p.text, limit=6) if x.endswith("was added")][:2]) if old_p else ""
+        old_p = paired_old.get(id(p)) or next((c.old for c in case_list if p in c.candidates), None)
+        what = _what_changed(old_p.text if old_p else "", p.text, text)
         changes.append({
             "requirement_id": None, "change": "added", "new_text": text[:2000],
-            "reason": f"Paragraph {p.label} of {regulation} was amended in version {new_version}"
-                      + (f": {what}." if what else "; it now states this obligation."),
+            "reason": f"Paragraph {p.label} of {regulation} was amended in version {new_version}: {what}.",
             "source": {"page": p.page, "paragraph": p.label},
         })
     for p, text in additions:
